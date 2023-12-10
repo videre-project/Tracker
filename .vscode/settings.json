@@ -1,0 +1,20 @@
+{
+  "files.associations": {
+    "*.esproj": "xml"
+  },
+  "files.exclude": {
+    // Visual Studio Code specific files
+    "**/.vs": true,
+    "**/.user": true,
+    // Exclude staging and production directories
+    "**/dist": true,
+    // Excludes all C# build output folders
+    "**/bin": true,
+    "**/obj": true,
+  },
+  "var": {
+    "configuration" : "Release",
+    "buildProperties" : "/m /v:m /clp:NoSummary /p:GenerateFullPaths=True"
+  },
+  "dotnet.defaultSolution": "Project.sln"
+}

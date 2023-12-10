@@ -1,0 +1,9 @@
+// This file configures API routes for the Visual Studio Endpoints Explorer.
+// https://learn.microsoft.com/en-us/aspnet/core/test/http-files?view=aspnetcore-8.0
+
+@hostname=localhost
+@port=5237
+@host={{hostname}}:{{port}}
+
+GET https://{{host}}/weatherforecast/
+Accept: application/json

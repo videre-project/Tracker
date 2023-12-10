@@ -1,0 +1,9 @@
+{
+  "name": "tracker",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "dev": "dotnet run --project src/server --launch-profile https",
+    "build": "dotnet build"
+  }
+}

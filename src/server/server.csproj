@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <AssemblyName>Videre Tracker</AssemblyName>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <OutputType>WinExe</OutputType>
+    <UseWindowsForms>true</UseWindowsForms>
+    <EnableWindowsTargeting>True</EnableWindowsTargeting>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <SpaRoot>..\client</SpaRoot>
+    <SpaProxyLaunchCommand>npm run dev</SpaProxyLaunchCommand>
+    <SpaProxyServerUrl>https://localhost:5173</SpaProxyServerUrl>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\client\client.esproj">
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+    </ProjectReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- ASP.NET Web API -->
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi"
+                      Version="8.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.SpaProxy"
+                      Version="8.0.0" />
+    <PackageReference Include="Swashbuckle.AspNetCore"
+                      Version="6.4.0" />
+    <!-- WebView2 Application -->
+    <PackageReference Include="Microsoft.Web.WebView2"
+                      Version="1.0.2151.40" />
+  </ItemGroup>
+
+</Project>

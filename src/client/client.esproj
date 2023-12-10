@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.VisualStudio.JavaScript.Sdk/0.5.127-alpha">
+
+  <PropertyGroup>
+    <!-- Disables running `npm install` on Build and Restore commands -->
+    <ShouldRunNpmInstall>false</ShouldRunNpmInstall>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <StartupCommand>npm run dev</StartupCommand>
+    <!-- <BuildCommand>npm run build</BuildCommand> -->
+    <!-- Allows the build (or compile) script located on package.json to run on Build -->
+    <ShouldRunBuildScript>false</ShouldRunBuildScript>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!-- Folder where production build objects will be placed -->
+    <PublishAssetsDirectory>$(MSBuildProjectDirectory)\dist</PublishAssetsDirectory>
+  </PropertyGroup>
+
+</Project>
