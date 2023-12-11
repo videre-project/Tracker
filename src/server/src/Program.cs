@@ -70,12 +70,7 @@ public class Program
       api.UseSwagger();
       api.UseSwaggerUI();
     }
-    else
-    {
-      api.UseHsts();
-    }
 
-    api.UseHttpsRedirection();
     api.UseAuthorization();
 
     api.MapControllers();
