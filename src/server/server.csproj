@@ -10,22 +10,41 @@
     <EnableWindowsTargeting>True</EnableWindowsTargeting>
   </PropertyGroup>
 
-  <PropertyGroup>
-    <PublishDir>..\..\publish\</PublishDir>
-    <PublishSingleFile>true</PublishSingleFile>
-  </PropertyGroup>
-
+  <!-- Frontend SPA Configuration -->
   <PropertyGroup>
     <SpaRoot>..\client</SpaRoot>
     <SpaProxyLaunchCommand>npm run dev</SpaProxyLaunchCommand>
     <SpaProxyServerUrl>https://localhost:5173</SpaProxyServerUrl>
   </PropertyGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\client\client.esproj">
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
     </ProjectReference>
   </ItemGroup>
+
+  <!-- Application Configuration -->
+  <ItemGroup>
+    <!-- Remove all references to explicitly handle which configs to publish -->
+    <Content Remove="appsettings.json" />
+    <Content Remove="appsettings.*.json" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="appsettings.json"
+             CopyToOutputDirectory="Always" />
+    <Content Include="appsettings.$(ASPNETCORE_ENVIRONMENT).json"
+             Condition="Exists('appsettings.$(ASPNETCORE_ENVIRONMENT).json')"
+             DependentUpon="appsettings.json"
+             CopyToOutputDirectory="Always" />
+  </ItemGroup>
+
+  <!-- Publishing Configuration -->
+  <PropertyGroup>
+    <PublishDir>..\..\publish\</PublishDir>
+    <PublishSingleFile>true</PublishSingleFile>
+    <DebugType>embedded</DebugType>
+    <IsWebConfigTransformDisabled>true</IsWebConfigTransformDisabled>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+  </PropertyGroup>
 
   <ItemGroup>
     <!-- ASP.NET Web API -->
@@ -34,10 +53,10 @@
     <PackageReference Include="Microsoft.AspNetCore.SpaProxy"
                       Version="8.0.0" />
     <PackageReference Include="Swashbuckle.AspNetCore"
-                      Version="6.4.0" />
+                      Version="6.5.0" />
     <!-- WebView2 Application -->
     <PackageReference Include="Microsoft.Web.WebView2"
-                      Version="1.0.2151.40" />
+                      Version="1.0.2210.55" />
   </ItemGroup>
 
 </Project>
