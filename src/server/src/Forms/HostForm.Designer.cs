@@ -53,7 +53,8 @@ partial class HostForm
     this.webView21.Location = new Point(0, 0);
     this.webView21.Name = "webView21";
     this.webView21.Size = new Size(1280, 768);
-    this.webView21.Source = new Uri("https://localhost:5173/", UriKind.Absolute);
+    this.webView21.Source = new Uri("https://localhost:7183/", UriKind.Absolute);
+
     this.webView21.TabIndex = 0;
     this.webView21.ZoomFactor = 1D;
 
@@ -67,6 +68,7 @@ partial class HostForm
     this.Name = "HostForm";
     this.Text = "Videre Tracker";
     this.ShowIcon = false;
+
     ((ISupportInitialize)(this.webView21)).EndInit();
     this.ResumeLayout(false);
   }

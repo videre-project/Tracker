@@ -11,6 +11,11 @@
   </PropertyGroup>
 
   <PropertyGroup>
+    <PublishDir>..\..\publish\</PublishDir>
+    <PublishSingleFile>true</PublishSingleFile>
+  </PropertyGroup>
+
+  <PropertyGroup>
     <SpaRoot>..\client</SpaRoot>
     <SpaProxyLaunchCommand>npm run dev</SpaProxyLaunchCommand>
     <SpaProxyServerUrl>https://localhost:5173</SpaProxyServerUrl>

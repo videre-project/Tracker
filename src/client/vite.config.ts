@@ -6,7 +6,7 @@
 import { fileURLToPath, URL } from 'node:url';
 
 import { defineConfig } from 'vite';
-import plugin from '@vitejs/plugin-react';
+import react from '@vitejs/plugin-react';
 import fs from 'fs';
 import path from 'path';
 import child_process from 'child_process';
@@ -40,9 +40,25 @@ if (!fs.existsSync(certFilePath) || !fs.existsSync(keyFilePath)) {
   }
 }
 
+let proxyConfig = {
+  target: 'https://localhost:7183/',
+  secure: false,
+  configure: (proxy, _options) => {
+    proxy.on('error', (err, _req, _res) => {
+      console.log('proxy error', err);
+    });
+    proxy.on('proxyReq', (proxyReq, req, _res) => {
+      console.log('Sending Request to .NET:', req.method, req.url);
+    });
+    proxy.on('proxyRes', (proxyRes, req, _res) => {
+      console.log('Received Response from .NET:', proxyRes.statusCode, req.url);
+    });
+  }
+}
+
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [plugin()],
+  plugins: [react()],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url))
@@ -50,15 +66,13 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '^/weatherforecast': {
-        target: 'https://localhost:7183/',
-        secure: false
-      }
+      '^/weatherforecast': proxyConfig
     },
     port: 5173,
+    strictPort: true,
     https: {
       key: fs.readFileSync(keyFilePath),
-      cert: fs.readFileSync(certFilePath),
+      cert: fs.readFileSync(certFilePath)
     }
   }
 })

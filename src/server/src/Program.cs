@@ -4,6 +4,7 @@
 **/
 
 using System;
+using System.IO;
 using System.Windows.Forms;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -22,10 +23,16 @@ public class Program
   /// Initializes the builder for the Web API host.
   /// </summary>
   /// <param name="args"></param>
-  /// <returns></returns>
+  /// <returns>A new <see cref="WebApplicationBuilder"/> instance.</returns>
   public static WebApplicationBuilder CreateHostBuilder(string[] args)
   {
-    var builder = WebApplication.CreateBuilder(args);
+    var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+    {
+      Args = args,
+      WebRootPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "wwwroot")
+    });
+
+    builder.WebHost.UseUrls("https://localhost:7183"); // Set the HTTPS endpoint
 
     // Add services to the container.
     builder.Services.AddControllers();
@@ -38,7 +45,7 @@ public class Program
       {
         Version = "v1",
         Title = "Videre Tracker API",
-        Description = "An ASP.NET Core Web API for the Videre Tracker app.",
+        Description = "An ASP.NET Core Web API for the Videre Tracker.",
         TermsOfService = new Uri("https://videreproject.com/terms")
       });
     });
@@ -54,11 +61,18 @@ public class Program
   {
     var api = CreateHostBuilder(args).Build();
 
+    api.UseDefaultFiles();
+    api.UseStaticFiles();
+
     // Configure the HTTP request pipeline.
     if (api.Environment.IsDevelopment())
     {
       api.UseSwagger();
       api.UseSwaggerUI();
+    }
+    else
+    {
+      api.UseHsts();
     }
 
     api.UseHttpsRedirection();

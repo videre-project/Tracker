@@ -3,7 +3,9 @@
   "private": true,
   "version": "0.0.0",
   "scripts": {
-    "dev": "dotnet run --project src/server --launch-profile https",
-    "build": "dotnet build"
+    "dev": "dotnet run --project src/server --launch-profile WebView2",
+    "build": "dotnet build",
+    "restore": "dotnet restore",
+    "publish" : "dotnet publish -o ./publish"
   }
 }
