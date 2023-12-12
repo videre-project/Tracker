@@ -1,6 +1,7 @@
 {
   "files.associations": {
-    "*.esproj": "xml"
+    "*.esproj": "xml",
+    "*.resx": "xml",
   },
   "files.exclude": {
     // Visual Studio Code specific files

@@ -5,6 +5,7 @@
 
 using System;
 using System.IO;
+using System.Threading;
 using System.Windows.Forms;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -54,12 +55,13 @@ public class Program
   }
 
   /// <summary>
-  /// The main entry point for the application.
+  /// Initializes the ASP.NET Core Web API service.
   /// </summary>
-  [STAThread]
-  public static void Main(string[] args)
+  /// <param name="builder">The builder for the Web API host.</param>
+  /// <returns>A new <see cref="WebApplication"/> instance.</returns>
+  public static WebApplication CreateAPIService(WebApplicationBuilder builder)
   {
-    var api = CreateHostBuilder(args).Build();
+    var api = builder.Build();
 
     api.UseDefaultFiles();
     api.UseStaticFiles();
@@ -76,12 +78,33 @@ public class Program
     api.MapControllers();
     api.MapFallbackToFile("/index.html");
 
-    api.RunAsync();
+    return api;
+  }
+
+  /// <summary>
+  /// The main entry point for the application.
+  /// </summary>
+  [STAThread]
+  public static void Main(string[] args)
+  {
+    // Create a new thread to run the ASP.NET Core Web API.
+    var apiThread = new Thread(() =>
+    {
+      var builder = CreateHostBuilder(args);
+      var api = CreateAPIService(builder);
+      api.Run();
+    })
+    {
+      Name = "API Thread",
+      IsBackground = true
+    };
+    apiThread.SetApartmentState(ApartmentState.STA);
+    apiThread.Start();
 
     // Start the WebView2 application.
     Application.SetHighDpiMode(HighDpiMode.SystemAware);
     Application.EnableVisualStyles();
     Application.SetCompatibleTextRenderingDefault(false);
-    Application.Run(new HostForm());
+    Application.Run(HostForm.CreateWebView2Host());
   }
 }
