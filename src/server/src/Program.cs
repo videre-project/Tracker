@@ -13,7 +13,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.OpenApi.Models;
 
-using Tracker.Forms;
+using Tracker.WebView;
 
 
 namespace Tracker;
@@ -88,23 +88,26 @@ public class Program
   public static void Main(string[] args)
   {
     // Create a new thread to run the ASP.NET Core Web API.
-    var apiThread = new Thread(() =>
-    {
-      var builder = CreateHostBuilder(args);
-      var api = CreateAPIService(builder);
-      api.Run();
-    })
+    var builder = CreateHostBuilder(args);
+    var api = CreateAPIService(builder);
+    var apiThread = new Thread(() => api.Run())
     {
       Name = "API Thread",
       IsBackground = true
     };
-    apiThread.SetApartmentState(ApartmentState.STA);
+
+    // Use API lifecycle events to stop the application.
+    api.Lifetime.ApplicationStopping.Register(() => Application.Exit());
     apiThread.Start();
 
     // Start the WebView2 application.
     Application.SetHighDpiMode(HighDpiMode.SystemAware);
     Application.EnableVisualStyles();
     Application.SetCompatibleTextRenderingDefault(false);
-    Application.Run(HostForm.CreateWebView2Host());
+    Application.Run(new HostForm()
+    {
+      Source = new Uri(builder.Configuration[WebHostDefaults.ServerUrlsKey]!),
+      Logger = api.Logger,
+    });
   }
 }

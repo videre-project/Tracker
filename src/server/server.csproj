@@ -57,6 +57,8 @@
     <!-- WebView2 Application -->
     <PackageReference Include="Microsoft.Web.WebView2"
                       Version="1.0.2210.55" />
+    <PackageReference Include="Newtonsoft.Json"
+                      Version="13.0.3" />
   </ItemGroup>
 
 </Project>
