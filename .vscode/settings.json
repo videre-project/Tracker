@@ -8,7 +8,7 @@
     "**/.vs": true,
     "**/.user": true,
     // Exclude staging and production directories
-    "**/dist": true,
+    // "**/dist": true,
     // Excludes all C# build output folders
     "**/bin": true,
     "**/obj": true,

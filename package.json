@@ -4,8 +4,10 @@
   "version": "0.0.0",
   "scripts": {
     "dev": "dotnet run --project src/server --launch-profile WebView2",
-    "build": "dotnet build",
-    "restore": "dotnet restore",
-    "publish" : "dotnet publish -o ./publish"
+    "build": "npm run build:client && npm run build:server",
+    "build:client": "npm run build --prefix src/client",
+    "build:server": "dotnet build --project src/server",
+    "restore": "npm install --prefix src/client && dotnet restore",
+    "publish" : "npm run build:client && dotnet publish src/server -o ./publish"
   }
 }

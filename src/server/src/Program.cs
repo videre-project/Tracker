@@ -4,13 +4,13 @@
 **/
 
 using System;
-using System.IO;
 using System.Threading;
 using System.Windows.Forms;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.OpenApi.Models;
 
 using Tracker.WebView;
@@ -30,7 +30,6 @@ public class Program
     var builder = WebApplication.CreateBuilder(new WebApplicationOptions
     {
       Args = args,
-      WebRootPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "wwwroot"),
       ContentRootPath = AppDomain.CurrentDomain.BaseDirectory,
     });
 
@@ -64,8 +63,13 @@ public class Program
   {
     var api = builder.Build();
 
-    api.UseDefaultFiles();
-    api.UseStaticFiles();
+    // Use the embedded static files provided by the client.
+    api.UseFileServer(new FileServerOptions
+    {
+      FileProvider = new ManifestEmbeddedFileProvider(typeof(Program).Assembly),
+      EnableDefaultFiles = true,
+      EnableDirectoryBrowsing = false,
+    });
 
     // Configure the HTTP request pipeline.
     if (api.Environment.IsDevelopment())
@@ -73,7 +77,7 @@ public class Program
       api.UseSwagger();
       api.UseSwaggerUI();
     }
-
+    api.UseRouting();
     api.UseAuthorization();
 
     api.MapControllers();
