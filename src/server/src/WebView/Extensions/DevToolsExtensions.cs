@@ -3,9 +3,6 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-#pragma warning disable CS8602, CA2254
-
-using System;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Web.WebView2.Core;

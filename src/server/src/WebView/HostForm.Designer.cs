@@ -44,9 +44,9 @@ partial class HostForm
     ((ISupportInitialize)(this.webView21)).BeginInit();
     this.SuspendLayout();
 
-    // 
+    //
     // webView21
-    // 
+    //
     this.webView21.CreationProperties = null;
     this.webView21.DefaultBackgroundColor = Color.White;
     this.webView21.Dock = DockStyle.Fill;
@@ -57,9 +57,9 @@ partial class HostForm
     this.webView21.TabIndex = 0;
     this.webView21.ZoomFactor = 1D;
 
-    // 
+    //
     // Form1
-    // 
+    //
     this.AutoScaleDimensions = new SizeF(8F, 20F);
     this.AutoScaleMode = AutoScaleMode.Font;
     this.ClientSize = new Size(1280, 768);

@@ -4,6 +4,7 @@
     <TargetFramework>net8.0-windows</TargetFramework>
     <AssemblyName>Videre Tracker</AssemblyName>
     <Nullable>enable</Nullable>
+    <NoWarn>$(NoWarn);CS8602;CA2254;IDE0058</NoWarn>
     <IsPackable>false</IsPackable>
     <OutputType>WinExe</OutputType>
     <UseWindowsForms>true</UseWindowsForms>
@@ -17,7 +18,7 @@
     <SpaProxyServerUrl>https://localhost:5173</SpaProxyServerUrl>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\client\client.esproj">
+    <ProjectReference Include="$(SpaRoot)\client.esproj">
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
     </ProjectReference>
   </ItemGroup>

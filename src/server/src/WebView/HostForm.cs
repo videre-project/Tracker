@@ -4,11 +4,9 @@
 **/
 
 using System;
-using System.IO;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using Microsoft.Extensions.Logging;
-using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
 
 using Tracker.WebView.Extensions;
@@ -77,7 +75,7 @@ public partial class HostForm : Form
   /// Controls whether the Form is visible.
   /// </summary>
   protected override void SetVisibleCore(bool value)
-  {            
+  {
     base.SetVisibleCore(AllowShowDisplay ? value : AllowShowDisplay);
   }
 }

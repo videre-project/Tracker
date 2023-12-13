@@ -3,13 +3,10 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-using System;
 using System.IO;
 using System.Windows.Forms;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
-
-using Newtonsoft.Json;
 
 
 namespace Tracker.WebView.Extensions;

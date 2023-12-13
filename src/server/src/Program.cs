@@ -23,14 +23,15 @@ public class Program
   /// <summary>
   /// Initializes the builder for the Web API host.
   /// </summary>
-  /// <param name="args"></param>
+  /// <param name="args">The command-line arguments.</param>
   /// <returns>A new <see cref="WebApplicationBuilder"/> instance.</returns>
   public static WebApplicationBuilder CreateHostBuilder(string[] args)
   {
     var builder = WebApplication.CreateBuilder(new WebApplicationOptions
     {
       Args = args,
-      WebRootPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "wwwroot")
+      WebRootPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "wwwroot"),
+      ContentRootPath = AppDomain.CurrentDomain.BaseDirectory,
     });
 
     builder.WebHost.UseUrls("https://localhost:7183"); // Set the HTTPS endpoint
@@ -76,7 +77,7 @@ public class Program
     api.UseAuthorization();
 
     api.MapControllers();
-    api.MapFallbackToFile("/index.html");
+    api.MapFallbackToFile("index.html");
 
     return api;
   }
@@ -97,7 +98,7 @@ public class Program
     };
 
     // Use API lifecycle events to stop the application.
-    api.Lifetime.ApplicationStopping.Register(() => Application.Exit());
+    api.Lifetime.ApplicationStopping.Register(Application.Exit);
     apiThread.Start();
 
     // Start the WebView2 application.
