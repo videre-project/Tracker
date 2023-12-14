@@ -11,9 +11,11 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Logging;
 using Microsoft.OpenApi.Models;
 
 using Tracker.WebView;
+using Tracker.WebView.Logging;
 
 
 namespace Tracker;
@@ -92,8 +94,21 @@ public class Program
   [STAThread]
   public static void Main(string[] args)
   {
-    // Create a new thread to run the ASP.NET Core Web API.
+    Application.SetHighDpiMode(HighDpiMode.SystemAware);
+    Application.EnableVisualStyles();
+    Application.SetCompatibleTextRenderingDefault(false);
+
     var builder = CreateHostBuilder(args);
+    var hostForm = new HostForm()
+    {
+      Source = new Uri(builder.Configuration[WebHostDefaults.ServerUrlsKey]!),
+    };
+
+    // Redirect logging to the WebView2 console.
+    builder.Logging.ClearProviders();
+    builder.Logging.AddProvider(new ConsoleLoggerProvider(hostForm));
+
+    // Create a new thread to run the ASP.NET Core Web API.
     var api = CreateAPIService(builder);
     var apiThread = new Thread(() => api.Run())
     {
@@ -106,13 +121,6 @@ public class Program
     apiThread.Start();
 
     // Start the WebView2 application.
-    Application.SetHighDpiMode(HighDpiMode.SystemAware);
-    Application.EnableVisualStyles();
-    Application.SetCompatibleTextRenderingDefault(false);
-    Application.Run(new HostForm()
-    {
-      Source = new Uri(builder.Configuration[WebHostDefaults.ServerUrlsKey]!),
-      Logger = api.Logger,
-    });
+    Application.Run(hostForm);
   }
 }

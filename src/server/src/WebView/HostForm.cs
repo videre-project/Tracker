@@ -6,7 +6,6 @@
 using System;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using Microsoft.Extensions.Logging;
 using Microsoft.Web.WebView2.WinForms;
 
 using Tracker.WebView.Extensions;
@@ -26,29 +25,12 @@ public partial class HostForm : Form
   /// </summary>
   public Uri Source { get => WebView.Source; set => WebView.Source = value; }
 
-  /// <summary>
-  /// The logger used to log events from the WebView2 DevTools.
-  /// </summary>
-  public ILogger Logger { get; set; } = null!;
-
   public HostForm()
   {
     InitializeComponent();
 
-    // Register WebView event handlers.
-    WebView.CoreWebView2InitializationCompleted += async (s, e) =>
-    {
-      await this.RegisterLogger(Logger);
-    };
-    WebView.NavigationCompleted += (s, e) =>
-    {
-      // Hides the form until the WebView has loaded.
-      if (!this.Visible)
-      {
-        AllowShowDisplay = true;
-        this.Visible |= true;
-      }
-    };
+    // Hides the form until the WebView has loaded.
+    WebView.NavigationCompleted += HostForm_Show;
 
     // Initialize the WebView2 environment.
     WebView.CreateEnvironment();
@@ -60,7 +42,7 @@ public partial class HostForm : Form
   /// <param name="script">The JavaScript to execute.</param>
   /// <returns>The result of the script execution.</returns>
   public async Task<string> Exec(string script) =>
-    await WebView.ExecuteScriptAsync(script);
+    await this.Invoke(() => WebView.ExecuteScriptAsync(script));
 
   //
   // WinForms Form Visibility - Hide the form until the WebView has loaded.
@@ -70,6 +52,18 @@ public partial class HostForm : Form
   /// Determines whether the Form is allowed to be displayed.
   /// </summary>
   public bool AllowShowDisplay { get; private set; } = false;
+
+  /// <summary>
+  /// Reveals the Form when the WebView has loaded.
+  /// </summary>
+  private void HostForm_Show(object? sender, EventArgs e)
+  {
+    if (!this.Visible)
+    {
+      AllowShowDisplay = true;
+      this.Visible |= true;
+    }
+  }
 
   /// <summary>
   /// Controls whether the Form is visible.

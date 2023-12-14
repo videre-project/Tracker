@@ -42,18 +42,7 @@ if (!fs.existsSync(certFilePath) || !fs.existsSync(keyFilePath)) {
 
 let proxyConfig = {
   target: 'https://localhost:7183/',
-  secure: false,
-  configure: (proxy, _options) => {
-    proxy.on('error', (err, _req, _res) => {
-      console.log('proxy error', err);
-    });
-    proxy.on('proxyReq', (proxyReq, req, _res) => {
-      console.log('Sending Request to .NET:', req.method, req.url);
-    });
-    proxy.on('proxyRes', (proxyRes, req, _res) => {
-      console.log('Received Response from .NET:', proxyRes.statusCode, req.url);
-    });
-  }
+  secure: false
 }
 
 // https://vitejs.dev/config/

@@ -5,7 +5,8 @@
     <AssemblyName>Videre Tracker</AssemblyName>
     <RootNamespace>Tracker</RootNamespace>
     <Nullable>enable</Nullable>
-    <NoWarn>$(NoWarn);CS8602;CA2254;IDE0058</NoWarn>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <NoWarn>$(NoWarn);CS8602;CA2211;CA2254;IDE0058</NoWarn>
     <IsPackable>false</IsPackable>
     <OutputType>WinExe</OutputType>
     <UseWindowsForms>true</UseWindowsForms>
