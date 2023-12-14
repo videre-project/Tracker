@@ -25,26 +25,27 @@ public class Program
   /// <summary>
   /// Initializes the builder for the Web API host.
   /// </summary>
-  /// <param name="args">The command-line arguments.</param>
+  /// <param name="options">The application options.</param>
   /// <returns>A new <see cref="WebApplicationBuilder"/> instance.</returns>
-  public static WebApplicationBuilder CreateHostBuilder(string[] args)
+  public static WebApplicationBuilder CreateHostBuilder(ApplicationOptions options)
   {
     var builder = WebApplication.CreateBuilder(new WebApplicationOptions
     {
-      Args = args,
-      ContentRootPath = AppDomain.CurrentDomain.BaseDirectory,
+      Args = options.Args,
+      ContentRootPath = options.ContentRootPath,
     });
 
-    builder.WebHost.UseUrls("https://localhost:7183"); // Set the HTTPS endpoint
+    // Set the HTTPS endpoint for the Web API.
+    builder.WebHost.UseUrls($"https://localhost:{options.Port}");
 
     // Add services to the container.
     builder.Services.AddControllers();
 
     // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
     builder.Services.AddEndpointsApiExplorer();
-    builder.Services.AddSwaggerGen(options =>
+    builder.Services.AddSwaggerGen(service =>
     {
-      options.SwaggerDoc("v1", new OpenApiInfo
+      service.SwaggerDoc("v1", new OpenApiInfo
       {
         Version = "v1",
         Title = "Videre Tracker API",
@@ -98,8 +99,9 @@ public class Program
     Application.EnableVisualStyles();
     Application.SetCompatibleTextRenderingDefault(false);
 
-    var builder = CreateHostBuilder(args);
-    var hostForm = new HostForm()
+    var options = new ApplicationOptions { Args = args };
+    var builder = CreateHostBuilder(options);
+    var hostForm = new HostForm(options)
     {
       Source = new Uri(builder.Configuration[WebHostDefaults.ServerUrlsKey]!),
     };
@@ -107,6 +109,9 @@ public class Program
     // Redirect logging to the WebView2 console.
     builder.Logging.ClearProviders();
     builder.Logging.AddProvider(new ConsoleLoggerProvider(hostForm));
+
+    // Label the main thread for logging purposes.
+    Thread.CurrentThread.Name ??= "UI Thread";
 
     // Create a new thread to run the ASP.NET Core Web API.
     var api = CreateAPIService(builder);

@@ -25,7 +25,7 @@ public partial class HostForm : Form
   /// </summary>
   public Uri Source { get => WebView.Source; set => WebView.Source = value; }
 
-  public HostForm()
+  public HostForm(ApplicationOptions options)
   {
     InitializeComponent();
 
@@ -33,7 +33,7 @@ public partial class HostForm : Form
     WebView.NavigationCompleted += HostForm_Show;
 
     // Initialize the WebView2 environment.
-    WebView.CreateEnvironment();
+    WebView.CreateEnvironment(options.UserDataFolder);
   }
 
   /// <summary>
