@@ -4,6 +4,7 @@
 **/
 
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using Microsoft.Web.WebView2.WinForms;
@@ -25,15 +26,18 @@ public partial class HostForm : Form
   /// </summary>
   public Uri Source { get => WebView.Source; set => WebView.Source = value; }
 
+  /// <summary>
+  /// The thread that controls the WebView2 control.
+  /// </summary>
+  public Thread ControllerThread { get; private set; } = Thread.CurrentThread;
+
   public HostForm(ApplicationOptions options)
   {
     InitializeComponent();
 
-    // Hides the form until the WebView has loaded.
-    WebView.NavigationCompleted += HostForm_Show;
-
     // Initialize the WebView2 environment.
     WebView.CreateEnvironment(options.UserDataFolder);
+    WebView.NavigationCompleted += HostForm_Show;
   }
 
   /// <summary>

@@ -9,12 +9,12 @@ using System.IO;
 
 namespace Tracker;
 
-public class ApplicationOptions
+public class ApplicationOptions(string[] args = null!)
 {
   /// <summary>
   /// The command-line arguments.
   /// </summary>
-  public string[] Args { get; internal set; } = Array.Empty<string>();
+  public string[] Args { get; internal set; } = args ?? Array.Empty<string>();
 
   /// <summary>
   /// The port number to use for the Web API.
