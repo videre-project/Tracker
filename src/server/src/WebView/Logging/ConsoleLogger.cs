@@ -41,7 +41,7 @@ public class ConsoleLogger(string name, HostForm hostForm)
 
       string args = FormatArgs(header, label, $"\\n{message}");
 #pragma warning disable CS4014
-      hostForm.Exec($"{GetConsoleMethod(logLevel)}({args})");
+      hostForm.Exec($"{DeRefConsole(logLevel, args)}");
 #pragma warning restore CS4014
     }
   }

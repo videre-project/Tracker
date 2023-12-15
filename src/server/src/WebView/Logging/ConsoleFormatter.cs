@@ -30,4 +30,13 @@ public class ConsoleFormatter
       _ =>
         throw new ArgumentOutOfRangeException(nameof(logLevel), logLevel, null),
     };
+
+  /// <summary>
+  /// Anonymizes the console method call's source context.
+  /// </summary>
+  /// <param name="logLevel">The log level.</param>
+  /// <param name="args">The arguments to pass to the console method.</param>
+  /// <returns>A string representing the console method call.</returns>
+  public string DeRefConsole(LogLevel logLevel, string args) =>
+    $"setTimeout({GetConsoleMethod(logLevel)}.bind(console, {args}))";
 }
