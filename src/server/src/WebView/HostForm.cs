@@ -37,6 +37,15 @@ public partial class HostForm : Form
 
     // Initialize the WebView2 environment.
     WebView.CreateEnvironment(options.UserDataFolder);
+    WebView.CoreWebView2InitializationCompleted += (sender, e) =>
+    {
+      WebView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
+      WebView.CoreWebView2.Settings.IsPinchZoomEnabled = false;
+      WebView.CoreWebView2.Settings.IsStatusBarEnabled = false;
+      WebView.CoreWebView2.Settings.IsSwipeNavigationEnabled = false;
+      WebView.CoreWebView2.Settings.IsZoomControlEnabled = false;
+      WebView.CoreWebView2.Settings.UserAgent = "Windows/VidereTracker";
+    };
     WebView.NavigationCompleted += HostForm_Show;
   }
 
