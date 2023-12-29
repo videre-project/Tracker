@@ -6,7 +6,6 @@
 using System;
 using System.Threading;
 using System.Windows.Forms;
-using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 
 using Tracker.Services;
@@ -38,7 +37,7 @@ public class Program
     hostForm.ControllerThread.Name ??= "UI Thread";
 
     // Create a new thread to run the ASP.NET Core Web API.
-    WebApplication api = builder.UseConsole(hostForm).CreateAPIService();
+    var api = builder.UseConsole(hostForm).CreateAPIService();
     var apiThread = new Thread(() => api.OnShutdown(Application.Exit).Run())
     {
       Name = "API Thread",
