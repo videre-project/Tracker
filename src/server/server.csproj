@@ -32,6 +32,8 @@
 
   <!-- Publishing Configuration -->
   <PropertyGroup>
+    <RuntimeIdentifiers>win-x86;win-x64</RuntimeIdentifiers>
+    <SelfContained>true</SelfContained>
     <PublishDir>..\..\publish\</PublishDir>
     <PublishSingleFile>true</PublishSingleFile>
     <DebugType>embedded</DebugType>
@@ -59,6 +61,20 @@
                       Version="1.0.2210.55" />
     <PackageReference Include="Newtonsoft.Json"
                       Version="13.0.3" />
+    <!-- MTGO SDK -->
+    <ProjectReference Include="..\..\lib\MTGOSDK\MTGOSDK\MTGOSDK.csproj" />
+  </ItemGroup>
+
+  <!-- MTGO Reference Assemblies -->
+  <Import Project="..\..\lib\MTGOSDK\MTGOSDK.MSBuild\build\MTGOSDK.MSBuild.props" />
+  <PropertyGroup>
+    <MTGOSDK_Refs>$(_MTGOSDK_Refs)\3.4.*.*</MTGOSDK_Refs>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\lib\MTGOSDK\MTGOSDK.Ref\MTGOSDK.Ref.csproj"
+                      ReferenceOutputAssembly="false" />
+    <Reference Include="$(MTGOSDK_Refs)\MTGOEnumStruct.dll" />
+    <Reference Include="$(MTGOSDK_Refs)\WotC.MtGO.Client.Model.Reference.dll" />
   </ItemGroup>
 
 </Project>

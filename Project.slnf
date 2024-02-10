@@ -1,0 +1,9 @@
+{
+  "solution": {
+    "path": "lib\\MTGOSDK.sln",
+    "projects": [
+      "..\\src\\client\\client.esproj",
+      "..\\src\\server\\server.csproj"
+    ]
+  }
+}

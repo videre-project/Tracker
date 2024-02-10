@@ -1,0 +1,3 @@
+[submodule "lib/MTGOSDK"]
+	path = lib/MTGOSDK
+	url = https://github.com/videre-project/MTGOSDK
