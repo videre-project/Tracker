@@ -3,10 +3,10 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Text.Json;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
 
-using Newtonsoft.Json;
+using Microsoft.Extensions.Logging;
 
 
 namespace Tracker.WebView.Extensions;
@@ -46,7 +46,7 @@ public static class ConsoleAPIExtensions
       // Extract the log entry from the event argument schema:
       // https://chromedevtools.github.io/devtools-protocol/tot/Runtime/#event-consoleAPICalled
       //
-      var obj = JsonConvert.DeserializeObject<dynamic>(e.ParameterObjectAsJson);
+      var obj = JsonSerializer.Deserialize<dynamic>(e.ParameterObjectAsJson);
       string message = obj["args"][0]["value"];
 
       var level = obj["type"];
@@ -83,7 +83,7 @@ public static class ConsoleAPIExtensions
       // Extract the log entry from the event argument schema:
       // https://chromedevtools.github.io/devtools-protocol/tot/Log/#type-LogEntry
       //
-      var obj = JsonConvert.DeserializeObject<dynamic>(e.ParameterObjectAsJson);
+      var obj = JsonSerializer.Deserialize<dynamic>(e.ParameterObjectAsJson);
       string source = obj["entry"]["source"];
       string level = obj["entry"]["level"];
       string message = $"[WebView2.{source}] {obj["entry"]["text"]}";
