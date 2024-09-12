@@ -13,7 +13,20 @@ namespace Tracker.WebView.Logging;
 public class ConsoleLogger(string name, HostForm hostForm)
     : ConsoleFormatter, ILogger
 {
-	private static readonly object s_lock = new();
+  private static string GetCategoryColor(LogLevel logLevel)
+  {
+    string color = "#000000";
+
+    if (logLevel == LogLevel.Information)
+      color = "#089fa2"; // teal
+    else if (logLevel == LogLevel.Warning)
+      color = "#ff8c00"; // orange
+    else if (logLevel == LogLevel.Error ||
+        logLevel == LogLevel.Critical)
+      color = "#ff0000"; // red
+
+    return color;
+  }
 
   public bool IsEnabled(LogLevel logLevel) => true;
 
@@ -30,19 +43,15 @@ public class ConsoleLogger(string name, HostForm hostForm)
   {
     if (!IsEnabled(logLevel)) return;
 
-    lock (s_lock)
-    {
-      string header = FormatCSS($"[{Thread.CurrentThread.Name ?? "Unknown"}]",
-        "margin-bottom: 0.25em",
-        "color: #089fa2"
-      );
-      string label = $"{name}[{eventId.Id}]";
-      string message = formatter(state, exception!);
+    string header = FormatCSS($"[{Thread.CurrentThread.Name ?? "Unknown"}]",
+      "margin-bottom: 0.25em",
+      $"color: {GetCategoryColor(logLevel)}");
+    string label = $"{name}[{eventId.Id}]";
+    string message = formatter(state, exception!);
 
-      string args = FormatArgs(header, label, $"\\n{message}");
+    string args = FormatArgs(header, label, $"\\n{message}");
 #pragma warning disable CS4014
-      hostForm.Exec($"{DeRefConsole(logLevel, args)}");
+    hostForm.Exec($"{DeRefConsole(logLevel, args)}");
 #pragma warning restore CS4014
-    }
   }
 }
