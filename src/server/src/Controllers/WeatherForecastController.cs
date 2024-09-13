@@ -6,21 +6,26 @@ using Microsoft.Extensions.Logging;
 
 namespace Tracker.Controllers;
 
+public class WeatherForecast
+{
+  public DateOnly Date { get; set; }
+
+  public int TemperatureC { get; set; }
+
+  public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
+
+  public string? Summary { get; set; }
+}
+
 [ApiController]
 [Route("[controller]")]
-public class WeatherForecastController : ControllerBase
+public class WeatherForecastController(ILogger<WeatherForecastController> logger)
+    : ControllerBase
 {
-  private static readonly string[] Summaries = new[]
-  {
+  private static readonly string[] Summaries =
+  [
     "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-  };
-
-  private readonly ILogger<WeatherForecastController> _logger;
-
-  public WeatherForecastController(ILogger<WeatherForecastController> logger)
-  {
-    _logger = logger;
-  }
+  ];
 
   [HttpGet(Name = "GetWeatherForecast")]
   public IEnumerable<WeatherForecast> Get()

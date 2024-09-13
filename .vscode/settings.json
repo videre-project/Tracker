@@ -9,9 +9,6 @@
     "**/.user": true,
     // Exclude staging and production directories
     // "**/dist": true,
-    // Excludes all C# build output folders
-    "**/bin": true,
-    "**/obj": true,
   },
   "var": {
     "configuration" : "Release",
