@@ -1,0 +1,37 @@
+<Project>
+
+  <PropertyGroup>
+    <!-- Enable central package management -->
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <!-- Enable deterministic NuGet package restore -->
+    <RestoreLockedMode>true</RestoreLockedMode>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <RestoreUseStaticGraphEvaluation>true</RestoreUseStaticGraphEvaluation>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageVersion Include="Newtonsoft.Json" Version="13.0.1" />
+    <PackageVersion Include="Newtonsoft.Json.Bson" Version="1.0.2" />
+  </ItemGroup>
+
+  <ItemGroup Label="PackageVersions">
+    <!-- ASP.NET Web API -->
+    <PackageVersion Include="Microsoft.AspNetCore.OpenApi"
+                    Version="8.0.11" />
+    <PackageVersion Include="Microsoft.AspNetCore.SpaProxy"
+                    Version="8.0.11" />
+    <PackageVersion Include="Swashbuckle.AspNetCore"
+                    Version="7.2.0" />
+    <!-- WebView2 Application -->
+    <PackageVersion Include="Microsoft.Extensions.FileProviders.Embedded"
+                    Version="8.0.11" />
+    <PackageVersion Include="Microsoft.Web.WebView2"
+                    Version="1.0.2903.40" />
+    <!-- MTGOSDK -->
+    <PackageVersion Include="MTGOSDK"
+                    Version="0.0.5.20241126" />
+    <PackageVersion Include="MTGOSDK.Win32"
+                    Version="0.0.5.20241126" />
+  </ItemGroup>
+
+</Project>

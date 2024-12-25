@@ -2,6 +2,7 @@
   Copyright (c) 2023, Cory Bennett. All rights reserved.
   SPDX-License-Identifier: Apache-2.0
 **/
+#pragma warning disable CS8602 // Ignore nullable warnings when parsing JSON.
 
 using System.Text.Json;
 using System.Threading.Tasks;

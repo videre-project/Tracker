@@ -6,11 +6,9 @@
     <RootNamespace>Tracker</RootNamespace>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <NoWarn>$(NoWarn);CS8602;CA2211;CA2254;IDE0058</NoWarn>
     <IsPackable>false</IsPackable>
     <OutputType>WinExe</OutputType>
     <UseWindowsForms>true</UseWindowsForms>
-    <EnableWindowsTargeting>True</EnableWindowsTargeting>
     <GenerateEmbeddedFilesManifest>true</GenerateEmbeddedFilesManifest>
   </PropertyGroup>
 
@@ -32,7 +30,6 @@
 
   <!-- Publishing Configuration -->
   <PropertyGroup>
-    <PublishDir>..\..\publish\</PublishDir>
     <PublishSingleFile>true</PublishSingleFile>
     <DebugType>embedded</DebugType>
     <StaticWebAssetsEnabled>false</StaticWebAssetsEnabled>
@@ -46,17 +43,15 @@
 
   <ItemGroup>
     <!-- ASP.NET Web API -->
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi"
-                      Version="8.0.8" />
-    <PackageReference Include="Microsoft.AspNetCore.SpaProxy"
-                      Version="8.0.8" />
-    <PackageReference Include="Swashbuckle.AspNetCore"
-                      Version="6.7.3" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <PackageReference Include="Microsoft.AspNetCore.SpaProxy" />
+    <PackageReference Include="Swashbuckle.AspNetCore" />
     <!-- WebView2 Application -->
-    <PackageReference Include="Microsoft.Extensions.FileProviders.Embedded"
-                      Version="8.0.8" />
-    <PackageReference Include="Microsoft.Web.WebView2"
-                      Version="1.0.2739.15" />
+    <PackageReference Include="Microsoft.Extensions.FileProviders.Embedded" />
+    <PackageReference Include="Microsoft.Web.WebView2" />
+    <!-- MTGOSDK -->
+    <PackageReference Include="MTGOSDK" />
+    <PackageReference Include="MTGOSDK.Win32" />
   </ItemGroup>
 
 </Project>

@@ -1,0 +1,23 @@
+<Project>
+
+  <!-- Project Directories -->
+  <PropertyGroup>
+    <SolutionDir>$(MSBuildThisFileDirectory)</SolutionDir>
+    <PublishDir>$(SolutionDir)publish</PublishDir>
+  </PropertyGroup>
+
+  <!-- Debugging Options -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <DefineConstants>TRACE</DefineConstants>
+  </PropertyGroup>
+
+  <!-- Enable building on non-Windows platforms -->
+  <PropertyGroup Condition="'$(OS)' != 'Windows_NT'">
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <IsNonDeterministic>true</IsNonDeterministic>
+  </PropertyGroup>
+
+</Project>
