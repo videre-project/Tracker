@@ -9,29 +9,35 @@
     <RestoreUseStaticGraphEvaluation>true</RestoreUseStaticGraphEvaluation>
   </PropertyGroup>
 
-  <ItemGroup>
-    <PackageVersion Include="Newtonsoft.Json" Version="13.0.1" />
-    <PackageVersion Include="Newtonsoft.Json.Bson" Version="1.0.2" />
-  </ItemGroup>
+  <PropertyGroup Label="SDKVersions">
+    <MTGOSDKVersion>0.0.5.20241126</MTGOSDKVersion>
+  </PropertyGroup>
 
   <ItemGroup Label="PackageVersions">
     <!-- ASP.NET Web API -->
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi"
-                    Version="8.0.11" />
+                    Version="9.0.0" />
     <PackageVersion Include="Microsoft.AspNetCore.SpaProxy"
-                    Version="8.0.11" />
+                    Version="9.0.0" />
     <PackageVersion Include="Swashbuckle.AspNetCore"
                     Version="7.2.0" />
+    <!-- SQLite Database -->
+    <PackageVersion Include="Microsoft.EntityFrameworkCore"
+                    Version="9.0.0" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite"
+                    Version="9.0.0" />
     <!-- WebView2 Application -->
     <PackageVersion Include="Microsoft.Extensions.FileProviders.Embedded"
-                    Version="8.0.11" />
+                    Version="9.0.0" />
     <PackageVersion Include="Microsoft.Web.WebView2"
                     Version="1.0.2903.40" />
     <!-- MTGOSDK -->
     <PackageVersion Include="MTGOSDK"
-                    Version="0.0.5.20241126" />
+                    Version="$(MTGOSDKVersion)" />
+    <PackageVersion Include="MTGOSDK.MSBuild"
+                    Version="$(MTGOSDKVersion)" />
     <PackageVersion Include="MTGOSDK.Win32"
-                    Version="0.0.5.20241126" />
+                    Version="$(MTGOSDKVersion)" />
   </ItemGroup>
 
 </Project>

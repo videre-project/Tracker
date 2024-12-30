@@ -2,6 +2,7 @@
   Copyright (c) 2023, Cory Bennett. All rights reserved.
   SPDX-License-Identifier: Apache-2.0
 **/
+#pragma warning disable WFO1000 // .NET 9: Disable code serialization warnings.
 
 using System;
 using System.Threading;
