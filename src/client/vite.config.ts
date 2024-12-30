@@ -23,7 +23,14 @@ const certFilePath = path.join(baseFolder, `${certificateName}.pem`);
 const keyFilePath = path.join(baseFolder, `${certificateName}.key`);
 
 if (!fs.existsSync(certFilePath) || !fs.existsSync(keyFilePath)) {
-  if (0 !== child_process.spawnSync('dotnet', [
+
+  // Explicitly create the ASP.NET certificates folder if it doesn't exist.
+  // https://github.com/dotnet/aspnetcore/issues/58330
+  if (!fs.existsSync(baseFolder)) {
+    fs.mkdirSync(baseFolder, { recursive: true });
+  }
+
+  const result = child_process.spawnSync('dotnet', [
     'dev-certs',
     'https',
     '--export-path',
@@ -31,8 +38,12 @@ if (!fs.existsSync(certFilePath) || !fs.existsSync(keyFilePath)) {
     '--format',
     'Pem',
     '--no-password',
-  ], { stdio: 'inherit', }).status) {
-    throw new Error("Could not create certificate.");
+    '--verbose',
+  ], { stdio: 'pipe' });
+
+  if (result.status !== 0) {
+    const errorOutput = result.stderr.toString();
+    throw new Error(`Could not create certificate. Error: ${errorOutput}`);
   }
 }
 
