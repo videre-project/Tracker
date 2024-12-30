@@ -6,10 +6,15 @@
 using System;
 using System.Threading;
 using System.Windows.Forms;
+using Microsoft.Extensions.DependencyInjection;
 
 using Microsoft.AspNetCore.Hosting;
+
+using MTGOSDK.Core.Logging;
+
 using Tracker.Services;
 using Tracker.WebView;
+using Microsoft.Extensions.Logging;
 
 
 namespace Tracker;
@@ -22,30 +27,45 @@ public class Program
   [STAThread]
   public static void Main(string[] args)
   {
+    var options = new ApplicationOptions(args);
     Application.SetHighDpiMode(HighDpiMode.SystemAware);
     Application.EnableVisualStyles();
     Application.SetCompatibleTextRenderingDefault(false);
 
-    var options = new ApplicationOptions(args);
     var builder = WebAPIService.CreateHostBuilder(options);
     var hostForm = new HostForm(options)
     {
       Source = new Uri(builder.Configuration[WebHostDefaults.ServerUrlsKey]!),
     };
-
-    // Label the controller thread for logging purposes.
     hostForm.ControllerThread.Name ??= "UI Thread";
+    hostForm.ControllerThread.Priority = ThreadPriority.AboveNormal;
+
+    // Redirect all logging to the WebView2 console.
+    LoggerBase.SetProviderInstance(hostForm.RegisterProvider());
+    builder.UseConsole(hostForm);
+    builder.Services.AddLogging(s =>
+    {
+      s.AddFilter("Microsoft.Hosting.Lifetime",               LogLevel.Warning);
+      s.AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.Warning);
+    });
 
     // Create a new thread to run the ASP.NET Core Web API.
-    var api = builder.UseConsole(hostForm).CreateAPIService();
-    var apiThread = new Thread(() => api.OnShutdown(Application.Exit).Run())
+    var apiThread = new Thread(() =>
+    {
+      Log.Debug("Starting the API thread.");
+      var api = builder.CreateAPIService();
+      api.OnShutdown(Application.Exit);
+      api.Run();
+    })
     {
       Name = "API Thread",
-      IsBackground = true
+      IsBackground = true,
+      Priority = ThreadPriority.AboveNormal,
     };
     apiThread.Start();
 
     // Start the WebView2 application.
+    Log.Debug("Starting the application.");
     Application.Run(hostForm);
   }
 }

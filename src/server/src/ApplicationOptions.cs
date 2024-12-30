@@ -21,6 +21,9 @@ public class ApplicationOptions(string[] args = null!)
   /// </summary>
   public int Port { get; internal set; } = 7183;
 
+  public bool IsDevelopment { get; internal set; } =
+    Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") == "Development";
+
   /// <summary>
   /// The base directory path for the application's static content.
   /// </summary>
@@ -34,7 +37,7 @@ public class ApplicationOptions(string[] args = null!)
   /// The base directory path for user application data.
   /// </summary>
   /// <remarks>
-  /// Defaults to <c>%appdata%\..\Local\Videre Tracker</c>
+  /// Defaults to <c>%LocalAppData%\Videre Tracker</c>
   /// </remarks>
   public string UserDataFolder { get; internal set; } =
     Path.Combine(

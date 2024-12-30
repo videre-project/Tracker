@@ -5,10 +5,14 @@
 #pragma warning disable WFO1000 // .NET 9: Disable code serialization warnings.
 
 using System;
+using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+
 using Microsoft.Web.WebView2.WinForms;
+
+using MTGOSDK.Core.Logging;
 
 using Tracker.WebView.Extensions;
 
@@ -47,16 +51,62 @@ public partial class HostForm : Form
       WebView.CoreWebView2.Settings.IsZoomControlEnabled = false;
       WebView.CoreWebView2.Settings.UserAgent = "Windows/VidereTracker";
     };
-    WebView.NavigationCompleted += HostForm_Show;
+
+    WebView.NavigationCompleted += (sender, e) =>
+    {
+      // Check if the current environment is development.
+      if (options.IsDevelopment)
+      {
+        WebView.CoreWebView2.Settings.AreDevToolsEnabled = true;
+        WebView.NavigationCompleted += (s, e) =>
+        {
+          HostForm_Show(sender, e);
+          WebView.CoreWebView2.OpenDevToolsWindow();
+        };
+      }
+      else
+      {
+        HostForm_Show(sender, e);
+      }
+    };
   }
+
+  private readonly SemaphoreSlim _semaphore = new(1, 1);
+  private readonly ConcurrentQueue<Func<Task>> _commandQueue = new();
 
   /// <summary>
   /// Executes a script in the WebView2 control.
   /// </summary>
   /// <param name="script">The JavaScript to execute.</param>
   /// <returns>The result of the script execution.</returns>
-  public async Task<string> Exec(string script) =>
-    await this.Invoke(() => WebView.ExecuteScriptAsync(script));
+  public async Task<string> Exec(string script)
+  {
+    async Task<string> runCommand() => await WebView.ExecuteScriptAsync(script);
+
+    await _semaphore.WaitAsync();
+    try
+    {
+      // Wait until the WebView2 control is ready before processing commands.
+      if (!AllowShowDisplay)
+      {
+        _commandQueue.Enqueue(runCommand);
+        return await Task.FromResult(string.Empty);
+      }
+      else if (!_commandQueue.IsEmpty)
+      {
+        while (_commandQueue.TryDequeue(out var command))
+        {
+          await command.Invoke();
+        }
+      }
+    }
+    finally
+    {
+      _ = _semaphore.Release();
+    }
+
+    return await runCommand();
+  }
 
   //
   // WinForms Form Visibility - Hide the form until the WebView has loaded.
@@ -68,6 +118,11 @@ public partial class HostForm : Form
   public bool AllowShowDisplay { get; private set; } = false;
 
   /// <summary>
+  /// Determines whether the Form is ready to be displayed.
+  /// </summary>
+  public EventHandler? OnReady;
+
+  /// <summary>
   /// Reveals the Form when the WebView has loaded.
   /// </summary>
   private void HostForm_Show(object? sender, EventArgs e)
@@ -76,6 +131,12 @@ public partial class HostForm : Form
     {
       AllowShowDisplay = true;
       this.Visible |= true;
+
+      // Notify any listeners that the HostForm is ready.
+      OnReady?.Invoke(this, EventArgs.Empty);
+
+      WebView.NavigationCompleted -= HostForm_Show;
+      Log.Debug("Finished initializing HostForm.");
     }
   }
 

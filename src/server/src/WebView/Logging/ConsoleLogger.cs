@@ -4,7 +4,9 @@
 **/
 
 using System;
+using System.ComponentModel.DataAnnotations;
 using System.Threading;
+
 using Microsoft.Extensions.Logging;
 
 
@@ -43,13 +45,19 @@ public class ConsoleLogger(string name, HostForm hostForm)
   {
     if (!IsEnabled(logLevel)) return;
 
-    string header = FormatCSS($"[{Thread.CurrentThread.Name ?? "Unknown"}]",
-      "margin-bottom: 0.25em",
-      $"color: {GetCategoryColor(logLevel)}");
+    string timestamp = DateTime.Now.ToString("HH:mm:ss.fff");
+    string header = $"[{Thread.CurrentThread.Name ?? "Unknown"}]";
     string label = $"{name}[{eventId.Id}]";
-    string message = formatter(state, exception!);
+    string message = formatter(state, exception!)
+      // Escape any slashes in the message
+      .Replace("\\", "\\\\");
 
-    string args = FormatArgs(header, label, $"\\n{message}");
+    string args = FormatArgs(
+      $"%c{timestamp} %c{header} %c{label} \\n{message}",
+      /* timestamp   */  "margin-bottom: 0.25em; color: #691569",
+      /* header      */ $"color: {GetCategoryColor(logLevel)}",
+      /* label + msg */  "color: #000000");
+
 #pragma warning disable CS4014
     hostForm.Exec($"{DeRefConsole(logLevel, args)}");
 #pragma warning restore CS4014

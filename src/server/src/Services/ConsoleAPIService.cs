@@ -6,6 +6,8 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Logging;
 
+using MTGOSDK.Core.Logging;
+
 using Tracker.WebView;
 using Tracker.WebView.Logging;
 
@@ -17,6 +19,17 @@ namespace Tracker.Services;
 /// </summary>
 public static class ConsoleAPIService
 {
+  private static ConsoleLoggerProvider? s_provider;
+
+  /// <summary>
+  /// Registers a new console logger provider for the HostForm.
+  /// </summary>
+  public static ConsoleLoggerProvider RegisterProvider(this HostForm hostForm)
+  {
+    s_provider = new ConsoleLoggerProvider(hostForm);
+    return s_provider;
+  }
+
   /// <summary>
   /// Redirects logging to the HostForm's WebView2 console.
   /// </summary>
@@ -27,9 +40,13 @@ public static class ConsoleAPIService
     this WebApplicationBuilder builder,
     HostForm hostForm)
   {
+    // Register the console logger provider if it hasn't been registered yet.
+    s_provider ??= new ConsoleLoggerProvider(hostForm);
+
     // Redirect logging to the WebView2 console.
     builder.Logging.ClearProviders();
-    builder.Logging.AddProvider(new ConsoleLoggerProvider(hostForm));
+    builder.Logging.AddProvider(s_provider);
+    Log.Debug("Logging redirected to the WebView2 console.");
 
     return builder;
   }
