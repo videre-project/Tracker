@@ -17,10 +17,14 @@ namespace Tracker.WebView;
 partial class HostForm
 {
   /// <summary>
-  ///  Required designer variable.
+  /// Required designer variable.
   /// </summary>
   private IContainer components = null;
+
+  private WebView2 webView21;
   private TitleBarComponent titleBar;
+
+  public Size? RestoreSize;
 
   /// <summary>
   ///  Clean up any resources being used.
@@ -60,13 +64,16 @@ partial class HostForm
     this.webView21.TabIndex = 0;
     this.webView21.ZoomFactor = 1D;
 
+    this.Controls.Add(this.webView21);
+
     //
     // HostForm
     //
     this.AutoScaleDimensions = new SizeF(8F, 20F);
     this.AutoScaleMode = AutoScaleMode.Font;
+    this.StartPosition = FormStartPosition.CenterScreen;
     this.ClientSize = new Size(1280, 768);
-    this.Controls.Add(this.webView21);
+    this.MinimumSize = new Size(800, 600);
     this.Name = "HostForm";
     this.Text = "Videre Tracker";
     // this.ShowIcon = false;
@@ -74,12 +81,14 @@ partial class HostForm
     if (options.UseCustomTitleBar)
     {
       // webView21
-      this.webView21.Location = new Point(0, 30); // Move to below the title bar
-      this.webView21.Size = new Size(1280, 738); // Adjusted height
+      this.webView21.Location = new Point(0, 30);
+      this.webView21.Size = new Size(this.Size.Width, this.Size.Height - 30);
+
       // HostForm
       this.titleBar = new TitleBarComponent(this);
       this.Controls.Add(this.titleBar);
       this.FormBorderStyle = FormBorderStyle.None; // Hide the native title bar
+      this.titleBar.AddResizeTriangle(this.webView21);
     }
 
     ((ISupportInitialize)(this.webView21)).EndInit();
@@ -87,6 +96,4 @@ partial class HostForm
   }
 
   #endregion
-
-  private WebView2 webView21;
 }
