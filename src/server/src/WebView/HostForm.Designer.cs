@@ -55,7 +55,6 @@ partial class HostForm
     // webView21
     //
     this.webView21.CreationProperties = null;
-    this.webView21.DefaultBackgroundColor = Color.White;
     this.webView21.Dock = DockStyle.Fill;
     this.webView21.Location = new Point(0, 0);
     this.webView21.Name = "webView21";
@@ -76,18 +75,16 @@ partial class HostForm
     this.MinimumSize = new Size(800, 600);
     this.Name = "HostForm";
     this.Text = "Videre Tracker";
-    // this.ShowIcon = false;
 
     if (options.UseCustomTitleBar)
     {
-      // webView21
       this.webView21.Location = new Point(0, 30);
       this.webView21.Size = new Size(this.Size.Width, this.Size.Height - 30);
 
-      // HostForm
       this.titleBar = new TitleBarComponent(this);
-      this.Controls.Add(this.titleBar);
+      this.BackColor = Color.FromArgb(255, 80, 80, 80); // #505050
       this.FormBorderStyle = FormBorderStyle.None; // Hide the native title bar
+      this.Controls.Add(this.titleBar);
       this.titleBar.AddResizeTriangle(this.webView21);
     }
 

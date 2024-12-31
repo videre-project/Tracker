@@ -2,6 +2,7 @@
   Copyright (c) 2023, Cory Bennett. All rights reserved.
   SPDX-License-Identifier: Apache-2.0
 **/
+#pragma warning disable WFO1000 // .NET 9: Disable code serialization warnings.
 
 using System;
 using System.Drawing;
@@ -18,6 +19,8 @@ public class TitleBarComponent : Panel
   public Button closeButton;
   public Button minimizeButton;
   public Button maximizeButton;
+
+  public bool DoLayoutOnResize { get; set; } = false;
 
   private bool _dragging = false;
   private Point _dragCursorPoint;
@@ -90,7 +93,15 @@ public class TitleBarComponent : Panel
   #region Native Methods
 
   [DllImport("user32.dll")]
-  private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+  private static extern bool SetWindowPos(
+    IntPtr hWnd,
+    IntPtr hWndInsertAfter,
+    int X,
+    int Y,
+    int cx,
+    int cy,
+    uint uFlags
+  );
 
   private static readonly IntPtr HWND_TOP = IntPtr.Zero;
   private const uint SWP_SHOWWINDOW = 0x0040;
@@ -282,7 +293,7 @@ public class TitleBarComponent : Panel
 
   public void AddResizeTriangle(Control parent)
   {
-    var width = 5/3 * this.Height;
+    var width = (int)(1.1 * this.Height);
     var resizeTriangle = new TransparentPanel
     {
       Size = new Size(width, width),
@@ -320,6 +331,8 @@ public class TitleBarComponent : Panel
 
   private void ResizeTriangle_MouseDown(object? sender, MouseEventArgs e)
   {
+    // _hostForm.TransparencyKey = _hostForm.BackColor;
+    if (!DoLayoutOnResize) _hostForm.SuspendLayout();
     _resizing = true;
     _resizeCursorPoint = Cursor.Position;
     _resizeFormSize = _hostForm.Size;
@@ -344,6 +357,8 @@ public class TitleBarComponent : Panel
 
   private void ResizeTriangle_MouseUp(object? sender, MouseEventArgs e)
   {
+    // _hostForm.TransparencyKey = Color.Empty;
+    if (!DoLayoutOnResize) _hostForm.ResumeLayout();
     _resizing = false;
   }
 
