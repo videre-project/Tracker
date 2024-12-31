@@ -6,7 +6,6 @@
 using System;
 using System.Threading;
 using System.Windows.Forms;
-using Microsoft.Extensions.DependencyInjection;
 
 using Microsoft.AspNetCore.Hosting;
 
@@ -14,7 +13,6 @@ using MTGOSDK.Core.Logging;
 
 using Tracker.Services;
 using Tracker.WebView;
-using Microsoft.Extensions.Logging;
 
 
 namespace Tracker;
@@ -43,11 +41,6 @@ public class Program
     // Redirect all logging to the WebView2 console.
     LoggerBase.SetProviderInstance(hostForm.RegisterProvider());
     builder.UseConsole(hostForm);
-    builder.Services.AddLogging(s =>
-    {
-      s.AddFilter("Microsoft.Hosting.Lifetime",               LogLevel.Warning);
-      s.AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.Warning);
-    });
 
     // Create a new thread to run the ASP.NET Core Web API.
     var apiThread = new Thread(() =>

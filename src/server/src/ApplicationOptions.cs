@@ -21,6 +21,9 @@ public class ApplicationOptions(string[] args = null!)
   /// </summary>
   public int Port { get; internal set; } = 7183;
 
+  /// <summary>
+  /// Indicates whether the application is running in development mode.
+  /// </summary>
   public bool IsDevelopment { get; internal set; } =
     Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") == "Development";
 

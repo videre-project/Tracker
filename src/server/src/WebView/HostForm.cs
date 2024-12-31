@@ -50,6 +50,7 @@ public partial class HostForm : Form
       WebView.CoreWebView2.Settings.IsSwipeNavigationEnabled = false;
       WebView.CoreWebView2.Settings.IsZoomControlEnabled = false;
       WebView.CoreWebView2.Settings.UserAgent = "Windows/VidereTracker";
+      Log.Information("Initialized WebView2 environment.");
     };
 
     WebView.NavigationCompleted += (sender, e) =>

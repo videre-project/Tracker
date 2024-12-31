@@ -5,6 +5,7 @@
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.DependencyInjection;
 
 using MTGOSDK.Core.Logging;
 
@@ -47,6 +48,13 @@ public static class ConsoleAPIService
     builder.Logging.ClearProviders();
     builder.Logging.AddProvider(s_provider);
     Log.Debug("Logging redirected to the WebView2 console.");
+
+    // Configure the logging levels for the application.
+    builder.Services.AddLogging(s =>
+    {
+      s.AddFilter("Microsoft.Hosting.Lifetime",               LogLevel.Warning);
+      s.AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.Warning);
+    });
 
     return builder;
   }
