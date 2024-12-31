@@ -6,7 +6,10 @@
 using System.ComponentModel;
 using System.Drawing;
 using System.Windows.Forms;
+
 using Microsoft.Web.WebView2.WinForms;
+
+using Tracker.WebView.Components;
 
 
 namespace Tracker.WebView;
@@ -16,7 +19,8 @@ partial class HostForm
   /// <summary>
   ///  Required designer variable.
   /// </summary>
-  private System.ComponentModel.IContainer components = null;
+  private IContainer components = null;
+  private TitleBarComponent titleBar;
 
   /// <summary>
   ///  Clean up any resources being used.
@@ -37,7 +41,7 @@ partial class HostForm
   ///  Required method for Designer support - do not modify
   ///  the contents of this method with the code editor.
   /// </summary>
-  private void InitializeComponent()
+  private void InitializeComponent(ApplicationOptions options)
   {
     this.webView21 = new WebView2();
     ((ISupportInitialize)(this.webView21)).BeginInit();
@@ -57,7 +61,7 @@ partial class HostForm
     this.webView21.ZoomFactor = 1D;
 
     //
-    // Form1
+    // HostForm
     //
     this.AutoScaleDimensions = new SizeF(8F, 20F);
     this.AutoScaleMode = AutoScaleMode.Font;
@@ -65,7 +69,18 @@ partial class HostForm
     this.Controls.Add(this.webView21);
     this.Name = "HostForm";
     this.Text = "Videre Tracker";
-    this.ShowIcon = false;
+    // this.ShowIcon = false;
+
+    if (options.UseCustomTitleBar)
+    {
+      // webView21
+      this.webView21.Location = new Point(0, 30); // Move to below the title bar
+      this.webView21.Size = new Size(1280, 738); // Adjusted height
+      // HostForm
+      this.titleBar = new TitleBarComponent(this);
+      this.Controls.Add(this.titleBar);
+      this.FormBorderStyle = FormBorderStyle.None; // Hide the native title bar
+    }
 
     ((ISupportInitialize)(this.webView21)).EndInit();
     this.ResumeLayout(false);

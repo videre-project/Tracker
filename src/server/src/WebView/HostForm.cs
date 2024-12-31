@@ -38,7 +38,7 @@ public partial class HostForm : Form
 
   public HostForm(ApplicationOptions options)
   {
-    InitializeComponent();
+    InitializeComponent(options);
 
     // Initialize the WebView2 environment.
     WebView.CreateEnvironment(options.UserDataFolder);

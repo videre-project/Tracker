@@ -28,6 +28,11 @@ public class ApplicationOptions(string[] args = null!)
     Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") == "Development";
 
   /// <summary>
+  /// Controls whether to render a custom title bar and window controls.
+  /// </summary>
+  public bool UseCustomTitleBar { get; internal set; } = true;
+
+  /// <summary>
   /// The base directory path for the application's static content.
   /// </summary>
   /// <remarks>
