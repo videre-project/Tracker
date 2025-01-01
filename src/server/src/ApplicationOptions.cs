@@ -21,6 +21,9 @@ public class ApplicationOptions(string[] args = null!)
   /// </summary>
   public int Port { get; internal set; } = 7183;
 
+  public bool IsDarkMode { get; internal set; } =
+    Environment.GetEnvironmentVariable("APP_THEME") == "Dark";
+
   /// <summary>
   /// Indicates whether the application is running in development mode.
   /// </summary>

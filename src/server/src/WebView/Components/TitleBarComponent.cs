@@ -26,12 +26,15 @@ public class TitleBarComponent : Panel
   private Point _dragCursorPoint;
   private Point _dragFormPoint;
   private readonly HostForm _hostForm;
+  private readonly Control _parent;
 
 #pragma warning disable CS8618
-  public TitleBarComponent(HostForm hostForm)
+  public TitleBarComponent(HostForm hostForm, Control parent)
   {
     this._hostForm = hostForm;
-    InitializeComponent();
+    this._parent = parent;
+    this.InitializeComponent();
+    this.AddResizeTriangle(parent);
   }
 #pragma warning restore CS8618
 
@@ -278,7 +281,7 @@ public class TitleBarComponent : Panel
   private int _formWidth => _hostForm.ClientSize.Width;
   private int _formHeight => _hostForm.ClientSize.Height;
 
-  public class TransparentPanel : Panel
+  private class TransparentPanel : Panel
   {
     protected override CreateParams CreateParams
     {
@@ -291,7 +294,7 @@ public class TitleBarComponent : Panel
     }
   }
 
-  public void AddResizeTriangle(Control parent)
+  private void AddResizeTriangle(Control parent)
   {
     var width = (int)(1.1 * this.Height);
     var resizeTriangle = new TransparentPanel

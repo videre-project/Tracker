@@ -25,6 +25,8 @@ partial class HostForm
   private TitleBarComponent titleBar;
 
   public Size? RestoreSize;
+  public Color Background_Dark = Color.FromArgb(255, 36, 36, 36); // #242424
+  public Color Background_Light = Color.FromArgb(255, 80, 80, 80); // #505050
 
   /// <summary>
   ///  Clean up any resources being used.
@@ -64,6 +66,9 @@ partial class HostForm
     this.webView21.ZoomFactor = 1D;
 
     this.Controls.Add(this.webView21);
+    this.webView21.BackColor = options.IsDarkMode
+      ? this.Background_Dark
+      : this.Background_Light;
 
     //
     // HostForm
@@ -81,11 +86,10 @@ partial class HostForm
       this.webView21.Location = new Point(0, 30);
       this.webView21.Size = new Size(this.Size.Width, this.Size.Height - 30);
 
-      this.titleBar = new TitleBarComponent(this);
+      this.titleBar = new TitleBarComponent(this, parent: this.webView21);
       this.BackColor = Color.FromArgb(255, 80, 80, 80); // #505050
       this.FormBorderStyle = FormBorderStyle.None; // Hide the native title bar
       this.Controls.Add(this.titleBar);
-      this.titleBar.AddResizeTriangle(this.webView21);
     }
 
     ((ISupportInitialize)(this.webView21)).EndInit();
