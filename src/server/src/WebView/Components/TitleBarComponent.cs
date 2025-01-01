@@ -305,6 +305,7 @@ public class TitleBarComponent : Panel
       Anchor = AnchorStyles.Bottom | AnchorStyles.Right,
     };
 
+    resizeTriangle.MouseEnter += ResizeTriangle_MouseEnter;
     resizeTriangle.MouseDown += ResizeTriangle_MouseDown;
     resizeTriangle.MouseMove += ResizeTriangle_MouseMove;
     resizeTriangle.MouseUp += ResizeTriangle_MouseUp;
@@ -332,6 +333,11 @@ public class TitleBarComponent : Panel
   private Point _resizeCursorPoint;
   private Size _resizeFormSize;
 
+  private void ResizeTriangle_MouseEnter(object? sender, EventArgs e)
+  {
+    Cursor.Current = Cursors.SizeNWSE;
+  }
+
   private void ResizeTriangle_MouseDown(object? sender, MouseEventArgs e)
   {
     // _hostForm.TransparencyKey = _hostForm.BackColor;
@@ -339,6 +345,7 @@ public class TitleBarComponent : Panel
     _resizing = true;
     _resizeCursorPoint = Cursor.Position;
     _resizeFormSize = _hostForm.Size;
+    Cursor.Current = Cursors.SizeNWSE;
   }
 
   private void ResizeTriangle_MouseMove(object? sender, MouseEventArgs e)
@@ -363,6 +370,7 @@ public class TitleBarComponent : Panel
     // _hostForm.TransparencyKey = Color.Empty;
     if (!DoLayoutOnResize) _hostForm.ResumeLayout();
     _resizing = false;
+    Cursor.Current = Cursors.Default;
   }
 
   #endregion
