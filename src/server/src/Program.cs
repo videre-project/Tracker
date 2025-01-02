@@ -18,6 +18,11 @@ namespace Tracker;
 
 public class Program
 {
+  static Program()
+  {
+    AppDomain.CurrentDomain.UnhandledException += Error_MessageBox;
+  }
+
   /// <summary>
   /// The main entry point for the application.
   /// </summary>
@@ -54,5 +59,24 @@ public class Program
     // Start the application.
     Log.Debug("Starting the application.");
     Application.Run(hostForm);
+  }
+
+  private static void Error_MessageBox(object sender, UnhandledExceptionEventArgs e)
+  {
+    var cts = new CancellationTokenSource();
+    ThreadPool.QueueUserWorkItem(delegate
+    {
+      if (e.ExceptionObject is Exception ex && e.IsTerminating)
+      {
+        MessageBox.Show(
+          $"An unhandled exception occurred: {ex}",
+          $"{Application.ProductName}: Unhandled Exception",
+          MessageBoxButtons.OK,
+          MessageBoxIcon.Error
+        );
+      }
+      cts.Cancel();
+    });
+    cts.Token.WaitHandle.WaitOne();
   }
 }
