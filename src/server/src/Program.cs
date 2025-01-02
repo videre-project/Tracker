@@ -25,6 +25,9 @@ public class Program
   public static void Main(string[] args)
   {
     var options = new ApplicationOptions(args);
+    Application.SetHighDpiMode(HighDpiMode.SystemAware);
+    Application.EnableVisualStyles();
+    Application.SetCompatibleTextRenderingDefault(false);
 
     // Configure the HostForm and the WebView2 control.
     var hostForm = new HostForm(options) { Source = options.Url };
@@ -50,9 +53,6 @@ public class Program
 
     // Start the application.
     Log.Debug("Starting the application.");
-    Application.SetHighDpiMode(HighDpiMode.SystemAware);
-    Application.EnableVisualStyles();
-    Application.SetCompatibleTextRenderingDefault(false);
     Application.Run(hostForm);
   }
 }
