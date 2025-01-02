@@ -46,6 +46,7 @@ public static class ConsoleAPIService
 
     // Redirect logging to the WebView2 console.
     builder.Logging.ClearProviders();
+    Log.Trace("Flushed all logging providers.");
     builder.Logging.AddProvider(s_provider);
     Log.Debug("Logging redirected to the WebView2 console.");
 

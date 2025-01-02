@@ -39,7 +39,7 @@ public static class WebAPIService
     });
 
     // Set the HTTPS endpoint for the Web API.
-    builder.WebHost.UseUrls($"https://localhost:{options.Port}");
+    builder.WebHost.UseUrls(options.Url.ToString());
 
     // Add services to the container.
     builder.Services.AddControllers();

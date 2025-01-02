@@ -21,6 +21,11 @@ public class ApplicationOptions(string[] args = null!)
   /// </summary>
   public int Port { get; internal set; } = 7183;
 
+  /// <summary>
+  /// The URL for the Web API.
+  /// </summary>
+  public Uri Url => new($"https://localhost:{this.Port}");
+
   public bool IsDarkMode { get; internal set; } =
     Environment.GetEnvironmentVariable("APP_THEME") == "Dark";
 
@@ -55,4 +60,6 @@ public class ApplicationOptions(string[] args = null!)
       Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
       typeof(Program).Assembly.GetName().Name!
     );
+
+  public string DatabasePath => Path.Combine(this.UserDataFolder, "Database");
 }

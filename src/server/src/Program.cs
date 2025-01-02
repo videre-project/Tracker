@@ -7,10 +7,9 @@ using System;
 using System.Threading;
 using System.Windows.Forms;
 
-using Microsoft.AspNetCore.Hosting;
-
 using MTGOSDK.Core.Logging;
 
+using Tracker.Database;
 using Tracker.Services;
 using Tracker.WebView;
 
@@ -26,41 +25,34 @@ public class Program
   public static void Main(string[] args)
   {
     var options = new ApplicationOptions(args);
-    Application.SetHighDpiMode(HighDpiMode.SystemAware);
-    Application.EnableVisualStyles();
-    Application.SetCompatibleTextRenderingDefault(false);
 
-    var builder = WebAPIService.CreateHostBuilder(options);
-    var hostForm = new HostForm(options)
-    {
-      Source = new Uri(builder.Configuration[WebHostDefaults.ServerUrlsKey]!),
-    };
+    // Configure the HostForm and the WebView2 control.
+    var hostForm = new HostForm(options) { Source = options.Url };
     hostForm.ControllerThread.Name ??= "UI Thread";
     hostForm.ControllerThread.Priority = ThreadPriority.AboveNormal;
 
-    // Redirect all logging to the WebView2 console.
-    LoggerBase.SetProviderInstance(hostForm.RegisterProvider());
-    builder.UseConsole(hostForm);
-
+    // Configure the Web API service.
+    var builder = WebAPIService.CreateHostBuilder(options);
+    builder.UseConsole(hostForm); // Only logging after this point is redirected
     builder.UseMTGOAPIClient();
+    builder.UseDatabase<EventContext>(options);
 
     // Create a new thread to run the ASP.NET Core Web API.
-    var apiThread = new Thread(() =>
-    {
-      Log.Debug("Starting the API thread.");
-      var api = builder.CreateAPIService();
-      api.OnShutdown(Application.Exit);
-      api.Run();
-    })
+    var api = builder.CreateAPIService();
+    var apiThread = new Thread(() => api.OnShutdown(Application.Exit).Run())
     {
       Name = "API Thread",
       IsBackground = true,
       Priority = ThreadPriority.AboveNormal,
     };
+    Log.Debug("Starting the API thread.");
     apiThread.Start();
 
-    // Start the WebView2 application.
+    // Start the application.
     Log.Debug("Starting the application.");
+    Application.SetHighDpiMode(HighDpiMode.SystemAware);
+    Application.EnableVisualStyles();
+    Application.SetCompatibleTextRenderingDefault(false);
     Application.Run(hostForm);
   }
 }

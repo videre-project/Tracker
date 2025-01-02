@@ -14,6 +14,7 @@ using Microsoft.Web.WebView2.WinForms;
 
 using MTGOSDK.Core.Logging;
 
+using Tracker.Services;
 using Tracker.WebView.Extensions;
 
 
@@ -38,6 +39,7 @@ public partial class HostForm : Form
 
   public HostForm(ApplicationOptions options)
   {
+    LoggerBase.SetProviderInstance(this.RegisterProvider());
     InitializeComponent(options);
 
     // Initialize the WebView2 environment.
