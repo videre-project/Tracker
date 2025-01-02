@@ -4,13 +4,15 @@
 **/
 
 using System;
+using System.IO;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
-using Microsoft.OpenApi.Models;
+
+using Scalar.AspNetCore;
 
 
 namespace Tracker.Services;
@@ -31,6 +33,9 @@ public static class WebAPIService
     {
       Args = options.Args,
       ContentRootPath = options.ContentRootPath,
+      WebRootPath = options.IsDevelopment
+        ? Path.Combine(options.ContentRootPath, "../../../..", "client", "dist")
+        : Path.Combine(options.ContentRootPath, "wwwroot")
     });
 
     // Set the HTTPS endpoint for the Web API.
@@ -38,19 +43,7 @@ public static class WebAPIService
 
     // Add services to the container.
     builder.Services.AddControllers();
-
-    // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
-    builder.Services.AddEndpointsApiExplorer();
-    builder.Services.AddSwaggerGen(service =>
-    {
-      service.SwaggerDoc("v1", new OpenApiInfo
-      {
-        Version = "v1",
-        Title = "Videre Tracker API",
-        Description = "An ASP.NET Core Web API for the Videre Tracker.",
-        TermsOfService = new Uri("https://videreproject.com/terms")
-      });
-    });
+    builder.Services.AddOpenApi();
 
     return builder;
   }
@@ -76,8 +69,8 @@ public static class WebAPIService
     // Configure the HTTP request pipeline.
     if (api.Environment.IsDevelopment())
     {
-      api.UseSwagger();
-      api.UseSwaggerUI();
+      api.MapOpenApi();
+      api.MapScalarApiReference();
     }
     api.UseRouting();
     api.UseAuthorization();

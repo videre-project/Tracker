@@ -7,53 +7,64 @@ import { useEffect, useState } from 'react';
 import './App.css';
 
 
-interface Forecast {
-  date: string;
-  temperatureC: number;
-  temperatureF: number;
-  summary: string;
+interface Event {
+  id: number;
+  name: string;
+  startTime: string;
+  endTime: string;
+  minPlayers: number;
+  maxPlayers: number;
+  players: number;
+  rounds: number;
+  IsCompleted: boolean;
 }
 
 function App() {
-  const [forecasts, setForecasts] = useState<Forecast[]>();
+  const [eventsList, setEventsList] = useState<Event[]>();
 
-  async function populateWeatherData() {
-    const response = await fetch('weatherforecast');
+  async function populateEventList() {
+    const response = await fetch('/api/events/geteventslist');
     const data = await response.json();
-    setForecasts(data);
+    setEventsList(data);
   }
 
   useEffect(() => {
-    populateWeatherData();
+    populateEventList();
   }, []);
 
-  const contents = forecasts === undefined
+  const handleOpenEvent = async (id: number) => {
+    await fetch(`/api/events/openevent/${id}`);
+  };
+
+  const contents = eventsList === undefined
     ? <p><em>Loading... Please refresh once the ASP.NET backend has started. See <a href="https://aka.ms/jspsintegrationreact">https://aka.ms/jspsintegrationreact</a> for more details.</em></p>
     : <table className="table table-striped" aria-labelledby="tabelLabel">
       <thead>
         <tr>
           <th>Date</th>
-          <th>Temp. (C)</th>
-          <th>Temp. (F)</th>
-          <th>Summary</th>
+          <th>Name</th>
+          <th>Min Players</th>
+          <th>Players</th>
+          <th>Rounds</th>
         </tr>
       </thead>
       <tbody>
-        {forecasts.map(forecast =>
-          <tr key={forecast.date}>
-            <td>{forecast.date}</td>
-            <td>{forecast.temperatureC}</td>
-            <td>{forecast.temperatureF}</td>
-            <td>{forecast.summary}</td>
-          </tr>
-        )}
+        {eventsList.map(event =>
+          <tr key={event.id}>
+            <td>{new Date(event.startTime).toLocaleString()}</td>
+            <td>{event.name}</td>
+            <td>{event.minPlayers}</td>
+            <td>{event.players}</td>
+            <td>{event.rounds}</td>
+            <td><button onClick={() => handleOpenEvent(event.id)}>Open Event</button></td>
+          </tr>)}
       </tbody>
     </table>;
 
   return (
     <div>
-      <h1 id="tabelLabel">Weather forecast</h1>
-      <p>This component demonstrates fetching data from the server.</p>
+      <h1 id="tabelLabel">Event List</h1>
+      <p>This component demonstrates fetching data from the MTGO client.</p>
       {contents}
     </div>
   );

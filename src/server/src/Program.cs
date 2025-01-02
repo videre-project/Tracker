@@ -42,6 +42,8 @@ public class Program
     LoggerBase.SetProviderInstance(hostForm.RegisterProvider());
     builder.UseConsole(hostForm);
 
+    builder.UseMTGOAPIClient();
+
     // Create a new thread to run the ASP.NET Core Web API.
     var apiThread = new Thread(() =>
     {

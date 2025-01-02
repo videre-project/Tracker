@@ -5,5 +5,10 @@
 @port=5237
 @host={{hostname}}:{{port}}
 
-GET https://{{host}}/weatherforecast/
+// GET /api/events/geteventslist
+GET https://{{host}}/eventslist/
+Accept: application/json
+
+// GET /api/events/openevent/{id}
+GET https://{{host}}/events/{{id}}
 Accept: application/json

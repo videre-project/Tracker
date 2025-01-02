@@ -4,13 +4,14 @@
     <!-- Enable central package management -->
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <!-- Enable deterministic NuGet package restore -->
-    <RestoreLockedMode>true</RestoreLockedMode>
+    <!-- <RestoreLockedMode>true</RestoreLockedMode> -->
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <RestoreUseStaticGraphEvaluation>true</RestoreUseStaticGraphEvaluation>
   </PropertyGroup>
 
   <PropertyGroup Label="SDKVersions">
-    <MTGOSDKVersion>0.0.5.20241126</MTGOSDKVersion>
+    <!-- <MTGOSDKVersion>0.0.5.20241126</MTGOSDKVersion> -->
+    <MTGOSDKVersion>0.0.6.20250102-preview.1</MTGOSDKVersion>
   </PropertyGroup>
 
   <ItemGroup Label="PackageVersions">
@@ -19,8 +20,8 @@
                     Version="9.0.0" />
     <PackageVersion Include="Microsoft.AspNetCore.SpaProxy"
                     Version="9.0.0" />
-    <PackageVersion Include="Swashbuckle.AspNetCore"
-                    Version="7.2.0" />
+    <PackageVersion Include="Scalar.AspNetCore"
+                    Version="1.2.72" />
     <!-- SQLite Database -->
     <PackageVersion Include="Microsoft.EntityFrameworkCore"
                     Version="9.0.0" />
