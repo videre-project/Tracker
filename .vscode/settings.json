@@ -1,18 +1,21 @@
 {
   "files.associations": {
     "*.esproj": "xml",
-    "*.resx": "xml",
+    "*.resx": "xml"
   },
   "files.exclude": {
     // Visual Studio Code specific files
     "**/.vs": true,
     "**/.user": true,
     // Exclude staging and production directories
-    // "**/dist": true,
+    // "**/dist": true
   },
   "var": {
-    "configuration" : "Release",
-    "buildProperties" : "/m /v:m /clp:NoSummary /p:GenerateFullPaths=True"
+    "configuration": "Release",
+    "buildProperties": "/m /v:m /clp:NoSummary /p:GenerateFullPaths=True"
   },
-  "dotnet.defaultSolution": "Project.sln"
+  "dotnet.defaultSolution": "Project.sln",
+  "code-runner.executorMap": {
+    "csharp": "dotnet run --project src/server"
+  }
 }
