@@ -69,7 +69,7 @@ public class Program
       if (e.ExceptionObject is Exception ex && e.IsTerminating)
       {
         MessageBox.Show(
-          $"An unhandled exception occurred: {ex}",
+          $"An unhandled exception occurred: {ex}\n\nStack Trace:\n{ex.StackTrace}",
           $"{Application.ProductName}: Unhandled Exception",
           MessageBoxButtons.OK,
           MessageBoxIcon.Error

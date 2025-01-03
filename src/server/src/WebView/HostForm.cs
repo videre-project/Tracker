@@ -84,7 +84,17 @@ public partial class HostForm : Form
   /// <returns>The result of the script execution.</returns>
   public async Task<string> Exec(string script)
   {
-    async Task<string> runCommand() => await WebView.ExecuteScriptAsync(script);
+    async Task<string> runCommand()
+    {
+      if (WebView.InvokeRequired)
+      {
+        return await WebView.Invoke(new Func<Task<string>>(runCommand));
+      }
+      else
+      {
+        return await WebView.ExecuteScriptAsync(script);
+      }
+    }
 
     await _semaphore.WaitAsync();
     try

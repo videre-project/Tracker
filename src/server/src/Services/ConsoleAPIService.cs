@@ -55,6 +55,8 @@ public static class ConsoleAPIService
     {
       s.AddFilter("Microsoft.Hosting.Lifetime",               LogLevel.Warning);
       s.AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.Warning);
+      s.AddFilter("Microsoft.AspNetCore.StaticFiles.StaticFileMiddleware",
+                                                              LogLevel.Warning);
     });
 
     return builder;
