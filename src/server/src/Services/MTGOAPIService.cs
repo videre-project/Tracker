@@ -7,10 +7,11 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.DependencyInjection;
 
 using MTGOSDK.API;
+using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Remoting;
 
 
@@ -25,43 +26,22 @@ public static class MTGOAPIService
     this IHostApplicationBuilder builder,
     ClientOptions options = default)
   {
-    //
-    // Register an instance of the MTGOSDK client with the service provider.
-    //
-    // This lets us use a single instance of the client to manage global state
-    // and event subscriptions that might otherwise create duplicate instances.
-    //
-    builder.Services.AddSingleton(serviceProvider =>
-    {
-      return new Client(options);
-    });
-
-    //
-    // Register a hosted client service to dispose when the application stops.
-    //
-    // Since the underlying RemoteClient is a singleton that automatically gets
-    // re-initialized when any remote objects are accessed, we only need to
-    // manage the lifecycle of the client at startup and shutdown to ensure that
-    // the client's resources are cleaned up after the application exits.
-    //
-    builder.Services.AddTransient<IHostedService>(serviceProvider =>
-    {
-      return new ClientService(serviceProvider);
-    });
+    builder.Services.AddSingleton(_ => new Client(options));
+    builder.Services.AddHostedService<ClientService>();
 
     return builder;
   }
 
   /// <summary>
-  /// A hosted service wrapper that manages the lifecycle of the MTGOSDK client.
+  /// A background service that monitors the MTGOSDK client connection.
   /// </summary>
-  private class ClientService(IServiceProvider provider) : IHostedService
+  public class ClientService(IServiceProvider provider) : BackgroundService
   {
     private bool _hasHooks = false;
     private readonly SemaphoreSlim _semaphore = new(1, 1);
     private CancellationTokenSource _cancellationTokenSource = new();
 
-    public async Task StartAsync(CancellationToken cancellationToken)
+    public override async Task StartAsync(CancellationToken cancellationToken)
     {
       await _semaphore.WaitAsync(cancellationToken);
       try
@@ -90,12 +70,11 @@ public static class MTGOAPIService
       }
       finally
       {
-        RemoteClient.EnsureInitialize();
         _semaphore.Release();
       }
     }
 
-    public async Task StopAsync(CancellationToken cancellationToken)
+    public override async Task StopAsync(CancellationToken cancellationToken)
     {
       await _semaphore.WaitAsync(cancellationToken);
       try
@@ -109,6 +88,37 @@ public static class MTGOAPIService
       {
         _semaphore.Release();
       }
+    }
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+      Log.Information("Timed Hosted Service running.");
+
+      // When the timer should have no due-time, then do the work once now.
+      Heartbeat();
+
+      using PeriodicTimer timer = new(TimeSpan.FromSeconds(1));
+
+      try
+      {
+        while (await timer.WaitForNextTickAsync(stoppingToken))
+        {
+          Heartbeat();
+        }
+      }
+      catch (OperationCanceledException)
+      {
+        Log.Information("Timed Hosted Service is stopping.");
+      }
+    }
+
+    private void Heartbeat()
+    {
+      if (RemoteClient.CheckHeartbeat()) return;
+
+      // Restart the client if the heartbeat fails.
+      RemoteClient.Dispose();
+      RemoteClient.EnsureInitialize();
     }
   }
 }
