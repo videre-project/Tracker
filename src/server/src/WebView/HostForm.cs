@@ -16,6 +16,7 @@ using MTGOSDK.Core.Logging;
 
 using Tracker.Services;
 using Tracker.WebView.Extensions;
+using Tracker.WebView.Components;
 
 
 namespace Tracker.WebView;
@@ -39,8 +40,10 @@ public partial class HostForm : Form
 
   public HostForm(ApplicationOptions options)
   {
+    AppDomain.CurrentDomain.UnhandledException += Error_MessageBox;
     LoggerBase.SetProviderInstance(this.RegisterProvider());
-    InitializeComponent(options);
+
+    InitializeComponent();
 
     // Initialize the WebView2 environment.
     WebView.CreateEnvironment(options.UserDataFolder);
@@ -159,5 +162,21 @@ public partial class HostForm : Form
   protected override void SetVisibleCore(bool value)
   {
     base.SetVisibleCore(AllowShowDisplay ? value : AllowShowDisplay);
+  }
+
+  private static void Error_MessageBox(object sender, UnhandledExceptionEventArgs e)
+  {
+    var cts = new CancellationTokenSource();
+    ThreadPool.QueueUserWorkItem(delegate
+    {
+      if (e.ExceptionObject is Exception ex && e.IsTerminating)
+      {
+        string label = "An unhandled exception occurred in the application.";
+        using var errorWindow = new ErrorWindow(ex, label);
+        errorWindow.ShowDialog();
+      }
+      cts.Cancel();
+    });
+    cts.Token.WaitHandle.WaitOne();
   }
 }

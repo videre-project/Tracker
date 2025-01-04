@@ -18,11 +18,6 @@ namespace Tracker;
 
 public class Program
 {
-  static Program()
-  {
-    AppDomain.CurrentDomain.UnhandledException += Error_MessageBox;
-  }
-
   /// <summary>
   /// The main entry point for the application.
   /// </summary>
@@ -30,6 +25,8 @@ public class Program
   public static void Main(string[] args)
   {
     var options = new ApplicationOptions(args);
+    Theme.Initialize(options);
+
     Application.SetHighDpiMode(HighDpiMode.SystemAware);
     Application.EnableVisualStyles();
     Application.SetCompatibleTextRenderingDefault(false);
@@ -47,36 +44,20 @@ public class Program
 
     // Create a new thread to run the ASP.NET Core Web API.
     var api = builder.CreateAPIService();
-    var apiThread = new Thread(() => api.OnShutdown(Application.Exit).Run())
+    var apiThread = new Thread(() =>
+    {
+      Log.Debug("Starting the API thread.");
+      api.OnShutdown(Application.Exit).Run();
+    })
     {
       Name = "API Thread",
       IsBackground = true,
       Priority = ThreadPriority.AboveNormal,
     };
-    Log.Debug("Starting the API thread.");
     apiThread.Start();
 
     // Start the application.
-    Log.Debug("Starting the application.");
+    Log.Trace("Starting the application.");
     Application.Run(hostForm);
-  }
-
-  private static void Error_MessageBox(object sender, UnhandledExceptionEventArgs e)
-  {
-    var cts = new CancellationTokenSource();
-    ThreadPool.QueueUserWorkItem(delegate
-    {
-      if (e.ExceptionObject is Exception ex && e.IsTerminating)
-      {
-        MessageBox.Show(
-          $"An unhandled exception occurred: {ex}\n\nStack Trace:\n{ex.StackTrace}",
-          $"{Application.ProductName}: Unhandled Exception",
-          MessageBoxButtons.OK,
-          MessageBoxIcon.Error
-        );
-      }
-      cts.Cancel();
-    });
-    cts.Token.WaitHandle.WaitOne();
   }
 }

@@ -14,7 +14,7 @@ using Tracker.WebView.Components;
 
 namespace Tracker.WebView;
 
-partial class HostForm
+partial class HostForm : IResizableForm
 {
   /// <summary>
   /// Required designer variable.
@@ -24,9 +24,7 @@ partial class HostForm
   private WebView2 webView21;
   private TitleBarComponent titleBar;
 
-  public Size? RestoreSize;
-  public Color Background_Dark = Color.FromArgb(255, 36, 36, 36); // #242424
-  public Color Background_Light = Color.FromArgb(255, 80, 80, 80); // #505050
+  public Size? RestoreSize { get; set; }
 
   /// <summary>
   ///  Clean up any resources being used.
@@ -47,7 +45,7 @@ partial class HostForm
   ///  Required method for Designer support - do not modify
   ///  the contents of this method with the code editor.
   /// </summary>
-  private void InitializeComponent(ApplicationOptions options)
+  private void InitializeComponent()
   {
     this.webView21 = new WebView2();
     ((ISupportInitialize)(this.webView21)).BeginInit();
@@ -64,11 +62,8 @@ partial class HostForm
     this.webView21.Source = null;
     this.webView21.TabIndex = 0;
     this.webView21.ZoomFactor = 1D;
-
+    this.webView21.SetTheme();
     this.Controls.Add(this.webView21);
-    this.webView21.BackColor = options.IsDarkMode
-      ? this.Background_Dark
-      : this.Background_Light;
 
     //
     // HostForm
@@ -79,9 +74,9 @@ partial class HostForm
     this.ClientSize = new Size(1280, 768);
     this.MinimumSize = new Size(800, 600);
     this.Name = "HostForm";
-    this.Text = "Videre Tracker";
+    this.Text = Application.ProductName;
 
-    if (options.UseCustomTitleBar)
+    if (Theme.UseCustomTitleBar)
     {
       this.webView21.Location = new Point(0, 30);
       this.webView21.Size = new Size(this.Size.Width, this.Size.Height - 30);

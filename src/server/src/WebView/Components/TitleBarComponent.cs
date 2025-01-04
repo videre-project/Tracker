@@ -25,16 +25,17 @@ public class TitleBarComponent : Panel
   private bool _dragging = false;
   private Point _dragCursorPoint;
   private Point _dragFormPoint;
-  private readonly HostForm _hostForm;
+  private readonly Form _hostForm;
   private readonly Control _parent;
 
 #pragma warning disable CS8618
-  public TitleBarComponent(HostForm hostForm, Control parent)
+  public TitleBarComponent(Form hostForm, Control parent, bool allowResize = true)
   {
     this._hostForm = hostForm;
     this._parent = parent;
     this.InitializeComponent();
-    this.AddResizeTriangle(parent);
+    if (allowResize)
+      this.AddResizeTriangle(parent);
   }
 #pragma warning restore CS8618
 
@@ -59,7 +60,7 @@ public class TitleBarComponent : Panel
       }
       else
       {
-        _hostForm.RestoreSize ??= _hostForm.Size;
+        ((IResizableForm)_hostForm).RestoreSize ??= _hostForm.Size;
         _hostForm.WindowState = FormWindowState.Maximized;
       }
     };
@@ -118,7 +119,7 @@ public class TitleBarComponent : Panel
     _dragging = true;
     _dragCursorPoint = Cursor.Position;
     _dragFormPoint = _hostForm.Location;
-    _hostForm.RestoreSize ??= _hostForm.Size;
+    ((IResizableForm)_hostForm).RestoreSize ??= _hostForm.Size;
   }
 
   private void TitleBarComponent_MouseMove(object? sender, MouseEventArgs e)
@@ -270,7 +271,7 @@ public class TitleBarComponent : Panel
       // Reset window size when dragging towards the center
       _hostForm.WindowState = FormWindowState.Normal;
       // Reset to the 'DefaultSize' when the window is not maximized
-      _hostForm.Size = (Size)_hostForm.RestoreSize!;
+      _hostForm.Size = (Size)((IResizableForm)_hostForm).RestoreSize!;
     }
   }
 
@@ -361,7 +362,7 @@ public class TitleBarComponent : Panel
 
       _hostForm.Size = new Size(newWidth < minWidth ? minWidth : newWidth,
                                 newHeight < minHeight ? minHeight : newHeight);
-      _hostForm.RestoreSize = _hostForm.Size;
+      ((IResizableForm)_hostForm).RestoreSize = _hostForm.Size;
     }
   }
 
