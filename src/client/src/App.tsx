@@ -10,8 +10,8 @@ import './App.css';
 interface Event {
   id: number;
   name: string;
+  format: string;
   startTime: string;
-  endTime: string;
   minPlayers: number;
   maxPlayers: number;
   players: number;
@@ -43,7 +43,7 @@ function App() {
         <tr>
           <th>Date</th>
           <th>Name</th>
-          <th>Min Players</th>
+          <th>Format</th>
           <th>Players</th>
           <th>Rounds</th>
         </tr>
@@ -51,10 +51,16 @@ function App() {
       <tbody>
         {eventsList.map(event =>
           <tr key={event.id}>
-            <td>{new Date(event.startTime).toLocaleString()}</td>
+            <td>{new Date(event.startTime).toLocaleString(undefined, {
+              month: 'numeric',
+              day: 'numeric',
+              hour: 'numeric',
+              minute: 'numeric',
+              hour12: true
+            })}</td>
             <td>{event.name}</td>
-            <td>{event.minPlayers}</td>
-            <td>{event.players}</td>
+            <td>{event.format}</td>
+            <td>{event.players} / {event.minPlayers}</td>
             <td>{event.rounds}</td>
             <td><button onClick={() => handleOpenEvent(event.id)}>Open Event</button></td>
           </tr>)}

@@ -19,7 +19,8 @@ namespace Tracker.Controllers;
 public class EventSummary
 {
   public int Id { get; set; }
-  public string? Name { get; set; }
+  public string Name { get; set; }
+  public string Format { get; set; }
   public DateTime StartTime { get; set; }
   public DateTime EndTime { get; set; }
   public int MinPlayers { get; set; }
@@ -35,22 +36,20 @@ public class EventsController : ControllerBase
   [HttpGet] // GET /api/events/geteventslist
   public IEnumerable<EventSummary> GetEventsList()
   {
-    IEnumerable<Tournament> events = EventManager.Events
-      .Where(e => e != null && e!.Description != string.Empty &&
-          Try<bool>(() => (e as Tournament)!.MinimumPlayers > 2))
-      .OrderBy(e => e.StartTime)
-      .Select(e => (e as Tournament)!);
+    IEnumerable<Tournament> events = EventManager.FeaturedEvents
+      .Where(e => e.MinimumPlayers > 2)
+      .OrderBy(e => e.StartTime);
 
     return events.Select(e => new EventSummary
     {
       Id = e.Id,
       Name = e.ToString(),
+      Format = Try(() => e.Format.Name) ?? "Unknown",
       StartTime = e.StartTime,
-      EndTime = e.EndTime,
       MinPlayers = e.MinimumPlayers,
       MaxPlayers = e.MaximumPlayers,
       Players = e.TotalPlayers,
-      Rounds = e.TotalRounds,
+      Rounds =e.TotalRounds,
       IsCompleted = e.IsCompleted
     })
     .ToArray();
