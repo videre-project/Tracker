@@ -10,8 +10,7 @@
   </PropertyGroup>
 
   <PropertyGroup Label="SDKVersions">
-    <!-- <MTGOSDKVersion>0.0.5.20241126</MTGOSDKVersion> -->
-    <MTGOSDKVersion>0.0.6.20250102-preview.1</MTGOSDKVersion>
+    <MTGOSDKVersion>0.1.0.20250107</MTGOSDKVersion>
   </PropertyGroup>
 
   <ItemGroup Label="PackageVersions">
