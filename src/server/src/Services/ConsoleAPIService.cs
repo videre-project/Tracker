@@ -49,6 +49,9 @@ public static class ConsoleAPIService
     builder.Logging.AddProvider(s_provider);
     Log.Debug("Logging redirected to the WebView2 console.");
 
+    // Adds an ETW event source logger as a fallback provider.
+    builder.Logging.AddEventSourceLogger();
+
     // Configure the logging levels for the application.
     builder.Services.AddLogging(s =>
     {

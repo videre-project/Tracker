@@ -171,12 +171,17 @@ public partial class HostForm : Form
     {
       if (e.ExceptionObject is Exception ex && e.IsTerminating)
       {
-        string label = "An unhandled exception occurred in the application.";
-        using var errorWindow = new ErrorWindow(ex, label);
-        errorWindow.ShowDialog();
+        DisplayError(ex, "An unhandled exception occurred in the application.");
       }
       cts.Cancel();
     });
     cts.Token.WaitHandle.WaitOne();
+  }
+
+  public static void DisplayError(Exception ex, string label)
+  {
+    using var errorWindow = new ErrorWindow(ex, label);
+    errorWindow.ShowDialog();
+    errorWindow.BringToFront();
   }
 }
