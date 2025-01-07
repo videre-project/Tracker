@@ -54,10 +54,8 @@ public static class WebAPIService
   /// <param name="builder">The builder for the Web API host.</param>
   /// <param name="hostForm">The host form for the WebView2 control.</param>
   /// <returns>A new <see cref="WebApplication"/> instance.</returns>
-  public static WebApplication CreateAPIService(this WebApplicationBuilder builder)
+  public static WebApplication CreateAPIService(this WebApplication api)
   {
-    var api = builder.Build();
-
     // Use the embedded static files provided by the client.
     api.UseFileServer(new FileServerOptions
     {

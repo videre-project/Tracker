@@ -39,11 +39,13 @@ public class Program
     // Configure the Web API service.
     var builder = WebAPIService.CreateHostBuilder(options);
     builder.UseConsole(hostForm); // Only logging after this point is redirected
-    builder.UseMTGOAPIClient();
+    builder.RegisterClientSingleton();
     builder.UseDatabase<EventContext>(options);
 
     // Create a new thread to run the ASP.NET Core Web API.
-    var api = builder.CreateAPIService();
+    var api = builder.Build();
+    api.UseClientMiddleware();
+    api.CreateAPIService();
     var apiThread = new Thread(() =>
     {
       Log.Debug("Starting the API thread.");

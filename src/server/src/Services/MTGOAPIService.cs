@@ -6,13 +6,17 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Linq;
 
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 
 using MTGOSDK.API;
-using MTGOSDK.Core.Logging;
+using MTGOSDK.Core.Exceptions;
 using MTGOSDK.Core.Remoting;
+using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 
 namespace Tracker.Services;
@@ -22,103 +26,71 @@ namespace Tracker.Services;
 /// </summary>
 public static class MTGOAPIService
 {
-  public static IHostApplicationBuilder UseMTGOAPIClient(
+  public static IHostApplicationBuilder RegisterClientSingleton(
     this IHostApplicationBuilder builder,
     ClientOptions options = default)
   {
     builder.Services.AddSingleton(_ => new Client(options));
-    builder.Services.AddHostedService<ClientService>();
-
     return builder;
   }
 
-  /// <summary>
-  /// A background service that monitors the MTGOSDK client connection.
-  /// </summary>
-  public class ClientService(IServiceProvider provider) : BackgroundService
+  public static IApplicationBuilder UseClientMiddleware(
+        this IApplicationBuilder builder)
   {
-    private bool _hasHooks = false;
-    private readonly SemaphoreSlim _semaphore = new(1, 1);
-    private CancellationTokenSource _cancellationTokenSource = new();
+    return builder.UseMiddleware<ClientMiddleware>();
+  }
 
-    public override async Task StartAsync(CancellationToken cancellationToken)
+  public class ClientMiddleware(RequestDelegate next)
+  {
+    private readonly SemaphoreSlim _semaphore = new(1, 1);
+
+    /// <summary>
+    /// Process an individual request.
+    /// </summary>
+    /// <param name="context"></param>
+    /// <returns></returns>
+    public async Task InvokeAsync(HttpContext context)
     {
-      await _semaphore.WaitAsync(cancellationToken);
+      await _semaphore.WaitAsync(context.RequestAborted);
       try
       {
-        // Cancel any ongoing StopAsync tasks
-        _cancellationTokenSource.Cancel();
-        _cancellationTokenSource = new CancellationTokenSource();
+        await next(context);
+      }
+      catch (ProcessCrashedException ex)
+      {
+        // Abort if the response has already started sending.
+        if (!context.Response.HasStarted) return;
 
-        // Check if a MTGO process currently exists that we can connect to.
-        if (Client.HasStarted)
+        // If a new process has started since the exception was thrown,
+        // reinitialize and re-register the client with the service collection.
+        if (await WaitUntil(() => RemoteClient.Port != (ushort)ex.ProcessId) &&
+            RemoteClient.HasStarted)
         {
-          var client = provider.GetRequiredService<Client>();
-          if (!_hasHooks)
+          // Wait for the previous client to dispose.
+          await RemoteClient.WaitForDisposeAsync();
+          // Register a new client instance.
+          if (RemoteClient.Port == null)
           {
-            _hasHooks = true;
-            client.IsConnectedChanged += delegate(object? sender)
-            {
-              if (!Client.IsConnected)
-              {
-                client.Dispose();
-                _hasHooks = false;
-              }
-            };
+            var provider = context.RequestServices;
+            var services = provider.GetRequiredService<IServiceCollection>();
+            services.Remove(services.First(d => d.ServiceType == typeof(Client)));
+            services.AddSingleton(new Client());
           }
         }
-      }
-      finally
-      {
-        _semaphore.Release();
-      }
-    }
 
-    public override async Task StopAsync(CancellationToken cancellationToken)
-    {
-      await _semaphore.WaitAsync(cancellationToken);
-      try
-      {
-        var client = provider.GetRequiredService<Client>();
-        client.ClearCaches();
-        client.Dispose();
-        _hasHooks = false;
-      }
-      finally
-      {
-        _semaphore.Release();
-      }
-    }
-
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-      Log.Information("Timed Hosted Service running.");
-
-      // When the timer should have no due-time, then do the work once now.
-      Heartbeat();
-
-      using PeriodicTimer timer = new(TimeSpan.FromSeconds(1));
-
-      try
-      {
-        while (await timer.WaitForNextTickAsync(stoppingToken))
+        // If a new client is initialized, retry the request.
+        if (RemoteClient.IsInitialized)
         {
-          Heartbeat();
+          await next(context);
+          return;
         }
+
+        throw;
       }
-      catch (OperationCanceledException)
+      finally
       {
-        Log.Information("Timed Hosted Service is stopping.");
+        _semaphore.Release();
       }
-    }
-
-    private void Heartbeat()
-    {
-      if (RemoteClient.CheckHeartbeat()) return;
-
-      // Restart the client if the heartbeat fails.
-      RemoteClient.Dispose();
-      RemoteClient.EnsureInitialize();
     }
   }
 }
