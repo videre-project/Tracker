@@ -2,8 +2,10 @@
   Copyright (c) 2025, Cory Bennett. All rights reserved.
   SPDX-License-Identifier: Apache-2.0
 **/
+#pragma warning disable CS8618
 
 using System;
+
 
 namespace Tracker.Database.Models;
 
@@ -17,4 +19,3 @@ public class GameLogModel
   public int GameId { get; set; }
   public GameModel Game { get; set; }
 }
-
