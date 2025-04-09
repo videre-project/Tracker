@@ -4,7 +4,7 @@
 **/
 
 using System;
-using System.ComponentModel.DataAnnotations;
+using System.Globalization;
 using System.Threading;
 
 using Microsoft.Extensions.Logging;
@@ -28,6 +28,40 @@ public class ConsoleLogger(string name, HostForm hostForm)
       color = "#ff0000"; // red
 
     return color;
+  }
+
+  private static string ColorANSI(string message, string hexColor)
+  {
+    // Remove the '#' if it exists
+    hexColor = hexColor.Replace("#", "");
+
+    // Parse the hex color string
+    int r = int.Parse(hexColor.Substring(0, 2), NumberStyles.HexNumber);
+    int g = int.Parse(hexColor.Substring(2, 2), NumberStyles.HexNumber);
+    int b = int.Parse(hexColor.Substring(4, 2), NumberStyles.HexNumber);
+
+    // Convert RGB to ANSI 256 color
+    int grayPossible = (r == g && g == b) ? 1 : 0;
+    int colorCode;
+
+    if (grayPossible == 1)
+    {
+      if (r < 8)
+        colorCode = 16;
+      else if (r > 248)
+        colorCode = 231;
+      else
+        colorCode = (int)Math.Round(((double)(r - 8) / 247) * 24) + 232;
+    }
+    else
+    {
+      colorCode = 16
+                + (36 * (int)Math.Round(r / 255.0 * 5))
+                + (6 * (int)Math.Round(g / 255.0 * 5))
+                + (int)Math.Round(b / 255.0 * 5);
+    }
+
+    return $"\u001b[38;5;{colorCode}m{message}\u001b[0m";
   }
 
   public bool IsEnabled(LogLevel logLevel) => true;
@@ -61,5 +95,15 @@ public class ConsoleLogger(string name, HostForm hostForm)
 #pragma warning disable CS4014
     hostForm.Exec($"{DeRefConsole(logLevel, args)}");
 #pragma warning restore CS4014
+
+#if DEBUG
+    Console.WriteLine(string.Format(
+      CultureInfo.InvariantCulture,
+      "{0} {1} {2}\n{3}",
+      ColorANSI(timestamp, "#691569"),
+      ColorANSI(header, GetCategoryColor(logLevel).Replace("000000", "ffffff")),
+      label,
+      message));
+#endif
   }
 }
