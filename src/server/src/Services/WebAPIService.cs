@@ -5,6 +5,9 @@
 
 using System;
 using System.IO;
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -13,6 +16,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 
 using Scalar.AspNetCore;
+
+using MTGOSDK.Core.Reflection.Serialization;
 
 
 namespace Tracker.Services;
@@ -42,7 +47,23 @@ public static class WebAPIService
     builder.WebHost.UseUrls(options.Url.ToString());
 
     // Add services to the container.
-    builder.Services.AddControllers();
+    // builder.Services.AddControllers();
+    builder.Services.AddControllers().AddJsonOptions(options =>
+    {
+      // Configures the JSON serializer options to match JsonSerializableBase.
+      var jsonOptions = options.JsonSerializerOptions;
+      jsonOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
+      jsonOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+      jsonOptions.DictionaryKeyPolicy = JsonNamingPolicy.CamelCase;
+      jsonOptions.IncludeFields = false;
+      jsonOptions.Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping;
+      jsonOptions.WriteIndented = true;
+
+      // Add the JsonSerializableBaseConverter to the serializer options.
+      // This allows for safely serializing remote objects to JSON.
+      jsonOptions.Converters.Add(new JsonSerializableConverter());
+      jsonOptions.Converters.Add(new JsonSerializableEnumerableConverter());
+    });
     builder.Services.AddOpenApi();
 
     return builder;
