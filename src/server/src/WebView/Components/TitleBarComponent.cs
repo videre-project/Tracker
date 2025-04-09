@@ -353,6 +353,7 @@ public class TitleBarComponent : Panel
   {
     if (_resizing)
     {
+      this.Refresh();
       Point diff = Point.Subtract(Cursor.Position, new Size(_resizeCursorPoint));
 
       int minWidth = _hostForm.MinimumSize.Width;

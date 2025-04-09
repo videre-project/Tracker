@@ -82,6 +82,7 @@ partial class HostForm : IResizableForm
       this.webView21.Size = new Size(this.Size.Width, this.Size.Height - 30);
 
       this.titleBar = new TitleBarComponent(this, parent: this.webView21);
+      this.titleBar.DoLayoutOnResize = true;
       this.BackColor = Color.FromArgb(255, 80, 80, 80); // #505050
       this.FormBorderStyle = FormBorderStyle.None; // Hide the native title bar
       this.Controls.Add(this.titleBar);
