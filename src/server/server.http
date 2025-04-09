@@ -2,7 +2,7 @@
 // https://learn.microsoft.com/en-us/aspnet/core/test/http-files?view=aspnetcore-8.0
 
 @hostname=localhost
-@port=5237
+@port=5080
 @host={{hostname}}:{{port}}
 
 // GET /api/events/geteventslist

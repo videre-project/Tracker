@@ -93,9 +93,8 @@ public class Program
     Application.SetCompatibleTextRenderingDefault(false);
 
     // Configure the HostForm and the WebView2 control.
-    var hostForm = new HostForm(options) { Source = options.Url };
+    var hostForm = new HostForm(options) { Source = options.ClientUrl };
     hostForm.ControllerThread.Name ??= "UI Thread";
-    hostForm.ControllerThread.Priority = ThreadPriority.AboveNormal;
 
     // Configure the Web API service.
     var builder = WebAPIService.CreateHostBuilder(options);
@@ -115,7 +114,6 @@ public class Program
     {
       Name = "API Thread",
       IsBackground = true,
-      Priority = ThreadPriority.AboveNormal,
     };
     apiThread.Start();
 

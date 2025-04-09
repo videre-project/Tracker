@@ -16,21 +16,21 @@
   <ItemGroup Label="PackageVersions">
     <!-- ASP.NET Web API -->
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi"
-                    Version="9.0.0" />
+                    Version="9.0.3" />
     <PackageVersion Include="Microsoft.AspNetCore.SpaProxy"
-                    Version="9.0.0" />
+                    Version="9.0.3" />
     <PackageVersion Include="Scalar.AspNetCore"
-                    Version="1.2.72" />
+                    Version="2.1.1" />
     <!-- SQLite Database -->
     <PackageVersion Include="Microsoft.EntityFrameworkCore"
-                    Version="9.0.0" />
+                    Version="9.0.3" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite"
-                    Version="9.0.0" />
+                    Version="9.0.3" />
     <!-- WebView2 Application -->
     <PackageVersion Include="Microsoft.Extensions.FileProviders.Embedded"
-                    Version="9.0.0" />
+                    Version="9.0.3" />
     <PackageVersion Include="Microsoft.Web.WebView2"
-                    Version="1.0.2903.40" />
+                    Version="1.0.3124.44" />
     <!-- MTGOSDK -->
     <PackageVersion Include="MTGOSDK"
                     Version="$(MTGOSDKVersion)" />

@@ -19,12 +19,19 @@ public class ApplicationOptions(string[] args = null!)
   /// <summary>
   /// The port number to use for the Web API.
   /// </summary>
-  public int Port { get; internal set; } = 7183;
+  public int Port { get; internal set; } = 7149;
+
+  public int ClientPort { get; internal set; } = 51848;
 
   /// <summary>
   /// The URL for the Web API.
   /// </summary>
-  public Uri Url => new($"https://localhost:{this.Port}");
+  public Uri Url => new($"https://localhost:{Port}");
+
+  /// <summary>
+  /// The URL for the SPA client.
+  /// </summary>
+  public Uri ClientUrl => new($"https://localhost:{ClientPort}");
 
   public bool IsDarkMode { get; internal set; } =
     Environment.GetEnvironmentVariable("APP_THEME") == "Dark";

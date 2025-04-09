@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "scripts": {
-    "dev": "dotnet run --project src/server --launch-profile WebView2",
+    "dev": "dotnet restore --no-cache --force-evaluate && dotnet run --project src/server --launch-profile Https --no-restore --configuration Debug",
     "build": "npm run build:client && npm run build:server",
     "build:client": "npm run build --prefix src/client",
     "build:server": "dotnet build --project src/server",
