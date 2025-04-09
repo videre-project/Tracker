@@ -19,12 +19,12 @@ using MTGOSDK.Core.Remoting;
 using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 
-namespace Tracker.Services;
+namespace Tracker.Services.MTGO;
 
 /// <summary>
 /// Provides methods for configuring the MTGOSDK API service.
 /// </summary>
-public static class MTGOAPIService
+public static class ClientAPIService
 {
   public static IHostApplicationBuilder RegisterClientSingleton(
     this IHostApplicationBuilder builder,

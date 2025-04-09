@@ -17,6 +17,7 @@ using MTGOSDK.Core.Logging;
 
 using Tracker.Database;
 using Tracker.Services;
+using Tracker.Services.MTGO;
 using Tracker.WebView;
 
 namespace Tracker;
@@ -99,8 +100,9 @@ public class Program
     // Configure the Web API service.
     var builder = WebAPIService.CreateHostBuilder(options);
     builder.UseConsole(hostForm); // Only logging after this point is redirected
-    builder.RegisterClientSingleton();
     builder.UseDatabase<EventContext>(options);
+    builder.RegisterClientSingleton();
+    builder.RegisterGameService();
 
     // Create a new thread to run the ASP.NET Core Web API.
     var api = builder.Build();
