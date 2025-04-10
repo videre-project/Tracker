@@ -73,7 +73,7 @@ public static class GameAPIService
         JsonSerializer.Serialize(new
         {
           Phase = currentPhase.ToString(),
-          Player = activePlayer.User.Name
+          Player = activePlayer.Name
         })
       ));
     }
@@ -90,7 +90,7 @@ public static class GameAPIService
         JsonSerializer.Serialize(new
         {
           Turn = currentTurn,
-          Player = activePlayer.User.Name
+          Player = activePlayer.Name
         })
       ));
     }
@@ -161,7 +161,7 @@ public static class GameAPIService
         JsonSerializer.Serialize(new
         {
           Life = life,
-          Player = player.User.Name
+          Player = player.Name
         })
       ));
     }
@@ -193,30 +193,27 @@ public static class GameAPIService
       #region Game Initialization
       if (game.IsPreGame)
       {
-        SyncThread.Enqueue(() =>
+        foreach (GamePlayer player in game.Players)
         {
-          foreach (GamePlayer player in game.Players)
-          {
-            Game_OnLifeChange(game, player);
-          }
+          Game_OnLifeChange(game, player);
+        }
 
-          //
-          // If the game is currently pre-game, manually trigger the ZoneChange and
-          // CardCreated events for each card in the Hand zone as these events are
-          // fired too early to be caught by our event hooking.
-          //
-          foreach (GamePlayer player in game.Players)
-          {
-            GameZone handZone = game.GetGameZone(player, CardZone.Hand);
-            if (handZone.Count == 0) continue;
+        //
+        // If the game is currently pre-game, manually trigger the ZoneChange and
+        // CardCreated events for each card in the Hand zone as these events are
+        // fired too early to be caught by our event hooking.
+        //
+        foreach (GamePlayer player in game.Players)
+        {
+          GameZone handZone = game.GetGameZone(player, CardZone.Hand);
+          if (handZone.Count == 0) continue;
 
-            foreach (GameCard card in handZone.Cards)
-            {
-              Game_OnZoneChange(game, card);
-              // Game_OnCardCreated(game, card);
-            }
+          foreach (GameCard card in handZone.Cards)
+          {
+            Game_OnZoneChange(game, card);
+            // Game_OnCardCreated(game, card);
           }
-        });
+        }
       }
       #endregion
 
@@ -383,6 +380,10 @@ public static class GameAPIService
           else if (parentEvent is Match match &&
                    _activeGames.TryAdd(game.Id, game))
           {
+            // Add the match connected to its parent event
+            // This is a no-op if the match already exists in the database
+            _dbWriter.TryAddMatch(match, parentEvent.Id, out var _);
+
             // Event already exists, just add the game to the match
             Log.Debug("Game Joined {Id} for existing match", game.Id);
             _dbWriter.TryAddGame(game, match.Id, out var _);
@@ -402,14 +403,14 @@ public static class GameAPIService
           if (joinedEvent is Match match)
           {
             _dbWriter.TryAddMatch(match, joinedEvent.Id, out var _);
-            Game? currentGame = match.CurrentGame;
-            if (currentGame == null) continue;
+            Game? game = match.CurrentGame;
+            if (game == null) continue;
 
-            if (_activeGames.TryAdd(currentGame.Id, currentGame))
+            if (_activeGames.TryAdd(game.Id, game))
             {
-              Log.Information("Found game {Id}", currentGame.Id);
-              _dbWriter.TryAddGame(currentGame, match.Id, out var _);
-              ConfigureGameEvents(currentGame);
+              Log.Information("Found game {Id}", game.Id);
+              _dbWriter.TryAddGame(game, match.Id, out var _);
+              ConfigureGameEvents(game);
             }
           }
         }
@@ -428,10 +429,25 @@ public static class GameAPIService
       // Process events in the eventlog blocking collection
       foreach (EventLogEntry entry in _eventLog.GetConsumingEnumerable(stoppingToken))
       {
-        Log.Trace("[Game {Id}] {Timestamp:O}: {Type} {Data}",
-            entry.GameId, entry.Timestamp, entry.Type, entry.Data);
+        try
+        {
+          Log.Trace("[Game {Id}] {Timestamp:O}: {Type} {Data}",
+              entry.GameId, entry.Timestamp, entry.Type, entry.Data);
 
-        await _dbWriter.TryAddGameLogAsync(entry, stoppingToken);
+          if (!await _dbWriter.WaitForGameModelAsync(entry.GameId))
+          {
+            throw new InvalidOperationException(
+              $"Cannot add log entry for game {entry.GameId} " +
+              $"as the game model was not created in time.");
+          }
+          await _dbWriter.TryAddGameLogAsync(entry, stoppingToken);
+        }
+        catch (Exception ex)
+        {
+          Log.Error(ex, "Error adding log entry for game {GameId}: {Message}",
+            entry.GameId, ex.Message);
+          Log.Debug(ex.StackTrace);
+        }
       }
     }
   }

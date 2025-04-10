@@ -69,11 +69,11 @@
       "MTGOSDK": {
         "type": "Direct",
         "requested": "[0.1.1-preview, )",
-        "resolved": "0.1.1.20250409-preview.80",
-        "contentHash": "7Nbx812bJu9hV+5KbbuzFWXeSwgrIU5uk3Az33gM3ql4RUrDH0RJLGodHjkRPjhiegK4veVv+t77nZcRENxwaQ==",
+        "resolved": "0.1.1.20250409-preview.81",
+        "contentHash": "kT7F3ygHylsuIy7kCbN8KhJ2n7zrjsqlvpUKJg4FFh8zBr0xGl0CgZOYDDRDil9DWq46cedZRdkDiOi/moM52A==",
         "dependencies": {
           "ImpromptuInterface": "8.0.4",
-          "MTGOSDK.Win32": "0.1.1.20250409-preview.80",
+          "MTGOSDK.Win32": "0.1.1.20250409-preview.81",
           "Microsoft.CSharp": "4.7.0",
           "Microsoft.Diagnostics.Runtime": "3.1.512801",
           "Microsoft.Extensions.Logging": "8.0.0",
@@ -83,8 +83,8 @@
       "MTGOSDK.Win32": {
         "type": "Direct",
         "requested": "[0.1.1-preview, )",
-        "resolved": "0.1.1.20250409-preview.80",
-        "contentHash": "TiI7/Rl6o6dTF7i9SsjRXPJa6ectCEbl39OkC271FHmVX9/UxTeK88FBOnQ0ob70FC3D279JrhtEsx1b5pQIMg==",
+        "resolved": "0.1.1.20250409-preview.81",
+        "contentHash": "WzP5kX0RU5eMQNOIPN2EaM8Nhv6RFPLIJDKNN++EzYc+BnDurR+wgoaWevUN5Mds5rQw4lv0T1r9FDX/lsa/Mw==",
         "dependencies": {
           "Iced": "1.21.0",
           "Microsoft.Win32.Registry": "5.0.0"

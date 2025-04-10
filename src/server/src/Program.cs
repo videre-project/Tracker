@@ -11,6 +11,8 @@ using System.Text;
 using System.Threading;
 using System.Windows.Forms;
 
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Win32.SafeHandles;
 
 using MTGOSDK.Core.Logging;
@@ -99,6 +101,13 @@ public class Program
 
     // Configure the Web API service.
     var builder = WebAPIService.CreateHostBuilder(options);
+    {
+      builder.Services.Configure<HostOptions>(options =>
+      {
+        options.ShutdownTimeout = TimeSpan.FromSeconds(5);
+        options.BackgroundServiceExceptionBehavior = BackgroundServiceExceptionBehavior.Ignore;
+      });
+    }
     builder.UseConsole(hostForm); // Only logging after this point is redirected
     builder.UseDatabase<EventContext>(options);
     builder.RegisterClientSingleton();

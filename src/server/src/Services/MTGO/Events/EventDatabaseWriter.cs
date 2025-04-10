@@ -4,6 +4,7 @@
 **/
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -15,6 +16,7 @@ using Microsoft.Extensions.DependencyInjection;
 using MTGOSDK.API.Play;
 using MTGOSDK.API.Play.Games;
 using MTGOSDK.Core.Logging;
+using MTGOSDK.Core.Reflection;
 
 using Tracker.Database;
 using Tracker.Database.Models;
@@ -22,8 +24,11 @@ using Tracker.Database.Models;
 
 namespace Tracker.Services.MTGO.Events;
 
-public class EventDatabaseWriter(IServiceProvider serviceProvider)
+public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
 {
+  private static readonly ConcurrentDictionary<int, int> s_matchIdMap = new();
+  private static readonly ConcurrentDictionary<int, int> s_gameIdMap = new();
+
   public bool TryAddEvent(Event eventObj, out EventModel? eventModel)
   {
     using (var scope = serviceProvider.CreateScope())
@@ -106,6 +111,8 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider)
 
         context.SaveChanges();
         transaction.Commit();
+
+        s_matchIdMap.TryAdd(match.Id, eventId);
         return true;
       }
       catch (DbUpdateConcurrencyException ex)
@@ -168,6 +175,8 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider)
 
         context.SaveChanges();
         transaction.Commit();
+
+        s_gameIdMap.TryAdd(game.Id, matchId);
         return true;
       }
       catch (DbUpdateConcurrencyException ex)
@@ -186,6 +195,29 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider)
         return false;
       }
     }
+  }
+
+  public async Task<bool> WaitForGameModelAsync(
+    int gameId,
+    CancellationToken cancellationToken = default)
+  {
+    // Check if the game ID is already in the map
+    if (s_gameIdMap.ContainsKey(gameId)) return true;
+
+    using (var scope = serviceProvider.CreateScope())
+    {
+      var context = scope.ServiceProvider.GetRequiredService<EventContext>();
+
+      // Wait until the GameModel is created before adding the log entry.
+      if (!await WaitUntilAsync(async () =>
+        await context.Games.AnyAsync(g => g.Id == gameId, cancellationToken)
+      ))
+      {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   public async Task<bool> TryAddGameLogAsync(
