@@ -6,8 +6,6 @@
 using System;
 using System.Collections.Generic;
 
-using Microsoft.EntityFrameworkCore;
-
 using MTGOSDK.API.Collection;
 
 
@@ -17,35 +15,41 @@ public record CardEntry(int catalogId, string name, int quantity);
 
 public class DeckModel
 {
-  public int Id { get; set; }
-  public string Name { get; set; }
-  public string Format { get; set; }
+  public required int Id { get; set; }
+  public required string Name { get; set; }
+  public required string Format { get; set; }
 
-  public DateTime Timestamp { get; set; }
-  public string Hash { get; set; }
+  public required string Hash { get; set; }
+  public required DateTime Timestamp { get; set; }
 
-  public List<CardEntry> Mainboard { get; set; }
-  public List<CardEntry> Sideboard { get; set; }
+  public required List<CardEntry> Mainboard { get; set; }
+  public required List<CardEntry> Sideboard { get; set; }
 
-  public DeckModel(Deck deck)
+  public EventModel? Event { get; set; }
+
+  public static DeckModel ToModel(Deck deck)
   {
-    Id = deck.DeckId;
-    Name = deck.Name;
-    Format = deck.Format!;
+    var model = new DeckModel
+    {
+      Id = deck.DeckId,
+      Name = deck.Name,
+      Format = deck.Format!,
+      Timestamp = deck.Timestamp,
+      Hash = deck.Hash,
+      Mainboard = new(),
+      Sideboard = new()
+    };
 
-    Timestamp = deck.Timestamp;
-    Hash = deck.Hash;
-
-    Mainboard = new List<CardEntry>();
     foreach (var card in deck.GetCards(DeckRegion.MainDeck))
     {
-      Mainboard.Add(new CardEntry(card.Id, card.Card, card.Quantity));
+      model.Mainboard.Add(new CardEntry(card.Id, card.Card, card.Quantity));
     }
 
-    Sideboard = new List<CardEntry>();
     foreach (var card in deck.GetCards(DeckRegion.Sideboard))
     {
-      Sideboard.Add(new CardEntry(card.Id, card.Card, card.Quantity));
+      model.Sideboard.Add(new CardEntry(card.Id, card.Card, card.Quantity));
     }
+
+    return model;
   }
 }

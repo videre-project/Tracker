@@ -12,7 +12,7 @@ using System.Threading.Tasks;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-
+using MTGOSDK.API.Collection;
 using MTGOSDK.API.Play;
 using MTGOSDK.API.Play.Games;
 using MTGOSDK.Core.Logging;
@@ -48,7 +48,25 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
           return false;
         }
 
-        eventModel = new EventModel { Id = eventObj.Id };
+        eventModel = new EventModel
+        {
+          Id = eventObj.Id,
+          Format = eventObj.Format,
+          Description = eventObj.Description,
+        };
+        if (eventObj.RegisteredDeck is Deck deck)
+        {
+          eventModel.DeckHash = deck.Hash;
+          DeckModel deckModel = DeckModel.ToModel(deck);
+
+          // If the deckModel isn't already in the database, add it
+          if (!context.Decks.Any(d => d.Hash == deckModel.Hash))
+          {
+            context.Decks.Add(deckModel);
+          }
+          eventModel.Deck = deckModel;
+        }
+
         context.Events.Add(eventModel);
         context.SaveChanges();
 
