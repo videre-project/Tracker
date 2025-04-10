@@ -13,7 +13,7 @@ public class GameLogModel
 {
   public int Id { get; set; }
   public DateTime Timestamp { get; set; }
-  public string EventType { get; set; }
+  public string GameLogType { get; set; }
   public string Data { get; set; }
 
   public int GameId { get; set; }

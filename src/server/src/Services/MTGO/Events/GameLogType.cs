@@ -6,7 +6,7 @@
 
 namespace Tracker.Services.MTGO.Events;
 
-public enum EventType
+public enum GameLogType
 {
   PhaseChange,
   TurnChange,

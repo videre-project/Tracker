@@ -221,7 +221,7 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
   }
 
   public async Task<bool> TryAddGameLogAsync(
-    EventLogEntry entry,
+    GameLogEntry entry,
     CancellationToken cancellationToken = default)
   {
     using (var scope = serviceProvider.CreateScope())
@@ -250,7 +250,7 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
           Id = hashId,
           GameId = entry.GameId,
           Timestamp = entry.Timestamp,
-          EventType = entry.Type.ToString(),
+          GameLogType = entry.Type.ToString(),
           Data = entry.Data
         };
 

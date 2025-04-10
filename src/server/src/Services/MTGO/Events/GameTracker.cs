@@ -21,7 +21,7 @@ namespace Tracker.Services.MTGO.Events;
 /// </summary>
 public class GameTracker
 {
-  private readonly BlockingCollection<EventLogEntry> _eventLog;
+  private readonly BlockingCollection<GameLogEntry> _eventLog;
 
   /// <summary>
   /// Initializes a new instance of the <see cref="GameTracker"/> class.
@@ -36,7 +36,7 @@ public class GameTracker
   /// </remarks>
   public GameTracker(
     Game game,
-    BlockingCollection<EventLogEntry> eventLog,
+    BlockingCollection<GameLogEntry> eventLog,
     bool isInitialized = false)
   {
     _eventLog = eventLog;
@@ -193,10 +193,10 @@ public class GameTracker
   {
     GamePlayer activePlayer = playerPhase.ActivePlayer;
     GamePhase currentPhase = playerPhase.CurrentPhase;
-    _eventLog.Add(new EventLogEntry(
+    _eventLog.Add(new GameLogEntry(
       game.Id,
       activePlayer, // extract timestamp
-      EventType.PhaseChange,
+      GameLogType.PhaseChange,
       JsonSerializer.Serialize(new
       {
         Phase = currentPhase.ToString(),
@@ -210,10 +210,10 @@ public class GameTracker
     int currentTurn = e.Game.CurrentTurn;
     GamePlayer activePlayer = e.Game.ActivePlayer!;
     Game game = e.Game;
-    _eventLog.Add(new EventLogEntry(
+    _eventLog.Add(new GameLogEntry(
       game.Id,
       e, // extract timestamp
-      EventType.TurnChange,
+      GameLogType.TurnChange,
       JsonSerializer.Serialize(new
       {
         Turn = currentTurn,
@@ -226,10 +226,10 @@ public class GameTracker
   {
     GameZone? oldZone = card.PreviousZone;
     GameZone? newZone = card.Zone;
-    _eventLog.Add(new EventLogEntry(
+    _eventLog.Add(new GameLogEntry(
       game.Id,
       card, // extract timestamp
-      EventType.ZoneChange,
+      GameLogType.ZoneChange,
       JsonSerializer.Serialize(new
       {
         Card = card.ToString(),
@@ -249,10 +249,10 @@ public class GameTracker
       targetsProcessed.WaitOne(1_000); // Wait up to 1s for targets to be set
     }
 
-    _eventLog.Add(new EventLogEntry(
+    _eventLog.Add(new GameLogEntry(
       game.Id,
       action, // extract timestamp
-      EventType.GameAction,
+      GameLogType.GameAction,
       // action.ToJSON()
       $"{action.Name} ({(action as CardAction)?.Card?.ToString()})"
     ));
@@ -261,10 +261,10 @@ public class GameTracker
   private void Game_OnLifeChange(Game game, GamePlayer player)
   {
     int life = player.Life;
-    _eventLog.Add(new EventLogEntry(
+    _eventLog.Add(new GameLogEntry(
       game.Id,
       player, // extract timestamp
-      EventType.LifeChange,
+      GameLogType.LifeChange,
       JsonSerializer.Serialize(new
       {
         Life = life,
@@ -275,10 +275,10 @@ public class GameTracker
 
   private void Game_OnLogMessage(Game game, Message message)
   {
-    _eventLog.Add(new EventLogEntry(
+    _eventLog.Add(new GameLogEntry(
       game.Id,
       message.Timestamp,
-      EventType.LogMessage,
+      GameLogType.LogMessage,
       message.Text
     ));
   }

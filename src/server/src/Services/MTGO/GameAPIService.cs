@@ -46,7 +46,7 @@ public static class GameAPIService
     private readonly ConcurrentDictionary<int, Game> _activeGames = new();
     private readonly ConcurrentDictionary<int, GameTracker> _trackers = new();
 
-    private readonly BlockingCollection<EventLogEntry> _eventLog = new();
+    private readonly BlockingCollection<GameLogEntry> _eventLog = new();
     private readonly EventDatabaseWriter _dbWriter = new(serviceProvider);
 
     private void CreateGameTracker(Game game, int? matchId = null)
@@ -143,7 +143,7 @@ public static class GameAPIService
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
       // Process events in the eventlog blocking collection
-      foreach (EventLogEntry entry in _eventLog.GetConsumingEnumerable(stoppingToken))
+      foreach (GameLogEntry entry in _eventLog.GetConsumingEnumerable(stoppingToken))
       {
         try
         {

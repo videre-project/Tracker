@@ -11,14 +11,14 @@ using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 namespace Tracker.Services.MTGO.Events;
 
-public struct EventLogEntry : IComparable<EventLogEntry>
+public struct GameLogEntry : IComparable<GameLogEntry>
 {
   public int GameId;
   public DateTime Timestamp;
-  public EventType Type;
+  public GameLogType Type;
   public string Data;
 
-  public EventLogEntry(int gameId, DateTime timestamp, EventType type, string data)
+  public GameLogEntry(int gameId, DateTime timestamp, GameLogType type, string data)
   {
     GameId = gameId;
     Timestamp = timestamp;
@@ -26,7 +26,7 @@ public struct EventLogEntry : IComparable<EventLogEntry>
     Data = data;
   }
 
-  public EventLogEntry(int gameId, DLRWrapper args, EventType type, string data)
+  public GameLogEntry(int gameId, DLRWrapper args, GameLogType type, string data)
   {
     GameId = gameId;
     Timestamp = Unbind(args).__timestamp;
@@ -34,7 +34,7 @@ public struct EventLogEntry : IComparable<EventLogEntry>
     Data = data;
   }
 
-  public int CompareTo(EventLogEntry other)
+  public int CompareTo(GameLogEntry other)
   {
     int timestampComparison = Timestamp.CompareTo(other.Timestamp);
     if (timestampComparison != 0) return timestampComparison;
