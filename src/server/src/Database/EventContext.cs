@@ -58,8 +58,8 @@ public class EventContext(DbContextOptions<EventContext> options)
 
     modelBuilder.Entity<EventModel>()
       .HasOne(e => e.Deck)
-      .WithOne(d => d.Event)
-      .HasForeignKey<EventModel>(e => e.DeckHash)
+      .WithMany()
+      .HasForeignKey(e => e.DeckHash)
       .IsRequired(false);
 
     //

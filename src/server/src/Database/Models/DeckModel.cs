@@ -25,8 +25,6 @@ public class DeckModel
   public required List<CardEntry> Mainboard { get; set; }
   public required List<CardEntry> Sideboard { get; set; }
 
-  public EventModel? Event { get; set; }
-
   public static DeckModel ToModel(Deck deck)
   {
     var model = new DeckModel

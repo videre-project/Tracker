@@ -57,13 +57,16 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
         if (eventObj.RegisteredDeck is Deck deck)
         {
           eventModel.DeckHash = deck.Hash;
-          DeckModel deckModel = DeckModel.ToModel(deck);
 
-          // If the deckModel isn't already in the database, add it
-          if (!context.Decks.Any(d => d.Hash == deckModel.Hash))
+          // Check if the deck already exists in the database
+          DeckModel? deckModel = context.Decks.FirstOrDefault(d => d.Hash == deck.Hash);
+          if (deckModel == null)
           {
+            // If it doesn't exist, create a new DeckModel entry
+            deckModel = DeckModel.ToModel(deck);
             context.Decks.Add(deckModel);
           }
+
           eventModel.Deck = deckModel;
         }
 
