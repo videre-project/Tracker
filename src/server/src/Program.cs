@@ -22,6 +22,7 @@ using Tracker.Services;
 using Tracker.Services.MTGO;
 using Tracker.WebView;
 
+
 namespace Tracker;
 
 public class Program
@@ -44,16 +45,22 @@ public class Program
   private static extern bool AllocConsole();
 
   [DllImport("kernel32.dll")]
-  public static extern bool SetConsoleOutputCP(uint wCodePageID);
+  private static extern bool SetConsoleOutputCP(uint wCodePageID);
 
   [DllImport("kernel32.dll")]
-  static extern bool GetConsoleMode(IntPtr hConsoleHandle, out uint lpMode);
+  private static extern bool GetConsoleMode(
+    IntPtr hConsoleHandle,
+    out uint lpMode
+  );
 
   [DllImport("kernel32.dll")]
-  static extern bool SetConsoleMode(IntPtr hConsoleHandle, uint dwMode);
+  private static extern bool SetConsoleMode(
+    IntPtr hConsoleHandle,
+    uint dwMode
+  );
 
-  const int STD_OUTPUT_HANDLE = -11;
-  const uint ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004;
+  private const int STD_OUTPUT_HANDLE = -11;
+  private const uint ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004;
 
   #endregion
 
