@@ -11,6 +11,7 @@ using System.Threading;
 using MTGOSDK.API.Chat;
 using MTGOSDK.API.Play.Games;
 using MTGOSDK.Core.Logging;
+using MTGOSDK.Core.Reflection.Serialization;
 using static MTGOSDK.API.Events;
 
 
@@ -253,8 +254,7 @@ public class GameTracker
       game.Id,
       action, // extract timestamp
       GameLogType.GameAction,
-      // action.ToJSON()
-      $"{action.Name} ({(action as CardAction)?.Card?.ToString()})"
+      action.ToJSON()
     ));
   }
 
