@@ -6,6 +6,8 @@
 
 using System.Collections.Generic;
 
+using MTGOSDK.API.Play.Games;
+
 
 namespace Tracker.Database.Models;
 
@@ -16,5 +18,6 @@ public class GameModel
   public int MatchId { get; set; }
   public MatchModel Match { get; set; }
 
+  public List<PlayerResult> PlayerResults { get; set; } = new();
   public List<GameLogModel> GameLogs { get; set; } = new();
 }

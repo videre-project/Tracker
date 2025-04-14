@@ -54,7 +54,7 @@ public static class GameAPIService
       matchId ??= game.Match.Id;
 
       bool isNewGame = _dbWriter.TryAddGame(game, matchId.Value, out var _);
-      GameTracker tracker = new(game, _eventLog, isInitialized: !isNewGame);
+      GameTracker tracker = new(game, _eventLog, _dbWriter, !isNewGame);
       _trackers.TryAdd(game.Id, tracker);
     }
 

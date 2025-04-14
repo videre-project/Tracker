@@ -294,4 +294,49 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
       }
     }
   }
+
+  public bool TryUpdateGameResults(Game game, IList<PlayerResult> results)
+  {
+    using (var scope = serviceProvider.CreateScope())
+    {
+      var context = scope.ServiceProvider.GetRequiredService<EventContext>();
+
+      try
+      {
+        using var transaction = context.Database.BeginTransaction();
+
+        // Check if game already exists
+        var existingGame = context.Games.FirstOrDefault(g => g.Id == game.Id);
+
+        if (existingGame == null)
+        {
+          Log.Warning("Game {Id} not found for updating results", game.Id);
+          return false;
+        }
+
+        // Update player results
+        existingGame.PlayerResults.Clear();
+        foreach (var result in results)
+        {
+          existingGame.PlayerResults.Add(result);
+        }
+
+        context.SaveChanges();
+        transaction.Commit();
+        return true;
+      }
+      catch (DbUpdateConcurrencyException ex)
+      {
+        Log.Warning("Concurrency conflict occurred while updating game results for game {GameId}: {Message}",
+                  game.Id, ex.Message);
+        return false;
+      }
+      catch (Exception ex)
+      {
+        Log.Error(ex, "Error updating game results for game {GameId}", game.Id);
+        Log.Debug(ex.Message + "\n" + ex.StackTrace);
+        return false;
+      }
+    }
+  }
 }

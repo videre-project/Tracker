@@ -11,6 +11,8 @@ using Microsoft.EntityFrameworkCore;
 using Tracker.Database.Models;
 using Tracker.Database.Extensions;
 
+using MTGOSDK.API.Play.Games;
+
 
 namespace Tracker.Database;
 
@@ -32,6 +34,7 @@ public class EventContext(DbContextOptions<EventContext> options)
   protected override void OnModelCreating(ModelBuilder modelBuilder)
   {
     modelBuilder.Ignore<CardEntry>();
+    modelBuilder.Ignore<PlayerResult>();
 
     //
     // Deck relationships
@@ -83,5 +86,15 @@ public class EventContext(DbContextOptions<EventContext> options)
       .WithOne(e => e.Game)
       .HasForeignKey(e => e.GameId)
       .OnDelete(DeleteBehavior.Cascade);
+
+    //
+    // Game relationships
+    //
+
+    modelBuilder.Entity<GameModel>()
+      .Property(d => d.PlayerResults)
+      .HasConversion(
+          e => JsonSerializer.Serialize(e, s_jsonOptions),
+          e => JsonSerializer.Deserialize<List<PlayerResult>>(e, s_jsonOptions)!);
   }
 }

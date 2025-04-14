@@ -23,6 +23,7 @@ namespace Tracker.Services.MTGO.Events;
 public class GameTracker
 {
   private readonly BlockingCollection<GameLogEntry> _eventLog;
+  private readonly EventDatabaseWriter _dbWriter;
 
   /// <summary>
   /// Initializes a new instance of the <see cref="GameTracker"/> class.
@@ -38,9 +39,11 @@ public class GameTracker
   public GameTracker(
     Game game,
     BlockingCollection<GameLogEntry> eventLog,
+    EventDatabaseWriter dbWriter,
     bool isInitialized = false)
   {
     _eventLog = eventLog;
+    _dbWriter = dbWriter;
 
     #region Game Initialization
     if (!isInitialized && game.IsPreGame)
@@ -78,6 +81,7 @@ public class GameTracker
     game.OnLifeChange += (GamePlayer player) => Game_OnLifeChange(game, player);
     game.OnLogMessage += (Message message) => Game_OnLogMessage(game, message);
     game.GameStatusChanged += () => Game_GameStatusChange(game);
+    game.OnGameResultsChanged += (IList<PlayerResult> results) => Game_OnGameResultsChanged(game, results);
 
     // Ensure that the global event is initialized before doing any processing
     CardAction.TargetSetChanged.EnsureInitialize();
@@ -290,6 +294,15 @@ public class GameTracker
     if (status == GameStatus.Finished)
     {
       game.ClearEvents();
+    }
+  }
+
+  private void Game_OnGameResultsChanged(Game game, IList<PlayerResult> results)
+  {
+    if (_dbWriter.TryUpdateGameResults(game, results))
+    {
+      string jsonRes = JsonSerializer.Serialize(results);
+      Log.Debug("Updated game results for {Id}: {Results}", game.Id, jsonRes);
     }
   }
 }
