@@ -43,11 +43,21 @@ public static class GameAPIService
       : BackgroundService, IHostedService
   {
     private readonly ConcurrentDictionary<int, Event> _activeEvents = new();
+    private readonly ConcurrentDictionary<int, Match> _activeMatches = new();
     private readonly ConcurrentDictionary<int, Game> _activeGames = new();
-    private readonly ConcurrentDictionary<int, GameTracker> _trackers = new();
+
+    private readonly ConcurrentDictionary<int, MatchTracker> _matchTrackers = new();
+    private readonly ConcurrentDictionary<int, GameTracker> _gameTrackers = new();
 
     private readonly BlockingCollection<GameLogEntry> _eventLog = new();
     private readonly EventDatabaseWriter _dbWriter = new(serviceProvider);
+
+    private void CreateMatchTracker(Match match, int eventId)
+    {
+      _dbWriter.TryAddMatch(match, eventId, out var _);
+      MatchTracker tracker = new(match, _dbWriter);
+      _matchTrackers.TryAdd(match.Id, tracker);
+    }
 
     private void CreateGameTracker(Game game, int? matchId = null)
     {
@@ -55,7 +65,7 @@ public static class GameAPIService
 
       bool isNewGame = _dbWriter.TryAddGame(game, matchId.Value, out var _);
       GameTracker tracker = new(game, _eventLog, _dbWriter, !isNewGame);
-      _trackers.TryAdd(game.Id, tracker);
+      _gameTrackers.TryAdd(game.Id, tracker);
     }
 
     public override Task StartAsync(CancellationToken cancellationToken)
@@ -71,6 +81,11 @@ public static class GameAPIService
           {
             Log.Debug("Event Joined {Id}", e.Id);
           }
+          if (e is Match match && _activeMatches.TryAdd(match.Id, match))
+          {
+            Log.Debug("Match Joined {Id}", match.Id);
+            CreateMatchTracker(match, e.Id);
+          }
         };
         EventManager.GameJoined += (Event parentEvent, Game game) =>
         {
@@ -84,7 +99,11 @@ public static class GameAPIService
             if (parentEvent is Match match)
             {
               // Add the match connected to its parent event
-              _dbWriter.TryAddMatch(match, parentEvent.Id, out var _);
+              if (_activeMatches.TryAdd(match.Id, match))
+              {
+                Log.Debug("Match Joined {Id}", match.Id);
+                CreateMatchTracker(match, parentEvent.Id);
+              }
 
               // Now add the game connected to its parent match
               if (_activeGames.TryAdd(game.Id, game))
@@ -94,16 +113,19 @@ public static class GameAPIService
               }
             }
           }
-          // Match event already exists, just add the game to the match
+          // Parent event already exists, just add the game to the match
           else if (parentEvent is Match match &&
                    _activeGames.TryAdd(game.Id, game))
           {
             // Add the match connected to its parent event
-            // This is a no-op if the match already exists in the database
-            _dbWriter.TryAddMatch(match, parentEvent.Id, out var _);
+            if (_activeMatches.TryAdd(match.Id, match))
+            {
+              Log.Debug("Match Joined {Id}", match.Id);
+              CreateMatchTracker(match, parentEvent.Id);
+            }
 
             // Event already exists, just add the game to the match
-            Log.Debug("Game Joined {Id} for existing match", game.Id);
+            Log.Debug("Game Joined {Id} for existing event", game.Id);
             CreateGameTracker(game, match.Id);
           }
         };
@@ -119,7 +141,12 @@ public static class GameAPIService
           // Add any active games from any joined matches
           if (joinedEvent is Match match)
           {
-            _dbWriter.TryAddMatch(match, joinedEvent.Id, out var _);
+            if (_activeMatches.TryAdd(match.Id, match))
+            {
+              Log.Information("Found match {Id}", match.Id);
+              CreateMatchTracker(match, joinedEvent.Id);
+            }
+
             Game? game = match.CurrentGame;
             if (game == null) continue;
 

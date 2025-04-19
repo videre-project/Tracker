@@ -5,12 +5,14 @@
 
 using System.Collections.Generic;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 using Microsoft.EntityFrameworkCore;
 
 using Tracker.Database.Models;
 using Tracker.Database.Extensions;
 
+using MTGOSDK.API.Play;
 using MTGOSDK.API.Play.Games;
 
 
@@ -29,12 +31,19 @@ public class EventContext(DbContextOptions<EventContext> options)
   {
     PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
     WriteIndented = true,
+    PropertyNameCaseInsensitive = true,
+    Converters =
+    {
+      new JsonStringEnumConverter(),
+    }
   };
 
   protected override void OnModelCreating(ModelBuilder modelBuilder)
   {
     modelBuilder.Ignore<CardEntry>();
+    modelBuilder.Ignore<GamePlayerResult>();
     modelBuilder.Ignore<PlayerResult>();
+    modelBuilder.Ignore<Dictionary<int, List<CardEntry>>>();
 
     //
     // Deck relationships
@@ -88,13 +97,29 @@ public class EventContext(DbContextOptions<EventContext> options)
       .OnDelete(DeleteBehavior.Cascade);
 
     //
+    // Match relationships
+    //
+
+    modelBuilder.Entity<MatchModel>()
+      .Property(m => m.PlayerResults)
+      .HasConversion(
+          e => JsonSerializer.Serialize(e, s_jsonOptions),
+          e => JsonSerializer.Deserialize<List<PlayerResult>>(e, s_jsonOptions)!);
+
+    modelBuilder.Entity<MatchModel>()
+      .Property(m => m.SideboardChanges)
+      .HasConversion(
+          e => JsonSerializer.Serialize(e, s_jsonOptions),
+          e => JsonSerializer.Deserialize<Dictionary<int, List<CardEntry>>>(e, s_jsonOptions)!);
+
+    //
     // Game relationships
     //
 
     modelBuilder.Entity<GameModel>()
-      .Property(d => d.PlayerResults)
+      .Property(d => d.GamePlayerResults)
       .HasConversion(
           e => JsonSerializer.Serialize(e, s_jsonOptions),
-          e => JsonSerializer.Deserialize<List<PlayerResult>>(e, s_jsonOptions)!);
+          e => JsonSerializer.Deserialize<List<GamePlayerResult>>(e, s_jsonOptions)!);
   }
 }

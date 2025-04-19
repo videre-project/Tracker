@@ -18,6 +18,6 @@ public class GameModel
   public int MatchId { get; set; }
   public MatchModel Match { get; set; }
 
-  public List<PlayerResult> PlayerResults { get; set; } = new();
+  public List<GamePlayerResult> GamePlayerResults { get; set; } = new();
   public List<GameLogModel> GameLogs { get; set; } = new();
 }

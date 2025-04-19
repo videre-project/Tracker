@@ -12,6 +12,7 @@ using System.Threading.Tasks;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+
 using MTGOSDK.API.Collection;
 using MTGOSDK.API.Play;
 using MTGOSDK.API.Play.Games;
@@ -104,6 +105,16 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
       {
         using var transaction = context.Database.BeginTransaction();
 
+        // Wait until the parent event is created before adding the match.
+        if (!s_matchIdMap.ContainsKey(eventId) &&
+            !WaitForEventModelAsync(eventId).Result)
+        {
+          Log.Warning("Parent event {Id} not found for match {MatchId}", eventId, match.Id);
+          matchModel = null;
+          transaction.Rollback();
+          return false;
+        }
+
         // Check if match already exists
         var existingMatch = context.Matches.FirstOrDefault(m => m.Id == match.Id);
         if (existingMatch != null)
@@ -164,6 +175,16 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
       {
         using var transaction = context.Database.BeginTransaction();
 
+        // Wait until the match is created before adding the game.
+        if (!s_matchIdMap.ContainsKey(matchId) &&
+            !WaitForMatchModelAsync(matchId).Result)
+        {
+          Log.Warning("Match {Id} not found for game {GameId}", matchId, game.Id);
+          gameModel = null;
+          transaction.Rollback();
+          return false;
+        }
+
         // Check if game already exists
         var existingGame = context.Games.FirstOrDefault(g => g.Id == game.Id);
         if (existingGame != null)
@@ -218,6 +239,53 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
     }
   }
 
+  //
+  //
+  //
+
+  public async Task<bool> WaitForEventModelAsync(
+    int eventId,
+    CancellationToken cancellationToken = default)
+  {
+    using (var scope = serviceProvider.CreateScope())
+    {
+      var context = scope.ServiceProvider.GetRequiredService<EventContext>();
+
+      // Wait until the EventModel is created before adding the log entry.
+      if (!await WaitUntilAsync(async () =>
+        await context.Events.AnyAsync(e => e.Id == eventId, cancellationToken)
+      ))
+      {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  public async Task<bool> WaitForMatchModelAsync(
+    int matchId,
+    CancellationToken cancellationToken = default)
+  {
+    // Check if the match ID is already in the map
+    if (s_matchIdMap.ContainsKey(matchId)) return true;
+
+    using (var scope = serviceProvider.CreateScope())
+    {
+      var context = scope.ServiceProvider.GetRequiredService<EventContext>();
+
+      // Wait until the MatchModel is created before adding the log entry.
+      if (!await WaitUntilAsync(async () =>
+        await context.Matches.AnyAsync(m => m.Id == matchId, cancellationToken)
+      ))
+      {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
   public async Task<bool> WaitForGameModelAsync(
     int gameId,
     CancellationToken cancellationToken = default)
@@ -239,6 +307,49 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
     }
 
     return true;
+  }
+
+  /// <summary>
+  /// Waits for the game to contain a non-empty GamePlayerResults entry.
+  /// </summary>
+  public async Task<bool> WaitForGameCompletionAsync
+  (
+    int gameId,
+    CancellationToken cancellationToken = default)
+  {
+    using (var scope = serviceProvider.CreateScope())
+    {
+      var context = scope.ServiceProvider.GetRequiredService<EventContext>();
+
+      // Wait until the GamePlayerResults entry is non-empty
+      return await WaitUntilAsync(async () =>
+        await context.Games
+          .AnyAsync(g => g.Id == gameId && g.GamePlayerResults.Count > 0,
+                    cancellationToken)
+      );
+    }
+  }
+
+  //
+  //
+  //
+
+  public async Task<IEnumerable<GameModel>> GetGamesAsync(
+    int matchId,
+    CancellationToken cancellationToken = default)
+  {
+    using (var scope = serviceProvider.CreateScope())
+    {
+      var context = scope.ServiceProvider.GetRequiredService<EventContext>();
+
+      // Check if the match ID is already in the map
+      if (!s_matchIdMap.ContainsKey(matchId)) return Enumerable.Empty<GameModel>();
+
+      // Fetch games related to the match ID
+      return await context.Games
+        .Where(g => g.MatchId == matchId)
+        .ToListAsync(cancellationToken);
+    }
   }
 
   public async Task<bool> TryAddGameLogAsync(
@@ -295,7 +406,11 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
     }
   }
 
-  public bool TryUpdateGameResults(Game game, IList<PlayerResult> results)
+  //
+  // Table mutations
+  //
+
+  public bool TryUpdateGameResults(Game game, IList<GamePlayerResult> results)
   {
     using (var scope = serviceProvider.CreateScope())
     {
@@ -315,12 +430,13 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
         }
 
         // Update player results
-        existingGame.PlayerResults.Clear();
+        existingGame.GamePlayerResults.Clear();
         foreach (var result in results)
         {
-          existingGame.PlayerResults.Add(result);
+          existingGame.GamePlayerResults.Add(result);
         }
 
+        context.Entry(existingGame).State = EntityState.Modified;
         context.SaveChanges();
         transaction.Commit();
         return true;
@@ -335,6 +451,92 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
       {
         Log.Error(ex, "Error updating game results for game {GameId}", game.Id);
         Log.Debug(ex.Message + "\n" + ex.StackTrace);
+        return false;
+      }
+    }
+  }
+
+  public bool TryUpdateSideboardChanges(Match match, int gameId, List<CardEntry> changes)
+  {
+    using (var scope = serviceProvider.CreateScope())
+    {
+      var context = scope.ServiceProvider.GetRequiredService<EventContext>();
+
+      try
+      {
+        using var transaction = context.Database.BeginTransaction();
+
+        // Check if match already exists
+        var existingMatch = context.Matches.FirstOrDefault(m => m.Id == match.Id);
+
+        if (existingMatch == null)
+        {
+          Log.Warning("Match {Id} not found for updating sideboard changes", match.Id);
+          return false;
+        }
+
+        // Update sideboard changes
+        existingMatch.SideboardChanges.Add(gameId, changes);
+
+        context.Entry(existingMatch).State = EntityState.Modified;
+        context.SaveChanges();
+        transaction.Commit();
+        return true;
+      }
+      catch (DbUpdateConcurrencyException ex)
+      {
+        Log.Warning("Concurrency conflict occurred while updating sideboard changes for match {MatchId}: {Message}",
+                  match.Id, ex.Message);
+        return false;
+      }
+      catch (Exception ex)
+      {
+        Log.Error(ex, "Error updating sideboard changes for match {MatchId}", match.Id);
+        return false;
+      }
+    }
+  }
+
+  public bool TryUpdateMatchResults(Match match, IList<PlayerResult> results)
+  {
+    using (var scope = serviceProvider.CreateScope())
+    {
+      var context = scope.ServiceProvider.GetRequiredService<EventContext>();
+
+      try
+      {
+        using var transaction = context.Database.BeginTransaction();
+
+        // Check if match already exists
+        var existingMatch = context.Matches.FirstOrDefault(m => m.Id == match.Id);
+
+        if (existingMatch == null)
+        {
+          Log.Warning("Match {Id} not found for updating results", match.Id);
+          return false;
+        }
+
+        // Update player results
+        existingMatch.PlayerResults.Clear();
+        foreach (var result in results)
+        {
+          existingMatch.PlayerResults.Add(result);
+        }
+
+        context.Entry(existingMatch).State = EntityState.Modified;
+        context.SaveChanges();
+        transaction.Commit();
+        return true;
+      }
+      catch (DbUpdateConcurrencyException ex)
+      {
+        Log.Warning("Concurrency conflict occurred while updating match results for match {MatchId}: {Message}",
+                  match.Id, ex.Message);
+        return false;
+      }
+      catch (Exception ex)
+      {
+        Log.Error(ex, "Error updating match results for match {MatchId}", match.Id);
         return false;
       }
     }

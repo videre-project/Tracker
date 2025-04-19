@@ -5,13 +5,18 @@
 
 using System;
 using System.Collections.Generic;
-
+using System.Text.Json.Serialization;
 using MTGOSDK.API.Collection;
 
 
 namespace Tracker.Database.Models;
 
-public record CardEntry(int catalogId, string name, int quantity);
+[method: JsonConstructor]
+public record CardEntry(int catalogId, string name, int quantity)
+{
+  public CardEntry(int catalogId, int quantity) :
+      this(catalogId, CollectionManager.GetCard(catalogId).Name, quantity) { }
+}
 
 public class DeckModel
 {

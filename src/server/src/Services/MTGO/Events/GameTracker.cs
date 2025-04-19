@@ -3,6 +3,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
 using System.Text.Json;
@@ -20,8 +21,9 @@ namespace Tracker.Services.MTGO.Events;
 /// <summary>
 /// Tracks game events and logs them to a blocking collection for processing.
 /// </summary>
-public class GameTracker
+public class GameTracker: IDisposable
 {
+  private readonly Game m_game;
   private readonly BlockingCollection<GameLogEntry> _eventLog;
   private readonly EventDatabaseWriter _dbWriter;
 
@@ -42,6 +44,7 @@ public class GameTracker
     EventDatabaseWriter dbWriter,
     bool isInitialized = false)
   {
+    m_game = game;
     _eventLog = eventLog;
     _dbWriter = dbWriter;
 
@@ -52,7 +55,7 @@ public class GameTracker
 
       foreach (GamePlayer player in game.Players)
       {
-        Game_OnLifeChange(game, player);
+        Game_OnLifeChange(player);
       }
 
       //
@@ -67,7 +70,7 @@ public class GameTracker
 
         foreach (GameCard card in handZone.Cards)
         {
-          Game_OnZoneChange(game, card);
+          Game_OnZoneChange(card);
         }
       }
     }
@@ -75,13 +78,13 @@ public class GameTracker
 
     Log.Debug("Configuring game {Id} events", game.Id);
     #region Global Callbacks
-    game.OnGamePhaseChange += (CurrentPlayerPhase playerPhase) => Game_CurrentPhaseChanged(game, playerPhase);
+    game.OnGamePhaseChange += Game_CurrentPhaseChanged;
     game.CurrentTurnChanged += Game_CurrentTurnChanged;
-    game.OnZoneChange += (GameCard card) => Game_OnZoneChange(game, card);
-    game.OnLifeChange += (GamePlayer player) => Game_OnLifeChange(game, player);
-    game.OnLogMessage += (Message message) => Game_OnLogMessage(game, message);
-    game.GameStatusChanged += () => Game_GameStatusChange(game);
-    game.OnGameResultsChanged += (IList<PlayerResult> results) => Game_OnGameResultsChanged(game, results);
+    game.OnZoneChange += Game_OnZoneChange;
+    game.OnLifeChange += Game_OnLifeChange;
+    game.OnLogMessage += Game_OnLogMessage;
+    game.GameStatusChanged += Game_GameStatusChange;
+    game.OnGameResultsChanged += Game_OnGameResultsChanged;
 
     // Ensure that the global event is initialized before doing any processing
     CardAction.TargetSetChanged.EnsureInitialize();
@@ -166,7 +169,7 @@ public class GameTracker
       // Process the actions in reverse order (i.e. the original push order).
       while (actions.TryPop(out GameAction? action))
       {
-        Game_OnGameAction(game, action);
+        Game_OnGameAction(action);
       }
     };
 
@@ -184,22 +187,33 @@ public class GameTracker
       }
       while (actions.TryPop(out GameAction? action))
       {
-        Game_OnGameAction(game, action);
+        Game_OnGameAction(action);
       }
 
-      Game_GameStatusChange(game);
+      Game_GameStatusChange();
     };
     #endregion
 
     Log.Debug("Game {Id} events configured", game.Id);
   }
 
-  private void Game_CurrentPhaseChanged(Game game, CurrentPlayerPhase playerPhase)
+  private bool _disposed = false;
+
+  public void Dispose()
+  {
+    if (_disposed) return;
+    _disposed = true;
+
+    m_game.ClearEvents();
+    GC.SuppressFinalize(this);
+  }
+
+  private void Game_CurrentPhaseChanged(CurrentPlayerPhase playerPhase)
   {
     GamePlayer activePlayer = playerPhase.ActivePlayer;
     GamePhase currentPhase = playerPhase.CurrentPhase;
     _eventLog.Add(new GameLogEntry(
-      game.Id,
+      m_game.Id,
       activePlayer, // extract timestamp
       GameLogType.PhaseChange,
       JsonSerializer.Serialize(new
@@ -227,12 +241,12 @@ public class GameTracker
     ));
   }
 
-  private void Game_OnZoneChange(Game game, GameCard card)
+  private void Game_OnZoneChange(GameCard card)
   {
     GameZone? oldZone = card.PreviousZone;
     GameZone? newZone = card.Zone;
     _eventLog.Add(new GameLogEntry(
-      game.Id,
+      m_game.Id,
       card, // extract timestamp
       GameLogType.ZoneChange,
       JsonSerializer.Serialize(new
@@ -244,7 +258,7 @@ public class GameTracker
     ));
   }
 
-  private void Game_OnGameAction(Game game, GameAction action)
+  private void Game_OnGameAction(GameAction action)
   {
     if (action is CardAction cardAction &&
         cardAction.RequiresTargets && !cardAction.IsTargetsSet)
@@ -255,18 +269,18 @@ public class GameTracker
     }
 
     _eventLog.Add(new GameLogEntry(
-      game.Id,
+      m_game.Id,
       action, // extract timestamp
       GameLogType.GameAction,
       action.ToJSON()
     ));
   }
 
-  private void Game_OnLifeChange(Game game, GamePlayer player)
+  private void Game_OnLifeChange(GamePlayer player)
   {
     int life = player.Life;
     _eventLog.Add(new GameLogEntry(
-      game.Id,
+      m_game.Id,
       player, // extract timestamp
       GameLogType.LifeChange,
       JsonSerializer.Serialize(new
@@ -277,32 +291,34 @@ public class GameTracker
     ));
   }
 
-  private void Game_OnLogMessage(Game game, Message message)
+  private void Game_OnLogMessage(Message message)
   {
+    if (_disposed) return;
+
     _eventLog.Add(new GameLogEntry(
-      game.Id,
+      m_game.Id,
       message.Timestamp,
       GameLogType.LogMessage,
       message.Text
     ));
   }
 
-  private void Game_GameStatusChange(Game game)
+  private void Game_GameStatusChange()
   {
     // Unsubscribe from all events when the game is over
-    GameStatus status = game.Status;
+    GameStatus status = m_game.Status;
     if (status == GameStatus.Finished)
     {
-      game.ClearEvents();
+      Dispose();
     }
   }
 
-  private void Game_OnGameResultsChanged(Game game, IList<PlayerResult> results)
+  private void Game_OnGameResultsChanged(IList<GamePlayerResult> results)
   {
-    if (_dbWriter.TryUpdateGameResults(game, results))
+    if (_dbWriter.TryUpdateGameResults(m_game, results))
     {
       string jsonRes = JsonSerializer.Serialize(results);
-      Log.Debug("Updated game results for {Id}: {Results}", game.Id, jsonRes);
+      Log.Debug("Updated game results for {Id}: {Results}", m_game.Id, jsonRes);
     }
   }
 }
