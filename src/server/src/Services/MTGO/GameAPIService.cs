@@ -15,6 +15,7 @@ using MTGOSDK.API.Play;
 using MTGOSDK.API.Play.Games;
 using MTGOSDK.Core.Logging;
 
+using Tracker.Services.Base;
 using Tracker.Services.MTGO.Events;
 
 
@@ -33,14 +34,13 @@ public static class GameAPIService
   public static IHostApplicationBuilder RegisterGameService(
     this IHostApplicationBuilder builder)
   {
-    builder.Services.AddSingleton<GameService>();
-    builder.Services.AddHostedService(p => p.GetRequiredService<GameService>());
+    builder.Services.AddHostedService<GameService>();
 
     return builder;
   }
 
   public class GameService(IServiceProvider serviceProvider)
-      : BackgroundService, IHostedService
+      : PooledBackgroundService, IHostedService
   {
     private readonly ConcurrentDictionary<int, Event> _activeEvents = new();
     private readonly ConcurrentDictionary<int, Match> _activeMatches = new();
@@ -68,7 +68,7 @@ public static class GameAPIService
       _gameTrackers.TryAdd(game.Id, tracker);
     }
 
-    public override Task StartAsync(CancellationToken cancellationToken)
+    public void InitializeGameService()
     {
       try
       {
@@ -163,33 +163,59 @@ public static class GameAPIService
         Log.Critical("Failed to start game service", ex);
         Log.Debug(ex.Message + "\n" + ex.StackTrace);
       }
-
-      return base.StartAsync(cancellationToken);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-      // Process events in the eventlog blocking collection
-      foreach (GameLogEntry entry in _eventLog.GetConsumingEnumerable(stoppingToken))
+      try
       {
-        try
-        {
-          Log.Trace("[Game {Id}] {Timestamp:O}: {Type} {Data}",
-              entry.GameId, entry.Timestamp, entry.Type, entry.Data);
+        // Wait for the game service events to be initialized
+        InitializeGameService();
 
-          if (!await _dbWriter.WaitForGameModelAsync(entry.GameId))
-          {
-            throw new InvalidOperationException(
-              $"Cannot add log entry for game {entry.GameId} " +
-              $"as the game model was not created in time.");
-          }
-          await _dbWriter.TryAddGameLogAsync(entry, stoppingToken);
-        }
-        catch (Exception ex)
+        // Process events in the eventlog blocking collection
+        foreach (GameLogEntry entry in _eventLog.GetConsumingEnumerable(stoppingToken))
         {
-          Log.Error(ex, "Error adding log entry for game {GameId}: {Message}",
-            entry.GameId, ex.Message);
-          Log.Debug(ex.StackTrace);
+          try
+          {
+            Log.Trace("[Game {Id}] {Timestamp:O}: {Type} {Data}",
+                entry.GameId, entry.Timestamp, entry.Type, entry.Data);
+
+            if (!await _dbWriter.WaitForGameModelAsync(entry.GameId))
+            {
+              throw new InvalidOperationException(
+                $"Cannot add log entry for game {entry.GameId} " +
+                $"as the game model was not created in time.");
+            }
+            await _dbWriter.TryAddGameLogAsync(entry, stoppingToken);
+          }
+          catch (Exception ex)
+          {
+            Log.Error(ex, "Error adding log entry for game {GameId}: {Message}",
+              entry.GameId, ex.Message);
+            Log.Debug(ex.StackTrace);
+          }
+        }
+      }
+      catch (OperationCanceledException)
+      {
+        // The service was stopped, exit gracefully
+        Log.Information("Game service stopped");
+      }
+      catch (Exception ex)
+      {
+        Log.Critical("Error in game service: {Message}", ex.Message);
+        Log.Debug(ex.StackTrace);
+      }
+      finally
+      {
+        // Clean up any remaining trackers
+        foreach (var tracker in _matchTrackers.Values)
+        {
+          tracker.Dispose();
+        }
+        foreach (var tracker in _gameTrackers.Values)
+        {
+          tracker.Dispose();
         }
       }
     }

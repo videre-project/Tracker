@@ -5,6 +5,7 @@
 
 using System;
 using System.IO;
+using System.Reflection;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -38,16 +39,12 @@ public static class WebAPIService
     {
       Args = options.Args,
       ContentRootPath = options.ContentRootPath,
-      WebRootPath = options.IsDevelopment
-        ? Path.Combine(options.ContentRootPath, "../../../..", "client", "dist")
-        : Path.Combine(options.ContentRootPath, "wwwroot")
     });
 
     // Set the HTTPS endpoint for the Web API.
     builder.WebHost.UseUrls(options.Url.ToString());
 
     // Add services to the container.
-    // builder.Services.AddControllers();
     builder.Services.AddControllers().AddJsonOptions(options =>
     {
       // Configures the JSON serializer options to match JsonSerializableBase.
@@ -77,13 +74,16 @@ public static class WebAPIService
   /// <returns>A new <see cref="WebApplication"/> instance.</returns>
   public static WebApplication CreateAPIService(this WebApplication api)
   {
+    api.UseHttpsRedirection();
+
     // Use the embedded static files provided by the client.
     api.UseFileServer(new FileServerOptions
     {
-      FileProvider = new ManifestEmbeddedFileProvider(typeof(Program).Assembly),
+      FileProvider = new ManifestEmbeddedFileProvider(Assembly.GetEntryAssembly()!),
       EnableDefaultFiles = true,
       EnableDirectoryBrowsing = false,
     });
+    api.UseDefaultFiles();
 
     // Configure the HTTP request pipeline.
     if (api.Environment.IsDevelopment())
@@ -95,7 +95,7 @@ public static class WebAPIService
     api.UseAuthorization();
 
     api.MapControllers();
-    api.MapFallbackToFile("index.html");
+    api.MapFallbackToFile("/index.html");
 
     return api;
   }

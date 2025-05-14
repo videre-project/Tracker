@@ -103,7 +103,7 @@ public class Program
     Application.SetCompatibleTextRenderingDefault(false);
 
     // Configure the HostForm and the WebView2 control.
-    var hostForm = new HostForm(options) { Source = options.ClientUrl };
+    var hostForm = new HostForm(options) { Source = options.Url };
     hostForm.ControllerThread.Name ??= "UI Thread";
 
     // Configure the Web API service.

@@ -15,20 +15,18 @@
   <!-- Frontend SPA Configuration -->
   <PropertyGroup>
     <SpaRoot>..\client</SpaRoot>
-    <SpaProxyLaunchCommand>pnpm dev</SpaProxyLaunchCommand>
+    <SpaProxyLaunchCommand>pnpm run dev</SpaProxyLaunchCommand>
     <!-- Workaround for https://github.com/dotnet/aspnetcore/issues/45700 -->
     <SpaProxyLaunchCommand Condition="$([MSBuild]::IsOsPlatform('Windows'))">cmd.exe /s /c $(SpaProxyLaunchCommand)</SpaProxyLaunchCommand>
     <SpaProxyLaunchCommand Condition="$([MSBuild]::IsOSUnixLike())">sh -c %5C&quot;$(SpaProxyLaunchCommand)%5C&quot;</SpaProxyLaunchCommand>
-    <SpaProxyServerUrl>https://localhost:51848</SpaProxyServerUrl>
+    <SpaProxyServerUrl>https://localhost:52797</SpaProxyServerUrl>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="$(SpaRoot)\client.esproj">
-      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
-    </ProjectReference>
+    <ProjectReference Include="$(SpaRoot)\client.esproj"
+                      ReferenceOutputAssembly="false" />
     <!-- Embed the build output of the client project -->
-    <EmbeddedResource Include="$(SpaRoot)\dist\**\*">
-      <LogicalName>%(RecursiveDir)%(FileName)%(Extension)</LogicalName>
-    </EmbeddedResource>
+    <EmbeddedResource Include="$(SpaRoot)\dist\**\*"
+                      LogicalName="%(RecursiveDir)%(FileName)%(Extension)" />
   </ItemGroup>
 
   <!-- Publishing Configuration -->

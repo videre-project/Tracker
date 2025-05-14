@@ -1,22 +1,10 @@
-<Project Sdk="Microsoft.VisualStudio.JavaScript.Sdk/1.0.2191419">
+<Project Sdk="Microsoft.VisualStudio.JavaScript.Sdk/1.0.784122">
   <PropertyGroup>
-    <!-- Disables running `npm install` on Build and Restore commands -->
-    <ShouldRunNpmInstall>false</ShouldRunNpmInstall>
-  </PropertyGroup>
-
-  <PropertyGroup>
-    <StartupCommand>pnpm dev</StartupCommand>
-    <BuildCommand>pnpm build</BuildCommand>
+    <StartupCommand>pnpm run dev</StartupCommand>
+    <JavaScriptTestRoot>src\</JavaScriptTestRoot>
     <!-- Allows the build (or compile) script located on package.json to run on Build -->
     <ShouldRunBuildScript>false</ShouldRunBuildScript>
-
-    <!-- <JavaScriptTestRoot>.\</JavaScriptTestRoot>
-    <JavaScriptTestFramework>Jest</JavaScriptTestFramework> -->
-  </PropertyGroup>
-
-  <PropertyGroup>
     <!-- Folder where production build objects will be placed -->
     <BuildOutputFolder>$(MSBuildProjectDirectory)\dist</BuildOutputFolder>
-    <!-- <PublishAssetsDirectory>$(MSBuildProjectDirectory)\dist</PublishAssetsDirectory> -->
   </PropertyGroup>
 </Project>
