@@ -13,12 +13,12 @@ using Microsoft.Extensions.DependencyInjection;
 
 using MTGOSDK.API.Play;
 using MTGOSDK.API.Play.Games;
+using MTGOSDK.Core;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Remoting;
 
 using Tracker.Services.Base;
 using Tracker.Services.MTGO.Events;
-using MTGOSDK.Core;
 
 
 namespace Tracker.Services.MTGO;
@@ -91,52 +91,29 @@ public static class GameAPIService
 
     public void InitializeGameService()
     {
-      try
+      EventManager.EventJoined += (Event e, object _) =>
       {
-        Log.Information("Game service started");
-
-        EventManager.EventJoined += (Event e, object _) =>
+        if (_activeEvents.TryAdd(e.Id, e) &&
+            _dbWriter.TryAddEvent(e, out var _))
         {
-          if (_activeEvents.TryAdd(e.Id, e) &&
-              _dbWriter.TryAddEvent(e, out var _))
-          {
-            Log.Debug("Event Joined {Id}", e.Id);
-          }
-          if (e is Match match && _activeMatches.TryAdd(match.Id, match))
-          {
-            Log.Debug("Match Joined {Id}", match.Id);
-            CreateMatchTracker(match, e.Id);
-          }
-        };
-        EventManager.GameJoined += (Event parentEvent, Game game) =>
+          Log.Debug("Event Joined {Id}", e.Id);
+        }
+        if (e is Match match && _activeMatches.TryAdd(match.Id, match))
         {
-          // First add the parent event if needed
-          if (_activeEvents.TryAdd(parentEvent.Id, parentEvent))
-          {
-            Log.Debug("Found event {Id}", parentEvent.Id);
-            _dbWriter.TryAddEvent(parentEvent, out var _);
+          Log.Debug("Match Joined {Id}", match.Id);
+          CreateMatchTracker(match, e.Id);
+        }
+      };
+      EventManager.GameJoined += (Event parentEvent, Game game) =>
+      {
+        // First add the parent event if needed
+        if (_activeEvents.TryAdd(parentEvent.Id, parentEvent))
+        {
+          Log.Debug("Found event {Id}", parentEvent.Id);
+          _dbWriter.TryAddEvent(parentEvent, out var _);
 
-            // If it's a match, add it to its parent event
-            if (parentEvent is Match match)
-            {
-              // Add the match connected to its parent event
-              if (_activeMatches.TryAdd(match.Id, match))
-              {
-                Log.Debug("Match Joined {Id}", match.Id);
-                CreateMatchTracker(match, parentEvent.Id);
-              }
-
-              // Now add the game connected to its parent match
-              if (_activeGames.TryAdd(game.Id, game))
-              {
-                Log.Debug("Game Joined {Id}", game.Id);
-                CreateGameTracker(game, match.Id);
-              }
-            }
-          }
-          // Parent event already exists, just add the game to the match
-          else if (parentEvent is Match match &&
-                   _activeGames.TryAdd(game.Id, game))
+          // If it's a match, add it to its parent event
+          if (parentEvent is Match match)
           {
             // Add the match connected to its parent event
             if (_activeMatches.TryAdd(match.Id, match))
@@ -145,46 +122,57 @@ public static class GameAPIService
               CreateMatchTracker(match, parentEvent.Id);
             }
 
-            // Event already exists, just add the game to the match
-            Log.Debug("Game Joined {Id} for existing event", game.Id);
-            CreateGameTracker(game, match.Id);
-          }
-        };
-
-        // Filter events list to get all joined events
-        foreach (Event joinedEvent in EventManager.JoinedEvents)
-        {
-          if (_activeEvents.TryAdd(joinedEvent.Id, joinedEvent))
-          {
-            Log.Information("Found event {Id}", joinedEvent.Id);
-            _dbWriter.TryAddEvent(joinedEvent, out var _);
-          }
-          // Add any active games from any joined matches
-          if (joinedEvent is Match match)
-          {
-            if (_activeMatches.TryAdd(match.Id, match))
-            {
-              Log.Information("Found match {Id}", match.Id);
-              CreateMatchTracker(match, joinedEvent.Id);
-            }
-
-            Game? game = match.CurrentGame;
-            if (game == null) continue;
-
+            // Now add the game connected to its parent match
             if (_activeGames.TryAdd(game.Id, game))
             {
-              Log.Information("Found game {Id}", game.Id);
+              Log.Debug("Game Joined {Id}", game.Id);
               CreateGameTracker(game, match.Id);
             }
           }
         }
-      }
-      catch (Exception ex)
-      {
-        if (_isDisposed) return;
+        // Parent event already exists, just add the game to the match
+        else if (parentEvent is Match match &&
+                  _activeGames.TryAdd(game.Id, game))
+        {
+          // Add the match connected to its parent event
+          if (_activeMatches.TryAdd(match.Id, match))
+          {
+            Log.Debug("Match Joined {Id}", match.Id);
+            CreateMatchTracker(match, parentEvent.Id);
+          }
 
-        Log.Critical("Failed to start game service", ex);
-        Log.Debug(ex.Message + "\n" + ex.StackTrace);
+          // Event already exists, just add the game to the match
+          Log.Debug("Game Joined {Id} for existing event", game.Id);
+          CreateGameTracker(game, match.Id);
+        }
+      };
+
+      // Filter events list to get all joined events
+      foreach (Event joinedEvent in EventManager.JoinedEvents)
+      {
+        if (_activeEvents.TryAdd(joinedEvent.Id, joinedEvent))
+        {
+          Log.Information("Found event {Id}", joinedEvent.Id);
+          _dbWriter.TryAddEvent(joinedEvent, out var _);
+        }
+        // Add any active games from any joined matches
+        if (joinedEvent is Match match)
+        {
+          if (_activeMatches.TryAdd(match.Id, match))
+          {
+            Log.Information("Found match {Id}", match.Id);
+            CreateMatchTracker(match, joinedEvent.Id);
+          }
+
+          Game? game = match.CurrentGame;
+          if (game == null) continue;
+
+          if (_activeGames.TryAdd(game.Id, game))
+          {
+            Log.Information("Found game {Id}", game.Id);
+            CreateGameTracker(game, match.Id);
+          }
+        }
       }
     }
 
@@ -196,7 +184,7 @@ public static class GameAPIService
         this.Dispose();
 
         // Wait for a new MTGO process to start before reinitializing
-        await ClientAPIService.WaitForRemoteClientAsync(serviceProvider);
+        await ClientAPIService.WaitForRemoteClientAsync();
         RemoteClient.Disposed += GameService_Disposed;
 
         InitializeGameService();
@@ -208,8 +196,24 @@ public static class GameAPIService
       try
       {
         // Wait for the game service events to be initialized
-        RemoteClient.Disposed += GameService_Disposed;
-        InitializeGameService();
+        Log.Information("Game service started");
+        await ClientAPIService.WaitSemaphoreAsync(stoppingToken);
+        try
+        {
+          RemoteClient.Disposed += GameService_Disposed;
+          InitializeGameService();
+        }
+        catch (Exception ex)
+        {
+          if (_isDisposed) return;
+
+          Log.Critical("Failed to start game service", ex);
+          Log.Debug(ex.Message + "\n" + ex.StackTrace);
+        }
+        finally
+        {
+          ClientAPIService.ReleaseSemaphore();
+        }
 
         // Process events in the eventlog blocking collection
         foreach (GameLogEntry entry in _eventLog.GetConsumingEnumerable(stoppingToken))

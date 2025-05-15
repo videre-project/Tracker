@@ -41,11 +41,11 @@ public static class ClientAPIService
 
   private static readonly SemaphoreSlim _semaphore = new(1, 1);
 
-  public static IHostApplicationBuilder RegisterClientSingleton(
+  public static async Task<IHostApplicationBuilder> RegisterClientSingleton(
     this IHostApplicationBuilder builder,
     ClientOptions options = default)
   {
-    InitializeClient(options);
+    await WaitForRemoteClientAsync(options);
     builder.Services.AddSingleton(_ => Client);
 
     return builder;
@@ -57,42 +57,58 @@ public static class ClientAPIService
     return builder.UseMiddleware<ClientMiddleware>();
   }
 
-  public static async Task WaitForRemoteClientAsync(IServiceProvider provider)
+  public static async Task WaitForRemoteClientAsync(
+    ClientOptions? options = null,
+    CancellationToken cancellationToken = default)
   {
     // Register a new client instance.
-    await _semaphore.WaitAsync();
+    await _semaphore.WaitAsync(cancellationToken);
     try
     {
-      // Wait for the previous client to dispose.
-      Log.Trace("Waiting for previous client to dispose...");
-      await RemoteClient.WaitForDisposeAsync();
+      if (s_client != null)
+      {
+        // Wait for the previous client to dispose.
+        Log.Trace("Waiting for previous client to dispose...");
+        await RemoteClient.WaitForDisposeAsync();
+      }
 
       Log.Trace("Waiting for a new MTGO process to start...");
       await Client.WaitForMTGOProcess(TimeSpan.FromMinutes(10));
 
       // Log the process ID of the new MTGO process.
-      short pid = (short)RemoteClient.MTGOProcess()!.Id;
+      int pid = RemoteClient.MTGOProcess()!.Id;
       Log.Trace("Found a new MTGO process with PID {pid}.", pid);
 
       Log.Trace("Waiting for the user to log in...");
       await Client.WaitForUserLogin(TimeSpan.FromMinutes(5));
 
-      // Re-initialize the client (re-using the new RemoteClient instance).
-      Log.Trace("User has logged in, re-initializing the client instance...");
-      InitializeClient(s_options);
-      if (pid != s_pid)
+      // Initialize the client (re-using the new RemoteClient instance).
+      Log.Trace("User is logged in, initializing the client instance...");
+      InitializeClient(options.HasValue ? options.Value : s_options);
+      if (pid != (int) s_pid!)
       {
         throw new InvalidOperationException(
           $"The MTGO process ID {pid} does not match the expected PID {s_pid}.");
       }
 
       Log.Trace("Waiting for the client to finish initializing...");
-      await s_client.WaitForClientReady();
+      await s_client!.WaitForClientReady();
     }
     finally
     {
       _semaphore.Release();
     }
+  }
+
+  public static Task WaitSemaphoreAsync(
+    CancellationToken cancellationToken = default)
+  {
+    return _semaphore.WaitAsync(cancellationToken);
+  }
+
+  public static void ReleaseSemaphore()
+  {
+    _semaphore.Release();
   }
 
   public class ClientMiddleware(RequestDelegate next)
@@ -118,7 +134,7 @@ public static class ClientAPIService
 
         // If a new process has started since the exception was thrown,
         // reinitialize and re-register the client with the service collection.
-        await WaitForRemoteClientAsync(context.RequestServices);
+        await WaitForRemoteClientAsync();
 
         // If a new client is initialized, retry the request.
         if (RemoteClient.IsInitialized)
