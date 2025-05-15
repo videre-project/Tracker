@@ -67,7 +67,7 @@ public partial class HostForm : Form
         WebView.NavigationCompleted += (s, e) =>
         {
           HostForm_Show(sender, e);
-          WebView.CoreWebView2.OpenDevToolsWindow();
+          // WebView.CoreWebView2.OpenDevToolsWindow();
         };
       }
       else

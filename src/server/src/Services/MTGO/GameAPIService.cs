@@ -14,9 +14,11 @@ using Microsoft.Extensions.DependencyInjection;
 using MTGOSDK.API.Play;
 using MTGOSDK.API.Play.Games;
 using MTGOSDK.Core.Logging;
+using MTGOSDK.Core.Remoting;
 
 using Tracker.Services.Base;
 using Tracker.Services.MTGO.Events;
+using MTGOSDK.Core;
 
 
 namespace Tracker.Services.MTGO;
@@ -39,8 +41,8 @@ public static class GameAPIService
     return builder;
   }
 
-  public class GameService(IServiceProvider serviceProvider)
-      : PooledBackgroundService, IHostedService
+  public sealed class GameService(IServiceProvider serviceProvider)
+      : PooledBackgroundService, IHostedService, IDisposable
   {
     private readonly ConcurrentDictionary<int, Event> _activeEvents = new();
     private readonly ConcurrentDictionary<int, Match> _activeMatches = new();
@@ -48,6 +50,25 @@ public static class GameAPIService
 
     private readonly ConcurrentDictionary<int, MatchTracker> _matchTrackers = new();
     private readonly ConcurrentDictionary<int, GameTracker> _gameTrackers = new();
+
+    private volatile bool _isDisposed;
+
+    public override void Dispose()
+    {
+      if (_isDisposed) return;
+      _isDisposed = true;
+
+      foreach (var tracker in _matchTrackers.Values)
+      {
+        tracker.Dispose();
+      }
+      foreach (var tracker in _gameTrackers.Values)
+      {
+        tracker.Dispose();
+      }
+
+      base.Dispose();
+    }
 
     private readonly BlockingCollection<GameLogEntry> _eventLog = new();
     private readonly EventDatabaseWriter _dbWriter = new(serviceProvider);
@@ -160,9 +181,26 @@ public static class GameAPIService
       }
       catch (Exception ex)
       {
+        if (_isDisposed) return;
+
         Log.Critical("Failed to start game service", ex);
         Log.Debug(ex.Message + "\n" + ex.StackTrace);
       }
+    }
+
+    private void GameService_Disposed(object? sender, EventArgs e)
+    {
+      SyncThread.Enqueue(async () =>
+      {
+        Log.Information("Game service disposed, reinitializing...");
+        this.Dispose();
+
+        // Wait for a new MTGO process to start before reinitializing
+        await ClientAPIService.WaitForRemoteClientAsync(serviceProvider);
+        RemoteClient.Disposed += GameService_Disposed;
+
+        InitializeGameService();
+      });
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -170,6 +208,7 @@ public static class GameAPIService
       try
       {
         // Wait for the game service events to be initialized
+        RemoteClient.Disposed += GameService_Disposed;
         InitializeGameService();
 
         // Process events in the eventlog blocking collection
