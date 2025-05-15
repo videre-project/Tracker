@@ -60,20 +60,8 @@ public partial class HostForm : Form
 
     WebView.NavigationCompleted += (sender, e) =>
     {
-      // Check if the current environment is development.
-      if (options.IsDevelopment)
-      {
-        WebView.CoreWebView2.Settings.AreDevToolsEnabled = true;
-        WebView.NavigationCompleted += (s, e) =>
-        {
-          HostForm_Show(sender, e);
-          // WebView.CoreWebView2.OpenDevToolsWindow();
-        };
-      }
-      else
-      {
-        HostForm_Show(sender, e);
-      }
+      WebView.CoreWebView2.Settings.AreDevToolsEnabled = true;
+      HostForm_Show(sender, e);
     };
   }
 
