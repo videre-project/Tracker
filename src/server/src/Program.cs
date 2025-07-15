@@ -68,15 +68,18 @@ public class Program
   {
     if (!Debugger.IsAttached && AllocConsole())
     {
+      // Redirect the standard output to the console.
       IntPtr stdHandle = GetStdHandle(STD_OUTPUT_HANDLE);
       SafeFileHandle safeFileHandle = new(stdHandle, true);
       FileStream fileStream = new(safeFileHandle, FileAccess.Write);
-      Encoding encoding = Encoding.UTF8;
-      StreamWriter standardOutput = new(fileStream, encoding) { AutoFlush = true };
+      StreamWriter standardOutput = new(fileStream, Encoding.UTF8)
+      {
+        AutoFlush = true
+      };
       Console.SetOut(standardOutput);
       SetConsoleOutputCP(65001); // Set console to UTF-8
 
-      // Enable ANSI support
+      // Enable ANSI support by overriding the console mode.
       IntPtr handle = GetStdHandle(STD_OUTPUT_HANDLE);
       if (GetConsoleMode(handle, out uint mode))
       {
@@ -106,26 +109,33 @@ public class Program
     var hostForm = new HostForm(options) { Source = options.Url };
     hostForm.ControllerThread.Name ??= "UI Thread";
 
-    // Configure the Web API service.
-    var builder = WebAPIService.CreateHostBuilder(options);
-    {
-      builder.Services.Configure<HostOptions>(options =>
-      {
-        options.ShutdownTimeout = TimeSpan.FromSeconds(5);
-        options.BackgroundServiceExceptionBehavior = BackgroundServiceExceptionBehavior.Ignore;
-      });
-    }
-    builder.UseConsole(hostForm); // Only logging after this point is redirected
-    builder.UseDatabase<EventContext>(options);
-    builder.RegisterClientSingleton();
-    builder.RegisterGameService();
-
     // Create a new thread to run the ASP.NET Core Web API.
-    var api = builder.Build();
-    api.UseClientMiddleware();
-    api.CreateAPIService();
     var apiThread = new Thread(() =>
     {
+      // Configure the Web API service.
+      var builder = WebAPIService.CreateHostBuilder(options);
+      {
+        builder.Services.Configure<HostOptions>(options =>
+        {
+          options.ServicesStartConcurrently = true;
+          options.ServicesStopConcurrently = true;
+          options.ShutdownTimeout = TimeSpan.FromSeconds(5);
+          options.BackgroundServiceExceptionBehavior =
+              BackgroundServiceExceptionBehavior.Ignore;
+        });
+      }
+      builder.UseConsole(hostForm); // Logging is redirected after this point.
+
+      // Configure API services and database context.
+      builder.UseDatabase<EventContext>(options);
+      builder.RegisterClientAPIProvider();
+      builder.RegisterGameService();
+
+      // Configure the Web API middleware.
+      var api = builder.Build();
+      api.UseClientMiddleware();
+      api.CreateAPIService();
+
       Log.Debug("Starting the API thread.");
       api.OnShutdown(Application.Exit).Run();
     })

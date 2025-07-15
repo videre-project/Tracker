@@ -57,7 +57,13 @@ public static class ConsoleAPIService
     {
       s.AddFilter("Microsoft.Hosting.Lifetime",               LogLevel.Warning);
       s.AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.Warning);
+      s.AddFilter("Microsoft.AspNetCore.SpaProxy.SpaProxyLaunchManager",
+                                                              LogLevel.Warning);
       s.AddFilter("Microsoft.AspNetCore.StaticFiles.StaticFileMiddleware",
+                                                              LogLevel.Warning);
+      s.AddFilter("Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker",
+                                                              LogLevel.Warning);
+      s.AddFilter("Microsoft.AspNetCore.Mvc.Infrastructure.ObjectResultExecutor",
                                                               LogLevel.Warning);
       s.AddFilter("Microsoft.EntityFrameworkCore.Database.Command",
                                                               LogLevel.Warning);

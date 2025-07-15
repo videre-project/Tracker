@@ -5,6 +5,7 @@
 
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -16,6 +17,7 @@ using MTGOSDK.API.Play.Games;
 using MTGOSDK.Core;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Remoting;
+using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 using Tracker.Services.Base;
 using Tracker.Services.MTGO.Events;
@@ -24,10 +26,84 @@ using Tracker.Services.MTGO.Events;
 namespace Tracker.Services.MTGO;
 
 /// <summary>
-/// A background service that listens for when new games are created in the client.
+/// A singleton service that manages the Tracker's monitoring of MTGO events,
+/// matches, and games.
 /// </summary>
+/// <remarks>
+/// This class serves as a global service for all instances of the GameService,
+/// and provides access to global events and state related to MTGO events,
+/// regardless of context.
+/// <para>
+/// It is designed to be used in conjunction with the ClientAPIService to
+/// ensure a consistent connection to the MTGO client and recovery when the
+/// MTGO process stops or restarts.
+/// </para>
+/// </remarks>
 public static class GameAPIService
 {
+  /// <summary>
+  /// An event that is raised when the player count of any event changes.
+  /// </summary>
+  public static EventHandler<IEnumerable<Event>>? PlayerCountUpdated;
+
+  /// <summary>
+  /// Watches changes to the total player count of the given events and invokes
+  /// the callback with the updated events whenever a change is detected.
+  /// </summary>
+  /// <param name="events">The events to watch.</param>
+  /// <param name="callback">The callback to invoke with the updated events.</param>
+  /// <param name="pollingInterval">The interval at which to poll for changes.</param>
+  private static void WatchPlayerCountAsync(
+    IEnumerable<Event> events,
+    Action<IEnumerable<Event>> callback,
+    TimeSpan pollingInterval = default)
+  {
+    IList<(Event, Func<int>, int)> eventCollection = [];
+    foreach (var eventObj in events)
+    {
+      int getTotalPlayers() => Try<int>(() => eventObj.TotalPlayers);
+      eventCollection.Add((eventObj, getTotalPlayers, getTotalPlayers()));
+    }
+
+    // Every 5 seconds, check each event's total players to see if it changed.
+    var timer = new System.Timers.Timer(
+      pollingInterval == default
+        ? TimeSpan.FromSeconds(5).TotalMilliseconds
+        : pollingInterval.TotalMilliseconds);
+
+    bool _isDisposed = false;
+    timer.Elapsed += (sender, e) =>
+    {
+      if (_isDisposed || PlayerCountUpdated == null) return;
+
+      // Enumerate with the index of the event in the collection.
+      IList<Event> updatedEvents = [];
+      for (int i = 0; i < eventCollection.Count; i++)
+      {
+        var (eventObj, getTotalPlayers, previousTotal) = eventCollection[i];
+        int currentTotal = getTotalPlayers();
+        if (currentTotal != previousTotal)
+        {
+          // Update the collection with the new total.
+          eventCollection[i] = (eventObj, getTotalPlayers, currentTotal);
+          updatedEvents.Add(eventObj);
+        }
+      }
+      if (updatedEvents.Count == 0) return;
+
+      // Call the callback with the updated events.
+      callback(updatedEvents);
+    };
+    timer.Start();
+
+    RemoteClient.Disposed += delegate
+    {
+      if (_isDisposed) return;
+      _isDisposed = true;
+      timer.Dispose();
+    };
+  }
+
   /// <summary>
   /// Initializes the game service.
   /// </summary>
@@ -41,6 +117,9 @@ public static class GameAPIService
     return builder;
   }
 
+  /// <summary>
+  /// A background service that listens for when new games are created in the client.
+  /// </summary>
   public sealed class GameService(IServiceProvider serviceProvider)
       : PooledBackgroundService, IHostedService, IDisposable
   {
@@ -53,6 +132,7 @@ public static class GameAPIService
 
     private volatile bool _isDisposed;
 
+    /// <inheritdoc />
     public override void Dispose()
     {
       if (_isDisposed) return;
@@ -89,6 +169,10 @@ public static class GameAPIService
       _gameTrackers.TryAdd(game.Id, tracker);
     }
 
+    /// <summary>
+    /// Initializes the game service by subscribing to MTGO events and setting
+    /// up state trackers for matches and games.
+    /// </summary>
     public void InitializeGameService()
     {
       EventManager.EventJoined += (Event e, object _) =>
@@ -147,6 +231,11 @@ public static class GameAPIService
         }
       };
 
+      // Poll active events every 5 seconds to check for player count changes.
+      WatchPlayerCountAsync(
+        EventManager.FeaturedEvents,
+        events => PlayerCountUpdated?.Invoke(this, events));
+
       // Filter events list to get all joined events
       foreach (Event joinedEvent in EventManager.JoinedEvents)
       {
@@ -174,6 +263,8 @@ public static class GameAPIService
           }
         }
       }
+
+      Log.Information("Game service finished initializing");
     }
 
     private void GameService_Disposed(object? sender, EventArgs e)
@@ -184,20 +275,23 @@ public static class GameAPIService
         this.Dispose();
 
         // Wait for a new MTGO process to start before reinitializing
-        await ClientAPIService.WaitForRemoteClientAsync();
+        var provider = serviceProvider.GetRequiredService<IClientAPIProvider>();
+        await provider.WaitForRemoteClientAsync();
         RemoteClient.Disposed += GameService_Disposed;
 
         InitializeGameService();
       });
     }
 
+    /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
       try
       {
         // Wait for the game service events to be initialized
         Log.Information("Game service started");
-        await ClientAPIService.WaitSemaphoreAsync(stoppingToken);
+        var provider = serviceProvider.GetRequiredService<IClientAPIProvider>();
+        await provider.WaitSemaphoreAsync(stoppingToken);
         try
         {
           RemoteClient.Disposed += GameService_Disposed;
@@ -212,7 +306,7 @@ public static class GameAPIService
         }
         finally
         {
-          ClientAPIService.ReleaseSemaphore();
+          provider.ReleaseSemaphore();
         }
 
         // Process events in the eventlog blocking collection
