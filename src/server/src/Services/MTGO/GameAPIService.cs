@@ -175,6 +175,8 @@ public static class GameAPIService
     /// </summary>
     public void InitializeGameService()
     {
+      Log.Debug("Initializing Game API service...");
+
       EventManager.EventJoined += (Event e, object _) =>
       {
         if (_activeEvents.TryAdd(e.Id, e) &&
@@ -230,19 +232,23 @@ public static class GameAPIService
           CreateGameTracker(game, match.Id);
         }
       };
-
-      // Poll active events every 5 seconds to check for player count changes.
-      WatchPlayerCountAsync(
-        EventManager.FeaturedEvents,
-        events => PlayerCountUpdated?.Invoke(this, events));
+      Log.Information("Game API service listener has started.");
 
       // Filter events list to get all joined events
+      Log.Information("Finding all joined events and matches...");
       foreach (Event joinedEvent in EventManager.JoinedEvents)
       {
         if (_activeEvents.TryAdd(joinedEvent.Id, joinedEvent))
         {
           Log.Information("Found event {Id}", joinedEvent.Id);
-          _dbWriter.TryAddEvent(joinedEvent, out var _);
+          SyncThread.Enqueue(() =>
+          {
+            // Add the event to the database
+            if (_dbWriter.TryAddEvent(joinedEvent, out var _))
+            {
+              Log.Debug("Added event {Id} to database", joinedEvent.Id);
+            }
+          });
         }
         // Add any active games from any joined matches
         if (joinedEvent is Match match)
@@ -250,7 +256,7 @@ public static class GameAPIService
           if (_activeMatches.TryAdd(match.Id, match))
           {
             Log.Information("Found match {Id}", match.Id);
-            CreateMatchTracker(match, joinedEvent.Id);
+            SyncThread.Enqueue(() => CreateMatchTracker(match, joinedEvent.Id));
           }
 
           Game? game = match.CurrentGame;
@@ -259,19 +265,23 @@ public static class GameAPIService
           if (_activeGames.TryAdd(game.Id, game))
           {
             Log.Information("Found game {Id}", game.Id);
-            CreateGameTracker(game, match.Id);
+            SyncThread.Enqueue(() => CreateGameTracker(game, match.Id));
           }
         }
       }
+      Log.Trace("Game API service finished initializing");
 
-      Log.Information("Game service finished initializing");
+      // Poll active events every 5 seconds to check for player count changes.
+      WatchPlayerCountAsync(
+        EventManager.FeaturedEvents,
+        events => PlayerCountUpdated?.Invoke(this, events));
     }
 
     private void GameService_Disposed(object? sender, EventArgs e)
     {
       SyncThread.Enqueue(async () =>
       {
-        Log.Information("Game service disposed, reinitializing...");
+        Log.Information("Game API service disposed, reinitializing...");
         this.Dispose();
 
         // Wait for a new MTGO process to start before reinitializing
@@ -289,7 +299,7 @@ public static class GameAPIService
       try
       {
         // Wait for the game service events to be initialized
-        Log.Information("Game service started");
+        Log.Information("Game API background service started");
         var provider = serviceProvider.GetRequiredService<IClientAPIProvider>();
         await provider.WaitSemaphoreAsync(stoppingToken);
         try
@@ -301,12 +311,8 @@ public static class GameAPIService
         {
           if (_isDisposed) return;
 
-          Log.Critical("Failed to start game service", ex);
+          Log.Critical("Failed to start Game API service", ex);
           Log.Debug(ex.Message + "\n" + ex.StackTrace);
-        }
-        finally
-        {
-          provider.ReleaseSemaphore();
         }
 
         // Process events in the eventlog blocking collection

@@ -72,7 +72,7 @@ public class Program
       IntPtr stdHandle = GetStdHandle(STD_OUTPUT_HANDLE);
       SafeFileHandle safeFileHandle = new(stdHandle, true);
       FileStream fileStream = new(safeFileHandle, FileAccess.Write);
-      StreamWriter standardOutput = new(fileStream, Encoding.UTF8)
+      StreamWriter standardOutput = new(fileStream, new UTF8Encoding(false))
       {
         AutoFlush = true
       };
@@ -124,7 +124,7 @@ public class Program
               BackgroundServiceExceptionBehavior.Ignore;
         });
       }
-      builder.UseConsole(hostForm); // Logging is redirected after this point.
+      builder.UseConsole(hostForm);
 
       // Configure API services and database context.
       builder.UseDatabase<EventContext>(options);

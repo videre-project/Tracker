@@ -21,6 +21,8 @@ public class ClientAPIProvider : IClientAPIProvider
   public ushort? Pid { get; set; } = null;
 
   private static readonly SemaphoreSlim _semaphore = new(1, 1);
+  private TaskCompletionSource<bool> _semaphoreReleased =
+    new(TaskCreationOptions.RunContinuationsAsynchronously);
 
   private void InitializeClient(ClientOptions options)
   {
@@ -41,6 +43,7 @@ public class ClientAPIProvider : IClientAPIProvider
         // Wait for the previous client to dispose.
         Log.Trace("Waiting for previous client to dispose...");
         await RemoteClient.WaitForDisposeAsync();
+        this.Pid = null;
       }
 
       Log.Trace("Waiting for a new MTGO process to start...");
@@ -70,17 +73,13 @@ public class ClientAPIProvider : IClientAPIProvider
     finally
     {
       _semaphore.Release();
+      _semaphoreReleased.TrySetResult(true);
+      _semaphoreReleased = new(TaskCreationOptions.RunContinuationsAsynchronously);
     }
   }
 
-  public Task WaitSemaphoreAsync(
-    CancellationToken cancellationToken = default)
+  public Task WaitSemaphoreAsync(CancellationToken cancellationToken = default)
   {
-    return _semaphore.WaitAsync(cancellationToken);
-  }
-
-  public void ReleaseSemaphore()
-  {
-    _semaphore.Release();
+    return _semaphoreReleased.Task.WaitAsync(cancellationToken);
   }
 }

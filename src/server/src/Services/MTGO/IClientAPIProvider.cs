@@ -24,6 +24,4 @@ public interface IClientAPIProvider
 
   Task WaitSemaphoreAsync(
     CancellationToken cancellationToken = default);
-
-  void ReleaseSemaphore();
 }

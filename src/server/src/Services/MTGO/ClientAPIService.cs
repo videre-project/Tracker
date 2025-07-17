@@ -37,7 +37,6 @@ public static class ClientAPIService
     {
       if (provider.Client == null)
       {
-        Log.Trace("Initializing the MTGO client with options: {options}", options);
         await provider.WaitForRemoteClientAsync(options);
       }
       else

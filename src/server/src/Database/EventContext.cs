@@ -104,13 +104,17 @@ public class EventContext(DbContextOptions<EventContext> options)
       .Property(m => m.PlayerResults)
       .HasConversion(
           e => JsonSerializer.Serialize(e, s_jsonOptions),
-          e => JsonSerializer.Deserialize<List<PlayerResult>>(e, s_jsonOptions)!);
+          e => JsonSerializer.Deserialize<List<PlayerResult>>(e, s_jsonOptions)!)
+      .Metadata
+        .SetValueComparer(PlayerResultComparerExtensions.PlayerResultListComparer);
 
     modelBuilder.Entity<MatchModel>()
       .Property(m => m.SideboardChanges)
       .HasConversion(
           e => JsonSerializer.Serialize(e, s_jsonOptions),
-          e => JsonSerializer.Deserialize<Dictionary<int, List<CardEntry>>>(e, s_jsonOptions)!);
+          e => JsonSerializer.Deserialize<Dictionary<int, List<CardEntry>>>(e, s_jsonOptions)!)
+      .Metadata
+        .SetValueComparer(SideboardChangesComparerExtensions.SideboardChangesComparer);
 
     //
     // Game relationships
@@ -120,6 +124,8 @@ public class EventContext(DbContextOptions<EventContext> options)
       .Property(d => d.GamePlayerResults)
       .HasConversion(
           e => JsonSerializer.Serialize(e, s_jsonOptions),
-          e => JsonSerializer.Deserialize<List<GamePlayerResult>>(e, s_jsonOptions)!);
+          e => JsonSerializer.Deserialize<List<GamePlayerResult>>(e, s_jsonOptions)!)
+      .Metadata
+        .SetValueComparer(GamePlayerResultComparerExtensions.GamePlayerResultListComparer);
   }
 }
