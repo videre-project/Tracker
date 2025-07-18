@@ -15,7 +15,7 @@ namespace Tracker.WebView.Components;
 public class ErrorWindow : Form, IResizableForm
 {
   private Panel _panel = null!;
-  private TitleBarComponent _titleBar = null!;
+  // private TitleBarComponent _titleBar = null!;
 
   public Size? RestoreSize { get; set; }
 
@@ -47,9 +47,9 @@ public class ErrorWindow : Form, IResizableForm
       this._panel.Location = new Point(0, 30);
       this._panel.Size = new Size(this.Size.Width, this.Size.Height - 30);
 
-      this._titleBar = new TitleBarComponent(this, parent: this._panel);//, false);
+      // this._titleBar = new TitleBarComponent(this, parent: this._panel);//, false);
       this.FormBorderStyle = FormBorderStyle.None; // Hide the native title bar
-      this.Controls.Add(this._titleBar);
+      // this.Controls.Add(this._titleBar);
     }
 
     this.ResumeLayout(false);
@@ -85,7 +85,7 @@ public class ErrorWindow : Form, IResizableForm
     var stackTracePanel = new Panel
     {
       Location = new Point(10, messagePanel.Bottom + 10),
-      Size = new Size(this.ClientSize.Width - 20, this.ClientSize.Height - messagePanel.Bottom - 80),
+      Size = new Size(this.ClientSize.Width - 20, this.ClientSize.Height - messagePanel.Bottom - 50),
       BorderStyle = BorderStyle.FixedSingle,
     };
     _panel.Controls.Add(stackTracePanel);
@@ -94,7 +94,7 @@ public class ErrorWindow : Form, IResizableForm
     {
       messagePanel.Size = new Size(this.ClientSize.Width - 20, message.Height + 20);
       stackTracePanel.Location = new Point(10, messagePanel.Bottom + 10);
-      stackTracePanel.Size = new Size(this.ClientSize.Width - 20, this.ClientSize.Height - messagePanel.Bottom - 80);
+      stackTracePanel.Size = new Size(this.ClientSize.Width - 20, this.ClientSize.Height - messagePanel.Bottom - 50);
     };
 
     string exceptionMessage = exception.ToString();
@@ -115,7 +115,7 @@ public class ErrorWindow : Form, IResizableForm
     var closeButton = new Button
     {
       Text = "Close",
-      Location = new Point(this.ClientSize.Width - 110, this.ClientSize.Height - 60),
+      Location = new Point(this.ClientSize.Width - 110, this.ClientSize.Height - 35),
       Size = new Size(100, 30),
       BackColor = Color.White
     };
@@ -128,7 +128,7 @@ public class ErrorWindow : Form, IResizableForm
     var copyButton = new Button
     {
       Text = "Copy",
-      Location = new Point(this.ClientSize.Width - 220, this.ClientSize.Height - 60),
+      Location = new Point(this.ClientSize.Width - 220, this.ClientSize.Height - 35),
       Size = new Size(100, 30),
       BackColor = Color.White
     };
@@ -148,9 +148,9 @@ public class ErrorWindow : Form, IResizableForm
     this.Resize += (sender, e) =>
     {
       messagePanel.Size = new Size(this.ClientSize.Width - 20, message.Height + 20);
-      stackTracePanel.Size = new Size(this.ClientSize.Width - 20, this.ClientSize.Height - messagePanel.Bottom - 80);
-      closeButton.Location = new Point(this.ClientSize.Width - 110, this.ClientSize.Height - 60);
-      copyButton.Location = new Point(this.ClientSize.Width - 220, this.ClientSize.Height - 60);
+      stackTracePanel.Size = new Size(this.ClientSize.Width - 20, this.ClientSize.Height - messagePanel.Bottom - 50);
+      closeButton.Location = new Point(this.ClientSize.Width - 110, this.ClientSize.Height - 35);
+      copyButton.Location = new Point(this.ClientSize.Width - 220, this.ClientSize.Height - 35);
     };
   }
 }

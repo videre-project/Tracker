@@ -22,7 +22,6 @@ partial class HostForm : IResizableForm
   private IContainer components = null;
 
   private WebView2 webView21;
-  private TitleBarComponent titleBar;
 
   public Size? RestoreSize { get; set; }
 
@@ -55,10 +54,10 @@ partial class HostForm : IResizableForm
     // webView21
     //
     this.webView21.CreationProperties = null;
-    this.webView21.Dock = DockStyle.Fill;
-    this.webView21.Location = new Point(0, 0);
+    this.webView21.Dock = DockStyle.None;
+    this.webView21.Location = new Point(0, SystemInformation.CaptionHeight);
     this.webView21.Name = "webView21";
-    this.webView21.Size = new Size(1280, 768);
+    this.webView21.Size = new Size(1280, 768 - SystemInformation.CaptionHeight);
     this.webView21.Source = null;
     this.webView21.TabIndex = 0;
     this.webView21.ZoomFactor = 1D;
@@ -76,17 +75,7 @@ partial class HostForm : IResizableForm
     this.Name = "HostForm";
     this.Text = Application.ProductName;
 
-    if (Theme.UseCustomTitleBar)
-    {
-      this.webView21.Location = new Point(0, 30);
-      this.webView21.Size = new Size(this.Size.Width, this.Size.Height - 30);
-
-      this.titleBar = new TitleBarComponent(this, parent: this.webView21);
-      this.titleBar.DoLayoutOnResize = true;
-      this.BackColor = Color.FromArgb(255, 80, 80, 80); // #505050
-      this.FormBorderStyle = FormBorderStyle.None; // Hide the native title bar
-      this.Controls.Add(this.titleBar);
-    }
+    this.SetTheme();
 
     ((ISupportInitialize)(this.webView21)).EndInit();
     this.ResumeLayout(false);
