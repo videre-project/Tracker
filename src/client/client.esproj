@@ -6,5 +6,8 @@
     <ShouldRunBuildScript>false</ShouldRunBuildScript>
     <!-- Folder where production build objects will be placed -->
     <BuildOutputFolder>$(MSBuildProjectDirectory)\dist</BuildOutputFolder>
+    <!-- Prevent restore on build -->
+    <ShouldRunNpmInstall>false</ShouldRunNpmInstall>
+    <ResolveNuGetPackages>false</ResolveNuGetPackages>
   </PropertyGroup>
 </Project>

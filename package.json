@@ -4,10 +4,10 @@
   "version": "0.0.0",
   "scripts": {
     "dev": "dotnet restore --no-cache --force-evaluate && dotnet run --project src/server --launch-profile Https --no-restore --configuration Debug",
-    "build": "npm run build:client && npm run build:server",
-    "build:client": "npm run build --prefix src/client",
+    "build": "pnpm run build:client && pnpm run build:server",
+    "build:client": "pnpm run build --prefix src/client",
     "build:server": "dotnet build --project src/server",
-    "restore": "npm install --prefix src/client && dotnet restore",
-    "publish" : "npm run build:client && dotnet publish src/server -o ./publish"
+    "restore": "pnpm install --prefix src/client && dotnet restore",
+    "publish" : "pnpm run build:client && dotnet publish src/server -o ./publish"
   }
 }
