@@ -11,3 +11,385 @@
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
+
+<!-- <!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Magic: The Gathering Online Game Tracker</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<style type="text/tailwindcss">
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #111827;
+            color: #e5e7eb;
+        }
+        .sidebar {
+            background-color: #1f2937;
+        }
+        .main-content {
+            background-color: #111827;
+        }
+        .card {
+            background-color: #1f2937;
+            border-radius: 4px;
+            border: 1px solid #374151;
+        }
+        .divider {
+            border-color: #374151;
+        }
+        .icon-btn {
+            background-color: #374151;
+            border-radius: 4px;
+        }
+        .active-event-card {
+            background-color: #374151;
+        }
+    </style>
+</head>
+<body class="flex min-h-screen">
+<aside class="w-64 sidebar p-4 flex flex-col fixed top-0 left-0 h-screen" style="z-index:10;">
+<div class="flex flex-col h-full">
+<div class="flex-1 flex flex-col min-h-0">
+<div class="flex items-center space-x-3 mb-8">
+<img alt="MTGO logo" class="w-8 h-8 rounded-sm" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCD2O2Fbj_7MVFGcP_TAghuYaoZmuRTZ3RADerx67G21NUP0EEX_xsM4A0Zo-r5sJIKyqaM3SZt5gUMcV1EZCHGpnNmb3PMkqa6SjW08Y983tp-wno3-925m98WJ-n3-cpZRJJgLx9u1AuOFYUEdpPOMas1NCa--KJOWme7jM3qC_qyIHwLJI-SHcsqYi7e-dorCuheji4nWQjbO70v8tfYg5kD4qM238EHZ94mjgW3AhVuQw82rHUdHSjwnuIIICcwMGtmI79CWXUy"/>
+<div>
+<h1 class="font-bold text-lg text-white">MTGO Tracker</h1>
+<p class="text-xs text-gray-400">ProdigyAcess</p>
+</div>
+</div>
+<nav class="space-y-2 mb-8">
+<a class="flex items-center space-x-3 px-3 py-2 rounded-md bg-gray-700 text-white font-medium" href="#">
+<span class="material-symbols-outlined text-lg">home</span>
+<span class="text-sm">Dashboard</span>
+</a>
+<a class="flex items-center space-x-3 px-3 py-2 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white" href="#">
+<span class="material-symbols-outlined text-lg">emoji_events</span>
+<span class="text-sm">Events</span>
+</a>
+<a class="flex items-center space-x-3 px-3 py-2 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white" href="#">
+<span class="material-symbols-outlined text-lg">style</span>
+<span class="text-sm">Decks</span>
+</a>
+<a class="flex items-center space-x-3 px-3 py-2 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white" href="#">
+<span class="material-symbols-outlined text-lg">monitoring</span>
+<span class="text-sm">Stats</span>
+</a>
+<a class="flex items-center space-x-3 px-3 py-2 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white" href="#">
+<span class="material-symbols-outlined text-lg">history</span>
+<span class="text-sm">Match History</span>
+</a>
+</nav>
+<h2 class="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-3 px-2">Active Events</h2>
+<div class="space-y-2 overflow-y-auto pr-1 flex-1 min-h-0" style="scrollbar-width: thin;">
+<div class="card p-3 active-event-card">
+<div class="flex justify-between items-center mb-1">
+<h3 class="font-semibold text-sm text-white">Modern League</h3>
+<span class="text-xs font-medium text-green-400 bg-green-900/50 px-2 py-0.5 rounded-full">3-1</span>
+</div>
+<p class="text-xs text-gray-400 mb-2">Izzet Murktide</p>
+<div class="flex items-center justify-between text-xs text-gray-300">
+<span>Round 5</span>
+<a class="text-blue-400 hover:underline" href="#">View</a>
+</div>
+</div>
+<div class="card p-3">
+<div class="flex justify-between items-center mb-1">
+<h3 class="font-semibold text-sm text-white">Kaldheim Premier Draft</h3>
+<span class="text-xs font-medium text-yellow-400 bg-yellow-900/50 px-2 py-0.5 rounded-full">1-1</span>
+</div>
+<p class="text-xs text-gray-400 mb-2">Grixis Snow</p>
+<div class="flex items-center justify-between text-xs text-gray-300">
+<span>Round 3</span>
+<a class="text-blue-400 hover:underline" href="#">View</a>
+</div>
+</div>
+<div class="card p-3">
+<div class="flex justify-between items-center mb-1">
+<h3 class="font-semibold text-sm text-white">Legacy Challenge</h3>
+<span class="text-xs font-medium text-red-400 bg-red-900/50 px-2 py-0.5 rounded-full">0-2 Drop</span>
+</div>
+<p class="text-xs text-gray-400 mb-2">Death &amp; Taxes</p>
+<div class="flex items-center justify-between text-xs text-gray-300">
+<span>Finished</span>
+<a class="text-blue-400 hover:underline" href="#">View</a>
+</div>
+</div>
+</div>
+</div>
+<div class="mt-6">
+<div class="flex items-center space-x-3">
+<img alt="User avatar" class="w-10 h-10 rounded-full" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB8rn7l2JPzExfnaxusSu332AJTUReJzC27TvXVtJ5uI8R3haMNvb4iHKaG3dpFsUu7gAyql8iEw1E39jAcy_RnEOOd5Gsp0D0iXmUS77tWyzI0vDFpEqsrrlXKmawBKI1vIFo-08ftXHqrx4UL2CXYYo-dMjlf5hIj0ZiABB7sDmGwAXkLSgOISZSjbf93eFPEzrdtpCyeptJgVWGEKXbDkYZEaEZ62Bn9Rhqq201p47aKLKaEFzyA8xi8mqxoU_KaGd3bI4e7W_lT"/>
+<div>
+<p class="font-semibold text-sm text-white">ProdigyAcess</p>
+<p class="text-xs text-gray-400">Online</p>
+</div>
+<span class="material-symbols-outlined text-gray-400 text-lg">settings</span>
+</div>
+    </div>
+</div>
+</aside>
+<main class="flex-1 p-6 main-content ml-64">
+<header class="flex justify-between items-center mb-6">
+<div>
+<h1 class="text-2xl font-bold text-white">Dashboard</h1>
+<p class="text-gray-400 text-sm">Welcome back, ProdigyAcess. Here's your performance overview.</p>
+</div>
+<div class="flex items-center space-x-2">
+<div class="flex space-x-1 p-0.5 bg-gray-800 rounded">
+<button class="px-3 py-1 rounded-[2px] bg-gray-600 text-white text-sm font-medium">Constructed</button>
+<button class="px-3 py-1 rounded-[2px] text-gray-400 text-sm font-medium hover:bg-gray-700">Limited</button>
+</div>
+</div>
+</header>
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+<div class="card p-4 col-span-1 md:col-span-2">
+<div class="flex items-center justify-between mb-2">
+<h3 class="text-base font-semibold text-white">Overall Winrate</h3>
+<span class="material-symbols-outlined text-green-400 text-xl">trending_up</span>
+</div>
+<div class="flex items-end justify-between">
+<div>
+<p class="text-3xl font-bold text-white">58.7%</p>
+<p class="text-sm text-gray-400">1234W - 876L</p>
+</div>
+<div class="flex space-x-4 text-right">
+<div>
+<p class="text-lg font-semibold text-white">62.1%</p>
+<p class="text-xs text-gray-400">On the Play</p>
+</div>
+<div>
+<p class="text-lg font-semibold text-white">55.3%</p>
+<p class="text-xs text-gray-400">On the Draw</p>
+</div>
+</div>
+</div>
+</div>
+<div class="card p-4">
+<div class="flex items-center justify-between mb-2">
+<h3 class="text-base font-semibold text-white">Total Matches</h3>
+<span class="material-symbols-outlined text-purple-400 text-xl">functions</span>
+</div>
+<p class="text-3xl font-bold text-white">2,110</p>
+<p class="text-sm text-gray-400">In selected period</p>
+</div>
+<div class="card p-4">
+<div class="flex items-center justify-between mb-2">
+<h3 class="text-base font-semibold text-white">Avg. Duration</h3>
+<span class="material-symbols-outlined text-yellow-400 text-xl">timer</span>
+</div>
+<div class="flex space-x-4">
+<div>
+<p class="text-xl font-bold text-white">18:32</p>
+<p class="text-sm text-gray-400">Match</p>
+</div>
+<div>
+<p class="text-xl font-bold text-white">7:45</p>
+<p class="text-sm text-gray-400">Game</p>
+</div>
+</div>
+</div>
+</div>
+<div class="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-6">
+<div class="xl:col-span-2 card p-4 pr-6 pb-8">
+<div class="flex justify-between items-center mb-4">
+<h2 class="text-lg font-bold text-white">Winrate Over Time</h2>
+<div class="flex space-x-1 text-xs">
+<button class="px-2 py-1 rounded bg-gray-700 text-white">All Time</button>
+<button class="px-2 py-1 rounded text-gray-400 hover:bg-gray-700">Last 30 Days</button>
+<button class="px-2 py-1 rounded text-gray-400 hover:bg-gray-700">This Season</button>
+</div>
+</div>
+<div class="h-64 relative pl-8 pr-4">
+<svg class="absolute inset-0 w-full h-full" fill="none" height="100%" preserveAspectRatio="none" viewBox="0 0 200 100" width="100%">
+<path d="M 0 60 C 20 40, 40 80, 60 65 S 100 30, 120 50 C 140 70, 160 40, 180 55 L 200 60" stroke="#d97706" stroke-width="2"></path>
+<path d="M 0 70 C 20 90, 40 50, 60 75 S 100 95, 120 70 C 140 45, 160 90, 180 65 L 200 60" stroke="#06b6d4" stroke-width="2"></path>
+<path d="M 0 45 C 20 25, 40 65, 60 50 S 100 20, 120 40 C 140 60, 160 30, 180 45 L 200 50" stroke="#8b5cf6" stroke-width="2"></path>
+<path d="M 0 80 C 20 100, 40 60, 60 85 S 100 105, 120 80 C 140 55, 160 100, 180 75 L 200 70" stroke="#3b82f6" stroke-width="2"></path>
+<path d="M 0 35 C 20 15, 40 55, 60 40 S 100 10, 120 30 C 140 50, 160 20, 180 35 L 200 40" stroke="#facc15" stroke-width="2"></path>
+</svg>
+<div class="absolute inset-0 grid grid-rows-4 pl-8 pr-4">
+<div class="border-b border-gray-700/50"></div>
+<div class="border-b border-gray-700/50"></div>
+<div class="border-b border-gray-700/50"></div>
+<div></div>
+</div>
+<div class="absolute left-0 top-0 bottom-0 flex flex-col justify-between text-xs text-gray-400 py-1">
+<span>75%</span>
+<span>62%</span>
+<span>50%</span>
+<span>38%</span>
+</div>
+<div class="absolute -bottom-6 w-full flex justify-between text-xs text-gray-400 pl-8 pr-4">
+<span>Jan</span>
+<span>Feb</span>
+<span>Mar</span>
+<span>Apr</span>
+<span>May</span>
+<span>Jun</span>
+</div>
+</div>
+<div class="mt-8 flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm">
+<div class="flex items-center space-x-2">
+<div class="w-3 h-3 rounded-full bg-orange-600"></div>
+<span class="text-gray-300">Modern</span>
+</div>
+<div class="flex items-center space-x-2">
+<div class="w-3 h-3 rounded-full bg-cyan-500"></div>
+<span class="text-gray-300">Pioneer</span>
+</div>
+<div class="flex items-center space-x-2">
+<div class="w-3 h-3 rounded-full bg-purple-500"></div>
+<span class="text-gray-300">Legacy</span>
+</div>
+<div class="flex items-center space-x-2">
+<div class="w-3 h-3 rounded-full bg-blue-500"></div>
+<span class="text-gray-300">Vintage</span>
+</div>
+<div class="flex items-center space-x-2">
+<div class="w-3 h-3 rounded-full bg-yellow-400"></div>
+<span class="text-gray-300">Pauper</span>
+</div>
+</div>
+</div>
+<div class="card p-4">
+<h2 class="text-lg font-bold text-white mb-4">Deck Performance</h2>
+<div class="space-y-4">
+<div class="flex items-center space-x-3">
+<div class="w-1 h-10 bg-orange-600 rounded-full"></div>
+<div class="flex-1">
+<div class="flex justify-between items-center mb-1">
+<p class="text-sm font-medium text-white">Izzet Murktide</p>
+<p class="text-sm font-semibold text-green-400">68%</p>
+</div>
+<div class="w-full bg-gray-700 rounded-full h-1.5">
+<div class="bg-green-500 h-1.5 rounded-full" style="width: 68%"></div>
+</div>
+<p class="text-xs text-gray-400 mt-1">128 Matches</p>
+</div>
+</div>
+<div class="flex items-center space-x-3">
+<div class="w-1 h-10 bg-cyan-500 rounded-full"></div>
+<div class="flex-1">
+<div class="flex justify-between items-center mb-1">
+<p class="text-sm font-medium text-white">MonoG Devotion</p>
+<p class="text-sm font-semibold text-green-400">62%</p>
+</div>
+<div class="w-full bg-gray-700 rounded-full h-1.5">
+<div class="bg-green-500 h-1.5 rounded-full" style="width: 62%"></div>
+</div>
+<p class="text-xs text-gray-400 mt-1">92 Matches</p>
+</div>
+</div>
+<div class="flex items-center space-x-3">
+<div class="w-1 h-10 bg-purple-500 rounded-full"></div>
+<div class="flex-1">
+<div class="flex justify-between items-center mb-1">
+<p class="text-sm font-medium text-white">Death &amp; Taxes</p>
+<p class="text-sm font-semibold text-yellow-400">51%</p>
+</div>
+<div class="w-full bg-gray-700 rounded-full h-1.5">
+<div class="bg-yellow-500 h-1.5 rounded-full" style="width: 51%"></div>
+</div>
+<p class="text-xs text-gray-400 mt-1">64 Matches</p>
+</div>
+</div>
+<div class="flex items-center space-x-3">
+<div class="w-1 h-10 bg-orange-600 rounded-full"></div>
+<div class="flex-1">
+<div class="flex justify-between items-center mb-1">
+<p class="text-sm font-medium text-white">4C Omnath</p>
+<p class="text-sm font-semibold text-red-400">45%</p>
+</div>
+<div class="w-full bg-gray-700 rounded-full h-1.5">
+<div class="bg-red-500 h-1.5 rounded-full" style="width: 45%"></div>
+</div>
+<p class="text-xs text-gray-400 mt-1">58 Matches</p>
+</div>
+</div>
+<div class="flex items-center space-x-3">
+<div class="w-1 h-10 bg-orange-600 rounded-full"></div>
+<div class="flex-1">
+<div class="flex justify-between items-center mb-1">
+<p class="text-sm font-medium text-white">Rakdos Midrange</p>
+<p class="text-sm font-semibold text-red-400">38%</p>
+</div>
+<div class="w-full bg-gray-700 rounded-full h-1.5">
+<div class="bg-red-500 h-1.5 rounded-full" style="width: 38%"></div>
+</div>
+<p class="text-xs text-gray-400 mt-1">42 Matches</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="card p-4">
+<div class="flex justify-between items-center mb-4">
+<h2 class="text-lg font-bold text-white">Recent Match History</h2>
+<a class="text-sm text-blue-400 hover:underline" href="#">View All</a>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-sm text-left">
+<thead class="text-xs text-gray-400 uppercase bg-gray-800">
+<tr>
+<th class="px-4 py-2 rounded-l-md" scope="col">Format</th>
+<th class="px-4 py-2" scope="col">Deck</th>
+<th class="px-4 py-2" scope="col">Opponent Deck</th>
+<th class="px-4 py-2" scope="col">Result</th>
+<th class="px-4 py-2 rounded-r-md" scope="col">Date</th>
+</tr>
+</thead>
+<tbody>
+<tr class="border-b border-gray-700">
+<td class="px-4 py-3 font-medium text-white">Modern</td>
+<td class="px-4 py-3">Izzet Murktide</td>
+<td class="px-4 py-3">Amulet Titan</td>
+<td class="px-4 py-3 text-green-400 font-semibold">2-1 (W)</td>
+<td class="px-4 py-3 text-gray-400">2h ago</td>
+</tr>
+<tr class="border-b border-gray-700">
+<td class="px-4 py-3 font-medium text-white">Modern</td>
+<td class="px-4 py-3">Izzet Murktide</td>
+<td class="px-4 py-3">Living End</td>
+<td class="px-4 py-3 text-red-400 font-semibold">0-2 (L)</td>
+<td class="px-4 py-3 text-gray-400">4h ago</td>
+</tr>
+<tr class="border-b border-gray-700">
+<td class="px-4 py-3 font-medium text-white">Modern</td>
+<td class="px-4 py-3">Izzet Murktide</td>
+<td class="px-4 py-3">4C Omnath</td>
+<td class="px-4 py-3 text-green-400 font-semibold">2-0 (W)</td>
+<td class="px-4 py-3 text-gray-400">5h ago</td>
+</tr>
+<tr class="border-b border-gray-700">
+<td class="px-4 py-3 font-medium text-white">Legacy</td>
+<td class="px-4 py-3">Death &amp; Taxes</td>
+<td class="px-4 py-3">Delver</td>
+<td class="px-4 py-3 text-red-400 font-semibold">1-2 (L)</td>
+<td class="px-4 py-3 text-gray-400">1d ago</td>
+</tr>
+<tr class="border-b border-gray-700">
+<td class="px-4 py-3 font-medium text-white">Pioneer</td>
+<td class="px-4 py-3">MonoG Devotion</td>
+<td class="px-4 py-3">Rakdos Midrange</td>
+<td class="px-4 py-3 text-green-400 font-semibold">2-1 (W)</td>
+<td class="px-4 py-3 text-gray-400">1d ago</td>
+</tr>
+<tr>
+<td class="px-4 py-3 font-medium text-white">Pioneer</td>
+<td class="px-4 py-3">MonoG Devotion</td>
+<td class="px-4 py-3">Izzet Phoenix</td>
+<td class="px-4 py-3 text-red-400 font-semibold">1-2 (L)</td>
+<td class="px-4 py-3 text-gray-400">2d ago</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</main>
+
+</body></html> -->

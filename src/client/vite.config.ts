@@ -12,6 +12,8 @@ import path from 'path';
 import child_process from 'child_process';
 import { env } from 'process';
 
+import rootPackageJson from '../../package.json';
+
 
 const baseFolder =
   process.env.APPDATA !== undefined && process.env.APPDATA !== ''
@@ -40,16 +42,19 @@ if (!fs.existsSync(certFilePath) || !fs.existsSync(keyFilePath)) {
   }
 }
 
-// const target = 'https://localhost:7101';
-const target = env.ASPNETCORE_HTTPS_PORT
-  ? `https://localhost:${env.ASPNETCORE_HTTPS_PORT}`
-  : env.ASPNETCORE_URLS
-    ? env.ASPNETCORE_URLS.split(';')[0]
-    : 'https://localhost:7101';
+const target = 'https://localhost:7101';
+// const target = env.ASPNETCORE_HTTPS_PORT
+//   ? `https://localhost:${env.ASPNETCORE_HTTPS_PORT}`
+//   : env.ASPNETCORE_URLS
+//     ? env.ASPNETCORE_URLS.split(';')[0]
+//     : 'https://localhost:7101';
 
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
+  define: {
+    __APP_VERSION__: JSON.stringify(rootPackageJson.version),
+  },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url))
@@ -57,18 +62,18 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      "^/scalar/+": {
+      "^/scalar/.*": {
         target,
         secure: false
       },
-      '^/api/+': {
+      '^/api/.*': {
         target,
         secure: false
       },
     },
-    // port: parseInt(env.DEV_SERVER_PORT || '52797'),
     port: 52797,
-    // strictPort: true,
+    // port: parseInt(env.DEV_SERVER_PORT || '52797'),
+    strictPort: true,
     https: {
       key: fs.readFileSync(keyFilePath),
       cert: fs.readFileSync(certFilePath)

@@ -8,6 +8,6 @@
     "build:client": "pnpm run build --prefix src/client",
     "build:server": "dotnet build --project src/server",
     "restore": "pnpm install --prefix src/client && dotnet restore",
-    "publish" : "pnpm run build:client && dotnet publish src/server -o ./publish"
+    "publish": "pnpm run build:client && dotnet publish src/server -o ./publish"
   }
 }

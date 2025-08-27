@@ -1,0 +1,314 @@
+import * as React from "react"
+import { Play, Pause, Clock, Square, Trophy, Target, Calendar } from "lucide-react"
+import { NavLink } from "react-router-dom"
+
+import {
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  useSidebar,
+} from "@/components/ui/sidebar"
+
+type EventType = "league" | "swiss" | "elimination" | "draft"
+type GameStatus = "active" | "paused" | "scheduled" | "completed"
+
+export interface ActiveGame {
+  id: string
+  name: string
+  type: EventType
+  status: GameStatus
+  format: string
+  url: string
+  deck?: string
+  // League-specific
+  wins?: number
+  losses?: number
+  totalRounds?: number
+  // Prelim-specific
+  currentRound?: number
+  totalSwissRounds?: number
+  // Draft-specific
+  pod?: string
+  // Timing
+  startTime?: string
+  endTime?: string
+  timeRemaining?: string
+}
+
+const mockGames: ActiveGame[] = [
+  {
+    id: "1",
+    name: "Modern League",
+    type: "league",
+    status: "active",
+    format: "Modern",
+    wins: 3,
+    losses: 1,
+    totalRounds: 5,
+    url: "/games/modern-league",
+    deck: "Izzet Murktide"
+  },
+  {
+    id: "2",
+    name: "Pioneer Preliminary",
+    type: "swiss",
+    status: "active",
+    format: "Pioneer",
+    currentRound: 4,
+    totalSwissRounds: 7,
+    url: "/games/pioneer-swiss",
+    deck: "Mono-G Devotion",
+    timeRemaining: "35m"
+  },
+  {
+    id: "3",
+    name: "Kaldheim Draft",
+    type: "draft",
+    status: "paused",
+    format: "KHM Draft",
+    wins: 1,
+    losses: 1,
+    url: "/games/kaldheim-draft",
+    deck: "Grixis Snow",
+    pod: "Pod 3"
+  },
+  {
+    id: "4",
+    name: "Legacy Challenge",
+    type: "elimination",
+    status: "completed",
+    format: "Legacy",
+    wins: 0,
+    losses: 2,
+    url: "/games/legacy-challenge",
+    deck: "Death & Taxes"
+  },
+  {
+    id: "5",
+    name: "Standard League",
+    type: "league",
+    status: "scheduled",
+    format: "Standard",
+    url: "/games/standard-league",
+    startTime: "16:30"
+  },
+  {
+    id: "6",
+    name: "Vintage Preliminary",
+    type: "swiss",
+    status: "active",
+    format: "Vintage",
+    currentRound: 2,
+    totalSwissRounds: 5,
+    wins: 2,
+    losses: 0,
+    url: "/games/vintage-swiss",
+    deck: "Dredge",
+    timeRemaining: "12m"
+  }
+]
+
+const upcomingGames: ActiveGame[] = [
+  {
+    id: "7",
+    name: "Modern Challenge",
+    type: "elimination",
+    status: "scheduled",
+    format: "Modern",
+    url: "/games/modern-challenge",
+    startTime: "18:00"
+  },
+  {
+    id: "8",
+    name: "Bloomburrow Draft",
+    type: "draft",
+    status: "scheduled",
+    format: "BLB Draft",
+    url: "/games/bloomburrow-draft",
+    startTime: "19:30"
+  },
+  {
+    id: "9",
+    name: "Pioneer League",
+    type: "league",
+    status: "scheduled",
+    format: "Pioneer",
+    url: "/games/pioneer-league-2",
+    startTime: "Tomorrow"
+  }
+]
+
+const getStatusConfig = (status: GameStatus) => {
+  switch (status) {
+    case "active":
+      return {
+        icon: Play,
+        badgeClass: "text-green-400 bg-green-900/50",
+      }
+    case "paused":
+      return {
+        icon: Pause,
+        badgeClass: "text-yellow-400 bg-yellow-900/50",
+      }
+    case "scheduled":
+      return {
+        icon: Clock,
+        badgeClass: "text-blue-400 bg-blue-900/50",
+      }
+    case "completed":
+      return {
+        icon: Square,
+        badgeClass: "text-red-400 bg-red-900/50",
+      }
+  }
+}
+
+const getEventTypeIcon = (type: EventType) => {
+  switch (type) {
+    case "league":
+      return Target
+    case "swiss":
+      return Trophy
+    case "elimination":
+      return Trophy
+    case "draft":
+      return Calendar
+  }
+}
+
+const getRecordDisplay = (game: ActiveGame) => {
+  if (game.wins !== undefined && game.losses !== undefined) {
+    if (game.status === "completed") {
+      return game.wins === 0 ? `${game.wins}-${game.losses} Drop` : `${game.wins}-${game.losses}`
+    }
+    return `${game.wins}-${game.losses}`
+  }
+  return null
+}
+
+const getProgressDisplay = (game: ActiveGame) => {
+  switch (game.type) {
+    case "league":
+      if (game.totalRounds && game.wins !== undefined && game.losses !== undefined) {
+        const played = game.wins + game.losses
+        return `${played}/${game.totalRounds} rounds`
+      }
+      break
+    case "swiss":
+      if (game.currentRound && game.totalSwissRounds) {
+        return `Round ${game.currentRound}/${game.totalSwissRounds}`
+      }
+      break
+    case "draft":
+      if (game.pod) {
+        return game.pod
+      }
+      break
+  }
+  return null
+}
+
+interface GameListProps {
+  label: string
+  games: ActiveGame[]
+  className?: string
+}
+
+export function GameList({ label, games, className }: GameListProps) {
+  const { state } = useSidebar()
+  const isCollapsed = state === "collapsed"
+
+  if (isCollapsed) {
+    return null // Hide completely when sidebar is collapsed
+  }
+
+  return (
+    <SidebarGroup className={`flex-1 min-h-0 pr-0 ${className || ''}`}>
+      <SidebarGroupLabel>{label}</SidebarGroupLabel>
+      <SidebarContent className="flex flex-col">
+        <SidebarGroup className="flex-1 min-h-0 -p-2">
+          <SidebarGroupContent className="space-y-2 overflow-y-auto flex-1 min-h-0">
+            {games.map((game) => {
+              const statusConfig = getStatusConfig(game.status)
+              const EventTypeIcon = getEventTypeIcon(game.type)
+              const record = getRecordDisplay(game)
+              const progress = getProgressDisplay(game)
+
+              return (
+                <div key={game.id} className="bg-sidebar-accent/20 p-3 rounded-md border border-sidebar-border/60 hover:bg-sidebar-accent/40 transition-colors">
+                  <div className="flex justify-between items-start mb-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <EventTypeIcon className="w-3 h-3 text-sidebar-foreground/60 shrink-0" />
+                        <h3 className="font-semibold text-sm text-sidebar-foreground truncate">
+                          <NavLink
+                            to={game.url}
+                            className="hover:text-sidebar-accent-foreground transition-colors"
+                          >
+                            {game.name}
+                          </NavLink>
+                        </h3>
+                      </div>
+                      <p className="text-xs text-sidebar-foreground/70">
+                        {game.format}
+                        {game.deck && (
+                          <>
+                            <span className="text-sidebar-foreground/50 mx-1">•</span>
+                            <span className="italic">{game.deck}</span>
+                          </>
+                        )}
+                      </p>
+                    </div>
+
+                    {record && (
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 ml-2 ${statusConfig.badgeClass}`}>
+                        {record}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs">
+                    <div className="flex items-center text-sidebar-foreground/80">
+                      {game.status === "scheduled" && game.startTime ? (
+                        <span>Starts {game.startTime}</span>
+                      ) : progress ? (
+                        <>
+                          <span>{progress}</span>
+                          {game.timeRemaining && game.status === "active" && (game.type === "swiss" || game.type === "elimination") && (
+                            <>
+                              <span className="text-sidebar-foreground/50 mx-1">•</span>
+                              <span className="text-sidebar-foreground/60">{game.timeRemaining} left</span>
+                            </>
+                          )}
+                        </>
+                      ) : (
+                        <span className="capitalize">{game.status}</span>
+                      )}
+                    </div>
+
+                    <NavLink
+                      to={game.url}
+                      className="text-blue-400 hover:underline shrink-0"
+                    >
+                      View
+                    </NavLink>
+                  </div>
+                </div>
+              )
+            })}
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+    </SidebarGroup>
+  )
+}
+
+// Convenience components using the mock data
+export function ActiveGames() {
+  return <GameList label="Active Events" games={mockGames} />
+}
+
+export function UpcomingGames() {
+  return <GameList label="Upcoming Events" games={upcomingGames} />
+}

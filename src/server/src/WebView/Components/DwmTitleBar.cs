@@ -58,6 +58,10 @@ public class DwmTitleBar
   private readonly Color _hoverColor;
   private readonly Color _closeHoverColor;
 
+  // Dynamic colors that can be updated
+  private Color _currentTitleBarColor;
+  private Color _currentTextColor;
+
   private enum HoveredButton
   {
     None,
@@ -76,6 +80,19 @@ public class DwmTitleBar
     _textColor = Color.White;
     _hoverColor = Color.FromArgb(60, 60, 60);
     _closeHoverColor = Color.FromArgb(255, 0, 0);
+
+    // Initialize current colors with default values
+    _currentTitleBarColor = _titleBarColor;
+    _currentTextColor = _textColor;
+  }
+
+  /// <summary>
+  /// Updates the titlebar colors dynamically.
+  /// </summary>
+  public void UpdateColors(Color backgroundColor, Color textColor)
+  {
+    _currentTitleBarColor = backgroundColor;
+    _currentTextColor = textColor;
   }
 
   public bool HandleMessage(ref Message m)
@@ -146,8 +163,11 @@ public class DwmTitleBar
         );
 
         // Adjust colors based on activation state
-        var backgroundColor = _isActive ? _titleBarColor : Color.FromArgb(60, 60, 63);
-        var foregroundColor = _isActive ? _textColor : Color.FromArgb(128, 128, 128);
+        var backgroundColor = _isActive ? _currentTitleBarColor : Color.FromArgb(
+          Math.Max(0, _currentTitleBarColor.R - 15),
+          Math.Max(0, _currentTitleBarColor.G - 15),
+          Math.Max(0, _currentTitleBarColor.B - 15));
+        var foregroundColor = _isActive ? _currentTextColor : Color.FromArgb(128, 128, 128);
 
         // Draw custom title bar background
         using (var brush = new SolidBrush(backgroundColor))
@@ -184,8 +204,11 @@ public class DwmTitleBar
     var titleBarRect = new Rectangle(0, 0, _hostForm.ClientSize.Width, SystemInformation.CaptionHeight + topPadding);
 
     // Adjust colors based on activation state
-    var backgroundColor = _isActive ? _titleBarColor : Color.FromArgb(60, 60, 63);
-    var foregroundColor = _isActive ? _textColor : Color.FromArgb(128, 128, 128);
+    var backgroundColor = _isActive ? _currentTitleBarColor : Color.FromArgb(
+      Math.Max(0, _currentTitleBarColor.R - 15),
+      Math.Max(0, _currentTitleBarColor.G - 15),
+      Math.Max(0, _currentTitleBarColor.B - 15));
+    var foregroundColor = _isActive ? _currentTextColor : Color.FromArgb(128, 128, 128);
 
     // Draw custom title bar background (including padding area)
     using (var brush = new SolidBrush(backgroundColor))

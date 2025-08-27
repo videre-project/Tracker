@@ -12,6 +12,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 
 using Microsoft.Web.WebView2.WinForms;
+using Microsoft.Web.WebView2.Core;
 
 using MTGOSDK.Core.Logging;
 
@@ -41,6 +42,7 @@ public partial class HostForm : Form
 
   private readonly DwmTitleBar? _dwmTitleBar;
   private readonly InvisibleResizePanel[] _resizePanels;
+  private bool _hasUpdatedTitleBarColor;
 
   public HostForm(ApplicationOptions options)
   {
@@ -118,6 +120,23 @@ public partial class HostForm : Form
       WebView.CoreWebView2.Settings.IsSwipeNavigationEnabled = false;
       WebView.CoreWebView2.Settings.IsZoomControlEnabled = false;
       WebView.CoreWebView2.Settings.UserAgent = "Windows/VidereTracker";
+
+      // Allow insecure content and localhost without certificates
+      WebView.CoreWebView2.Settings.IsGeneralAutofillEnabled = false;
+      WebView.CoreWebView2.PermissionRequested += (s, args) =>
+          args.State = CoreWebView2PermissionState.Allow;
+
+      // Handle certificate errors to allow localhost without valid certificates
+      WebView.CoreWebView2.ServerCertificateErrorDetected += (s, args) =>
+      {
+        // Allow localhost and 127.0.0.1 without valid certificates
+        if (args.RequestUri.Contains("localhost") ||
+            args.RequestUri.Contains("127.0.0.1"))
+        {
+          args.Action = CoreWebView2ServerCertificateErrorAction.AlwaysAllow;
+        }
+      };
+
       Log.Information("Initialized WebView2 environment.");
     };
 
@@ -125,6 +144,9 @@ public partial class HostForm : Form
     {
       WebView.CoreWebView2.Settings.AreDevToolsEnabled = true;
       HostForm_Show(sender, e);
+
+      // Update titlebar color when page is ready
+      _ = UpdateTitleBarColorFromPage(0.5f); // 50% darker than the sidebar
     };
   }
 
@@ -173,6 +195,126 @@ public partial class HostForm : Form
     }
 
     return await runCommand();
+  }
+
+  /// <summary>
+  /// Updates the titlebar color based on the CSS variables from the loaded page.
+  /// </summary>
+  /// <param name="darkenPercentage">Percentage to darken the background color (0.0 = no change, 1.0 = completely black)</param>
+  private async Task UpdateTitleBarColorFromPage(float darkenPercentage = 0.0f)
+  {
+    if (!Theme.UseCustomTitleBar || _dwmTitleBar == null || _hasUpdatedTitleBarColor)
+      return;
+
+    try
+    {
+      // Wait a bit for the page to fully render and CSS to be applied
+      await Task.Delay(500);
+
+      // Extract the sidebar background color from CSS
+      var script = @"
+        (function() {
+          const root = document.documentElement;
+          const computedStyle = window.getComputedStyle(root);
+          const sidebarBg = computedStyle.getPropertyValue('--sidebar-background').trim();
+          const foreground = computedStyle.getPropertyValue('--foreground').trim();
+
+          // Convert HSL to RGB
+          function hslToRgb(hslString) {
+            const values = hslString.split(' ').map(v => parseFloat(v.replace('%', '')));
+            const [h, s, l] = values;
+
+            const c = (1 - Math.abs(2 * l / 100 - 1)) * s / 100;
+            const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+            const m = l / 100 - c / 2;
+
+            let r, g, b;
+            if (h >= 0 && h < 60) [r, g, b] = [c, x, 0];
+            else if (h >= 60 && h < 120) [r, g, b] = [x, c, 0];
+            else if (h >= 120 && h < 180) [r, g, b] = [0, c, x];
+            else if (h >= 180 && h < 240) [r, g, b] = [0, x, c];
+            else if (h >= 240 && h < 300) [r, g, b] = [x, 0, c];
+            else [r, g, b] = [c, 0, x];
+
+            r = Math.round((r + m) * 255);
+            g = Math.round((g + m) * 255);
+            b = Math.round((b + m) * 255);
+
+            return [r, g, b];
+          }
+
+          if (sidebarBg && foreground) {
+            const bgRgb = hslToRgb(sidebarBg);
+            const fgRgb = hslToRgb(foreground);
+
+            return {
+              background: bgRgb,
+              foreground: fgRgb,
+              isDark: document.documentElement.classList.contains('dark')
+            };
+          }
+
+          return null;
+        })();
+      ";
+
+      var result = await Exec(script);
+
+      if (!string.IsNullOrEmpty(result) && result != "null")
+      {
+        // Parse the JSON result
+        var colorData = System.Text.Json.JsonSerializer.Deserialize<ColorData>(result);
+
+        if (colorData?.background != null && colorData.foreground != null)
+        {
+          // Create the original colors
+          var originalBgColor = Color.FromArgb(colorData.background[0], colorData.background[1], colorData.background[2]);
+          var fgColor = Color.FromArgb(colorData.foreground[0], colorData.foreground[1], colorData.foreground[2]);
+
+          // Apply darkening to background color
+          var bgColor = DarkenColor(originalBgColor, darkenPercentage);
+
+          // Update the DwmTitleBar colors
+          _dwmTitleBar.UpdateColors(bgColor, fgColor);
+          _hasUpdatedTitleBarColor = true;
+
+          // Force repaint
+          this.Invalidate();
+
+          Log.Information($"Updated titlebar colors - Original: {originalBgColor}, Darkened: {bgColor} ({darkenPercentage:P1}), Foreground: {fgColor}, Dark mode: {colorData.isDark}");
+        }
+      }
+    }
+    catch (Exception ex)
+    {
+      Log.Warning($"Failed to update titlebar color: {ex.Message}");
+    }
+  }
+
+  /// <summary>
+  /// Darkens a color by the specified percentage.
+  /// </summary>
+  /// <param name="color">The original color</param>
+  /// <param name="percentage">Darkening percentage (0.0 = no change, 1.0 = black)</param>
+  /// <returns>The darkened color</returns>
+  private static Color DarkenColor(Color color, float percentage)
+  {
+    // Clamp percentage between 0 and 1
+    percentage = Math.Max(0.0f, Math.Min(1.0f, percentage));
+
+    // Calculate the darkened RGB values
+    var r = (int)(color.R * (1.0f - percentage));
+    var g = (int)(color.G * (1.0f - percentage));
+    var b = (int)(color.B * (1.0f - percentage));
+
+    return Color.FromArgb(r, g, b);
+  }
+
+  private class ColorData
+  {
+    public int[]? background { get; set; }
+    public int[]? foreground { get; set; }
+    public bool isDark { get; set; }
   }
 
   //

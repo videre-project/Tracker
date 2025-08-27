@@ -29,6 +29,11 @@
                       LogicalName="%(RecursiveDir)%(FileName)%(Extension)" />
   </ItemGroup>
 
+  <!-- Set Application Icon -->
+  <PropertyGroup>
+    <ApplicationIcon>$(SpaRoot)\public\logo.ico</ApplicationIcon>
+  </PropertyGroup>
+
   <!-- Publishing Configuration -->
   <PropertyGroup>
     <PublishSingleFile>true</PublishSingleFile>
