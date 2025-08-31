@@ -7,8 +7,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using System.Threading;
 
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 using MTGOSDK.API.Play;
@@ -17,11 +17,16 @@ using MTGOSDK.Core.Reflection.Serialization;
 using static MTGOSDK.Core.Reflection.DLRWrapper;
 using MTGOSDK.Core.Remoting;
 
+using Tracker.Controllers.Base;
 using Tracker.Services.MTGO;
 
 
 namespace Tracker.Controllers;
 
+/// <summary>
+/// Events and tournaments management API
+/// </summary>
+[ApiController]
 [Route("api/[controller]/[action]")]
 public class EventsController : APIController
 {
@@ -39,8 +44,15 @@ public class EventsController : APIController
     int TotalRounds { get; }
     DateTime StartTime { get; }
     DateTime EndTime { get; }
+  }
 
-    // dynamic EntryFee { get; }
+  public interface ITournamentStateUpdate
+  {
+    int Id { get; }
+    TournamentState State { get; }
+    int CurrentRound { get; }
+    DateTime RoundEndTime { get; }
+    bool InPlayoffs { get; }
   }
 
   public interface ITournamentPlayerUpdate
@@ -52,10 +64,18 @@ public class EventsController : APIController
   }
 
   //
-  // API Endpoints
+  // Events API Endpoints
   //
 
+  /// <summary>
+  /// Get list of available tournaments/events
+  /// </summary>
+  /// <param name="stream">Whether to stream results as NDJSON</param>
+  /// <returns>List of tournaments</returns>
   [HttpGet] // GET /api/events/geteventslist
+  [ProducesResponseType(
+    typeof(IEnumerable<ITournament>), StatusCodes.Status200OK)]
+  [ProducesResponseType(StatusCodes.Status500InternalServerError)]
   public IActionResult GetEventsList([FromQuery] bool stream = false)
   {
     IEnumerable<ITournament> events = EventManager.FeaturedEvents
@@ -73,13 +93,27 @@ public class EventsController : APIController
     }
   }
 
+  /// <summary>
+  /// Get tournament by ID
+  /// </summary>
+  /// <param name="id">Tournament ID</param>
+  /// <returns>Tournament details</returns>
   [HttpGet("{id}")] // GET /api/events/getevent/{id}
+  [ProducesResponseType(typeof(Event), StatusCodes.Status200OK)]
+  [ProducesResponseType(StatusCodes.Status404NotFound)]
   public Event GetEvent(int id)
   {
     return EventManager.GetEvent(id);
   }
 
+  /// <summary>
+  /// Get entry fee information for a tournament
+  /// </summary>
+  /// <param name="id">Tournament ID</param>
+  /// <returns>Entry fee description</returns>
   [HttpGet("{id}")] // GET /api/events/getentryfee/{id}
+  [ProducesResponseType(typeof(string), StatusCodes.Status200OK)]
+  [ProducesResponseType(StatusCodes.Status404NotFound)]
   public string GetEntryFee(int id)
   {
     return Retry<string>(() =>
@@ -112,7 +146,15 @@ public class EventsController : APIController
     }, raise: true);
   }
 
+  /// <summary>
+  /// Get tournament standings
+  /// </summary>
+  /// <param name="id">Tournament ID</param>
+  /// <param name="stream">Whether to stream results as NDJSON</param>
+  /// <returns>Tournament standings</returns>
   [HttpGet("{id}")] // GET /api/events/getstandings/{id}
+  [ProducesResponseType(
+    typeof(IEnumerable<StandingRecord>), StatusCodes.Status200OK)]
   public IActionResult GetStandings(
     int id,
     [FromQuery] bool stream = false)
@@ -130,47 +172,69 @@ public class EventsController : APIController
     }
   }
 
-  [HttpGet] // GET /api/events/watchplayercount
-  public async Task<IActionResult> WatchPlayerCount()
-  {
-    DisableBuffering();
-    SetNdjsonContentType();
+  //
+  // Event Streaming Endpoints
+  //
 
-    using var semaphore = new SemaphoreSlim(1, 1);
-    async void playerCountCallback(object? sender, IEnumerable<Event> events)
+  /// <summary>
+  /// Stream real-time tournament state updates
+  /// </summary>
+  /// <returns>Server-sent events stream of tournament updates as NDJSON</returns>
+  [HttpGet] // GET /api/events/watchtournamentupdates
+  [ProducesResponseType(
+    typeof(IEnumerable<ITournamentStateUpdate>), StatusCodes.Status200OK)]
+  [Produces("application/x-ndjson")]
+  public async Task<IActionResult> WatchTournamentUpdates()
+  {
+    async Task tournamentStateCallback(Tournament tournament)
     {
-      await semaphore.WaitAsync(HttpContext.RequestAborted);
-      try
-      {
-        // Serialize the events to the response stream
-        await StreamResponse(events.SerializeAs<ITournamentPlayerUpdate>());
-      }
-      finally
-      {
-        semaphore.Release();
-      }
+      // Serialize the event to the response stream
+      await StreamResponse([tournament.SerializeAs<ITournamentStateUpdate>()]);
     }
 
-    // Subscribe to the player count updates
-    GameAPIService.PlayerCountUpdated += playerCountCallback;
-
-    // Keep the request alive until cancellation is requested
-    var cts = new TaskCompletionSource<bool>();
-    HttpContext.RequestAborted.Register(() =>
-    {
-      GameAPIService.PlayerCountUpdated -= playerCountCallback;
-      cts.SetResult(true);
-    });
-    await cts.Task;
-
-    return Ok();
+    return await StreamNdjsonEvent<Tournament>(
+      e => Tournament.StateChanged += e,
+      e => Tournament.StateChanged -= e,
+      tournamentStateCallback);
   }
 
-  [HttpGet("{id}")] // GET /api/events/openevent/{id}
+  /// <summary>
+  /// Stream real-time player count updates
+  /// </summary>
+  /// <returns>Server-sent events stream of player count changes as NDJSON</returns>
+  [HttpGet] // GET /api/events/watchplayercount
+  [ProducesResponseType(
+    typeof(IEnumerable<ITournamentPlayerUpdate>), StatusCodes.Status200OK)]
+  [Produces("application/x-ndjson")]
+  public async Task<IActionResult> WatchPlayerCount()
+  {
+    async Task playerCountCallback(object? sender, IEnumerable<Event> events)
+    {
+      // Serialize the event to the response stream
+      await StreamResponse([events.SerializeAs<ITournamentPlayerUpdate>()]);
+    }
+
+    return await StreamNdjsonEventHandler<IEnumerable<Event>>(
+      e => GameAPIService.PlayerCountUpdated += e,
+      e => GameAPIService.PlayerCountUpdated -= e,
+      playerCountCallback);
+  }
+
+  //
+  // Action Endpoints
+  //
+
+  /// <summary>
+  /// Open a tournament in the MTGO client
+  /// </summary>
+  /// <param name="id">Tournament ID</param>
+  [HttpPost("{id}")] // POST /api/events/openevent/{id}
+  [ProducesResponseType(StatusCodes.Status204NoContent)]
+  [ProducesResponseType(StatusCodes.Status404NotFound)]
   public IActionResult OpenEvent(int id)
   {
     EventManager.NavigateToEvent(id);
     RemoteClient.FocusWindow();
-    return Ok();
+    return NoContent();
   }
 }

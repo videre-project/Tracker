@@ -42,12 +42,11 @@ if (!fs.existsSync(certFilePath) || !fs.existsSync(keyFilePath)) {
   }
 }
 
-const target = 'https://localhost:7101';
-// const target = env.ASPNETCORE_HTTPS_PORT
-//   ? `https://localhost:${env.ASPNETCORE_HTTPS_PORT}`
-//   : env.ASPNETCORE_URLS
-//     ? env.ASPNETCORE_URLS.split(';')[0]
-//     : 'https://localhost:7101';
+const target = env.ASPNETCORE_HTTPS_PORT
+  ? `https://localhost:${env.ASPNETCORE_HTTPS_PORT}`
+  : env.ASPNETCORE_URLS
+    ? env.ASPNETCORE_URLS.split(';')[0]
+    : 'https://localhost:7101';
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -62,7 +61,7 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      "^/scalar/.*": {
+      "^/docs/.*": {
         target,
         secure: false
       },
@@ -71,8 +70,8 @@ export default defineConfig({
         secure: false
       },
     },
-    port: 52797,
-    // port: parseInt(env.DEV_SERVER_PORT || '52797'),
+    // port: 52797,
+    port: parseInt(env.DEV_SERVER_PORT || '52797'),
     strictPort: true,
     https: {
       key: fs.readFileSync(keyFilePath),

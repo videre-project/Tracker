@@ -4,6 +4,8 @@
 **/
 
 using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Reflection;
 using System.Text.Encodings.Web;
 using System.Text.Json;
@@ -14,6 +16,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
+using Microsoft.OpenApi.Models;
 
 using Scalar.AspNetCore;
 
@@ -60,7 +63,39 @@ public static class WebAPIService
       jsonOptions.Converters.Add(new JsonSerializableConverter());
       jsonOptions.Converters.Add(new JsonSerializableEnumerableConverter());
     });
-    builder.Services.AddOpenApi();
+
+    // Configure Swagger/OpenAPI
+    builder.Services.AddEndpointsApiExplorer();
+    builder.Services.AddSwaggerGen(options =>
+    {
+      options.SwaggerDoc("v1", new OpenApiInfo
+      {
+        Title = "Videre Tracker API",
+        Version = "v1",
+        Description = "Magic Online Tournament Tracker API",
+      });
+
+      // Include XML comments for better documentation
+      var xmlFilename = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
+      var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFilename);
+      if (File.Exists(xmlPath))
+      {
+        options.IncludeXmlComments(xmlPath);
+      }
+
+      // Enable annotations for better documentation
+      options.EnableAnnotations();
+
+      // Custom schema IDs to avoid conflicts
+      options.CustomSchemaIds(type => type.FullName?.Replace("+", "."));
+
+      // Support for streaming responses
+      options.MapType<IAsyncEnumerable<object>>(() => new OpenApiSchema
+      {
+        Type = "array",
+        Items = new OpenApiSchema { Type = "object" }
+      });
+    });
 
     return builder;
   }
@@ -68,8 +103,7 @@ public static class WebAPIService
   /// <summary>
   /// Initializes the ASP.NET Core Web API service.
   /// </summary>
-  /// <param name="builder">The builder for the Web API host.</param>
-  /// <param name="hostForm">The host form for the WebView2 control.</param>
+  /// <param name="api">The Web API application.</param>
   /// <returns>A new <see cref="WebApplication"/> instance.</returns>
   public static WebApplication CreateAPIService(this WebApplication api)
   {
@@ -87,8 +121,11 @@ public static class WebAPIService
     // Configure the HTTP request pipeline.
     if (api.Environment.IsDevelopment())
     {
+      // Use Swagger to generate OpenAPI documentation.
+      api.UseSwagger(o => o.RouteTemplate = "/openapi/{documentName}.json");
+
       api.MapOpenApi();
-      api.MapScalarApiReference();
+      api.MapScalarApiReference(endpointPrefix: "/docs");
     }
     api.UseRouting();
     api.UseAuthorization();

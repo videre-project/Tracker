@@ -17,7 +17,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
 
-namespace Tracker.Controllers;
+namespace Tracker.Controllers.Base;
 
 public abstract class APIController : ControllerBase
 {
@@ -51,17 +51,20 @@ public abstract class APIController : ControllerBase
       WriteIndented = false,
     };
 
+  [NonAction]
   public void DisableBuffering()
   {
     HttpContext.Features.Get<IHttpResponseBodyFeature>()!.DisableBuffering();
   }
 
+  [NonAction]
   public void SetNdjsonContentType()
   {
     Response.ContentType = "application/x-ndjson";
     Response.Headers.XContentTypeOptions = "nosniff";
   }
 
+  [NonAction]
   public static async IAsyncEnumerable<T> ToAsyncEnumerable<T>(
     IEnumerable<T> enumerable,
     [EnumeratorCancellation] CancellationToken cancellationToken = default)
@@ -74,10 +77,12 @@ public abstract class APIController : ControllerBase
     }
   }
 
+  [NonAction]
   public async Task StreamResponse<T>(IEnumerable<T> enumerable) =>
     await StreamResponse(
       ToAsyncEnumerable(enumerable, HttpContext.RequestAborted));
 
+  [NonAction]
   public async Task StreamResponse<T>(IAsyncEnumerable<T> asyncEnumerable)
   {
     var serializerOptions = GetSerializerOptions();
@@ -96,6 +101,93 @@ public abstract class APIController : ControllerBase
     }
   }
 
+  /// <summary>
+  /// Streams server-sent events as newline-delimited JSON (NDJSON).
+  /// </summary>
+  /// <typeparam name="TEvent">The type of event to stream.</typeparam>
+  /// <param name="subscribe">An action to subscribe to the event source.</param>
+  /// <param name="unsubscribe">An action to unsubscribe from the event source.</param>
+  /// <param name="onEvent">A callback to invoke when an event is received.</param>
+  /// <returns>An <see cref="IActionResult"/> that streams the events.</returns
+  [NonAction]
+  public async Task<IActionResult> StreamNdjsonEvent<TEvent>(
+    Action<Func<TEvent, Task>> subscribe,
+    Action<Func<TEvent, Task>> unsubscribe,
+    Func<TEvent, Task> onEvent)
+  {
+    DisableBuffering();
+    SetNdjsonContentType();
+
+    using var semaphore = new SemaphoreSlim(1, 1);
+    async Task eventCallback(TEvent evt)
+    {
+      await semaphore.WaitAsync(HttpContext.RequestAborted);
+      try
+      {
+        await onEvent(evt);
+      }
+      finally
+      {
+        semaphore.Release();
+      }
+    }
+    subscribe(eventCallback);
+
+    var cts = new TaskCompletionSource<bool>();
+    HttpContext.RequestAborted.Register(() =>
+    {
+      unsubscribe(eventCallback);
+      cts.SetResult(true);
+    });
+    await cts.Task;
+
+    return Ok();
+  }
+
+  /// <summary>
+  /// Streams server-sent events as newline-delimited JSON (NDJSON) for events with sender/args pattern.
+  /// </summary>
+  /// <typeparam name="TEventArgs">The type of event arguments to stream.</typeparam>
+  /// <param name="subscribe">An action to subscribe to the event source.</param>
+  /// <param name="unsubscribe">An action to unsubscribe from the event source.</param>
+  /// <param name="onEvent">A callback to invoke when an event is received.</param>
+  /// <returns>An <see cref="IActionResult"/> that streams the events.</returns>
+  [NonAction]
+  public async Task<IActionResult> StreamNdjsonEventHandler<TEventArgs>(
+    Action<EventHandler<TEventArgs>> subscribe,
+    Action<EventHandler<TEventArgs>> unsubscribe,
+    Func<object?, TEventArgs, Task> onEvent)
+  {
+    DisableBuffering();
+    SetNdjsonContentType();
+
+    using var semaphore = new SemaphoreSlim(1, 1);
+    async void eventCallback(object? sender, TEventArgs args)
+    {
+      await semaphore.WaitAsync(HttpContext.RequestAborted);
+      try
+      {
+        await onEvent(sender, args);
+      }
+      finally
+      {
+        semaphore.Release();
+      }
+    }
+    subscribe(eventCallback);
+
+    var cts = new TaskCompletionSource<bool>();
+    HttpContext.RequestAborted.Register(() =>
+    {
+      unsubscribe(eventCallback);
+      cts.SetResult(true);
+    });
+    await cts.Task;
+
+    return Ok();
+  }
+
+  [NonAction]
   protected NdjsonStreamActionResult<T> NdjsonStream<T>(IEnumerable<T> enumerable)
   {
     return new NdjsonStreamActionResult<T>(this, enumerable);

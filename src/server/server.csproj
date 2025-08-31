@@ -34,6 +34,13 @@
     <ApplicationIcon>$(SpaRoot)\public\logo.ico</ApplicationIcon>
   </PropertyGroup>
 
+  <!-- Enable XML documentation file generation for Swagger -->
+  <PropertyGroup>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <DocumentationFile>bin\$(Configuration)\$(TargetFramework)\$(AssemblyName).xml</DocumentationFile>
+    <NoWarn>$(NoWarn);CS1570;CS1573;CS1574;CS1587;CS1591</NoWarn>
+  </PropertyGroup>
+
   <!-- Publishing Configuration -->
   <PropertyGroup>
     <PublishSingleFile>true</PublishSingleFile>
@@ -52,6 +59,9 @@
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
     <PackageReference Include="Microsoft.AspNetCore.SpaProxy" />
     <PackageReference Include="Scalar.AspNetCore" />
+    <!-- Swagger -->
+    <PackageReference Include="Swashbuckle.AspNetCore" />
+    <PackageReference Include="Swashbuckle.AspNetCore.Annotations" />
     <!-- SQLite Database -->
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
