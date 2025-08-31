@@ -82,14 +82,16 @@ public partial class HostForm : Form
         panel.BringToFront();
       }
 
-      // Position WebView2 to account for custom title bar
-      this.webView21.SetBounds(0, SystemInformation.CaptionHeight,
+      // Position WebView2 to account for custom title bar (use EffectiveCaptionHeight)
+      int initialTopPadding = this.WindowState == FormWindowState.Maximized ? 8 : 0;
+      int initialTitleBarHeight = (_dwmTitleBar?.EffectiveCaptionHeight ?? SystemInformation.CaptionHeight) + initialTopPadding;
+      this.webView21.SetBounds(0, initialTitleBarHeight,
           this.ClientSize.Width,
-          this.ClientSize.Height - SystemInformation.CaptionHeight);
+          this.ClientSize.Height - initialTitleBarHeight);
       this.SizeChanged += (s, e) => {
         var isMaximized = this.WindowState == FormWindowState.Maximized;
         var topPadding = isMaximized ? 8 : 0;  // 8px top padding when maximized
-        var titleBarHeight = SystemInformation.CaptionHeight + topPadding;
+        int titleBarHeight = (_dwmTitleBar?.EffectiveCaptionHeight ?? SystemInformation.CaptionHeight) + topPadding;
 
         this.webView21.SetBounds(0, titleBarHeight,
             this.ClientSize.Width,
@@ -267,21 +269,15 @@ public partial class HostForm : Form
 
         if (colorData?.background != null && colorData.foreground != null)
         {
-          // Create the original colors
+          // Darken the background color if specified
           var originalBgColor = Color.FromArgb(colorData.background[0], colorData.background[1], colorData.background[2]);
           var fgColor = Color.FromArgb(colorData.foreground[0], colorData.foreground[1], colorData.foreground[2]);
 
-          // Apply darkening to background color
-          var bgColor = DarkenColor(originalBgColor, darkenPercentage);
-
-          // Update the DwmTitleBar colors
-          _dwmTitleBar.UpdateColors(bgColor, fgColor);
+          _dwmTitleBar.UpdateColors(originalBgColor, fgColor);
           _hasUpdatedTitleBarColor = true;
 
           // Force repaint
           this.Invalidate();
-
-          Log.Information($"Updated titlebar colors - Original: {originalBgColor}, Darkened: {bgColor} ({darkenPercentage:P1}), Foreground: {fgColor}, Dark mode: {colorData.isDark}");
         }
       }
     }

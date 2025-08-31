@@ -8,6 +8,7 @@ import {
   LibraryBig,
   BookCopy,
   ChartArea,
+  History,
 } from "lucide-react";
 
 import Layout from "@/layout/LayoutContent";
@@ -93,6 +94,19 @@ export const routes: RouteEntry[] = [
       {
         index: true,
         element: <Events />
+      }
+    ],
+  },
+  {
+    path: "/history",
+    name: "History",
+    icon: History,
+    type: NavType.Primary,
+    element: <Layout />,
+    children: [
+      {
+        index: true,
+        element: <DummyComponent />
       }
     ],
   },

@@ -55,13 +55,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <div className="p-2 pb-0">
           <NavLogo label={data.label} />
         </div>
-        <NavMain items={navMain} />
+        <div className="-mt-2">
+          <NavMain items={navMain} />
+        </div>
       </SidebarHeader>
-      <div className="flex flex-col flex-1 overflow-y-hidden gap-[2px]">
+      <div className="flex flex-col flex-1 overflow-y-hidden gap-0 -mt-2 mb-2">
         <ActiveGames />
-        <UpcomingGames />
+        <UpcomingGames className="-mt-1" />
       </div>
-      <SidebarFooter>
+      <SidebarFooter className="pt-1 pb-4">
         <NavFooter items={navFooter} />
       </SidebarFooter>
       <SidebarRail />

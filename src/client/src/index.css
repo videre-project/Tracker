@@ -101,9 +101,36 @@
 		--sidebar-ring: 224.3 76.3% 48%;
 	}
 
-	html, body, #root {
+	html, body {
 		@apply bg-background text-foreground;
 		height: 100%;
+		overscroll-behavior: none;
+	}
+
+	#root {
+		@apply bg-background text-foreground;
+		height: calc(100vh + 16px);
+		transform: translateY(-16px);
+		overflow: hidden;
+		overscroll-behavior: none;
+	}
+
+	/* Ensure child elements use the full root height instead of viewport height */
+	#root > * {
+		min-height: 100% !important;
+	}
+
+	/* Override viewport-based heights within root to use full available height */
+	#root .min-h-svh,
+	#root .min-h-screen,
+	#root .h-svh,
+	#root .h-screen,
+	#root [class*="min-h-svh"],
+	#root [class*="min-h-screen"],
+	#root [class*="h-svh"],
+	#root [class*="h-screen"] {
+		min-height: 100% !important;
+		height: auto !important;
 	}
 
 	/* Custom Scrollbar Styles - Hidden by default, visible on hover */
@@ -147,13 +174,24 @@
 		background: transparent;
 	}
 
-	/* Prevent scroll chaining for sidebar with a different approach */
+	/* Prevent scroll chaining for sidebar and main content */
 	[data-sidebar="content"],
 	[data-sidebar="group-content"] {
 		/* Use overscroll-behavior: auto to allow normal scrolling but prevent chaining */
 		overscroll-behavior-y: none;
 		/* Ensure touch events are handled properly */
 		touch-action: pan-y;
+	}
+
+	/* Prevent overscroll on main content area */
+	main {
+		overscroll-behavior: none;
+	}
+
+	/* Prevent overscroll on any scroll containers */
+	.overflow-y-auto,
+	.overflow-auto {
+		overscroll-behavior-y: none;
 	}
 
 	/* Alternative approach for containers that need true overlay scrollbars */

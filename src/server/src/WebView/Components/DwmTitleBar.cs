@@ -6,6 +6,7 @@
 
 using System;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
@@ -14,6 +15,25 @@ namespace Tracker.WebView.Components;
 
 public class DwmTitleBar
 {
+  /// <summary>
+  /// Amount (in pixels) to add to the system caption height.
+  /// </summary>
+  /// <remarks>
+  /// Setting this value to a negative number will reduce the title bar height.
+  /// The default of -5 is chosen to create a slightly more compact title bar
+  /// that still accommodates the window control buttons and text.
+  /// </remarks>
+  public int TitleBarHeightAdjustment { get; set; } = -5;
+
+  /// <summary>
+  /// The effective caption height after adjustment.
+  /// </summary>
+  /// <remarks>
+  /// Ensures a minimum height of 16 pixels to prevent too-small title bars.
+  /// </remarks>
+  public int EffectiveCaptionHeight =>
+    Math.Max(16, SystemInformation.CaptionHeight + TitleBarHeightAdjustment);
+
   [DllImport("user32.dll")]
   private static extern IntPtr GetWindowDC(IntPtr hWnd);
 
@@ -53,14 +73,38 @@ public class DwmTitleBar
   );
 
   private readonly Form _hostForm;
-  private readonly Color _titleBarColor;
-  private readonly Color _textColor;
-  private readonly Color _hoverColor;
-  private readonly Color _closeHoverColor;
 
   // Dynamic colors that can be updated
   private Color _currentTitleBarColor;
   private Color _currentTextColor;
+
+  /// <summary>
+  /// If true, show the window caption (title text) in the titlebar. If false, hide it.
+  /// </summary>
+  public bool ShowCaption { get; set; } = false;
+
+  // Custom button icon support
+  public Image? MinimizeIcon { get; set; }
+  public Image? MaximizeIcon { get; set; }
+  public Image? RestoreIcon { get; set; }
+  public Image? CloseIcon { get; set; }
+
+  //
+  // Rendering options for icons
+  //
+
+  /// <summary>
+  /// Padding (in pixels) to inset the icon inside the button area.
+  /// </summary>
+  public int ButtonPadding { get; set; } = 6;
+
+  /// <summary>
+  /// Scale factor for the button icon size relative to the button area.
+  /// </summary>
+  /// <remarks>
+  /// Value should be between 0.2 and 1.0, where 1.0 is full size (minus padding).
+  /// </remarks>
+  public float ButtonIconScale { get; set; } = 1.0f;
 
   private enum HoveredButton
   {
@@ -76,18 +120,13 @@ public class DwmTitleBar
   public DwmTitleBar(Form hostForm)
   {
     _hostForm = hostForm;
-    _titleBarColor = Color.FromArgb(45, 45, 48);
-    _textColor = Color.White;
-    _hoverColor = Color.FromArgb(60, 60, 60);
-    _closeHoverColor = Color.FromArgb(255, 0, 0);
-
-    // Initialize current colors with default values
-    _currentTitleBarColor = _titleBarColor;
-    _currentTextColor = _textColor;
+    // Default to a neutral color, but will be updated from client CSS
+    _currentTitleBarColor = Color.FromArgb(45, 45, 48);
+    _currentTextColor = Color.White;
   }
 
   /// <summary>
-  /// Updates the titlebar colors dynamically.
+  /// Updates the titlebar colors dynamically. Should be called with the client background color.
   /// </summary>
   public void UpdateColors(Color backgroundColor, Color textColor)
   {
@@ -102,8 +141,9 @@ public class DwmTitleBar
       case WM_NCACTIVATE:
         _isActive = m.WParam.ToInt32() != 0;
         // Only invalidate the title bar area to prevent flashing
-        _hostForm.Invalidate(new Rectangle(0, 0, _hostForm.ClientSize.Width, SystemInformation.CaptionHeight));
-        _hostForm.Update(); // Force immediate repaint
+        _hostForm.Invalidate(new Rectangle(0, 0, _hostForm.ClientSize.Width, EffectiveCaptionHeight));
+        _hostForm.Update();
+
         // Let the default proc handle the message but return our result
         m.Result = new IntPtr(1); // Return TRUE to indicate we handled it
         return true;
@@ -114,7 +154,7 @@ public class DwmTitleBar
         return true;
 
       case WM_NCCALCSIZE:
-        if (m.WParam.ToInt32() == 1) // TRUE
+        if (m.WParam.ToInt32() == 1)
         {
           // Extend the client area to cover the entire window
           // This removes the default title bar
@@ -159,15 +199,12 @@ public class DwmTitleBar
         var titleBarRect = new Rectangle(
           0, 0,
           windowRect.Right - windowRect.Left,
-          SystemInformation.CaptionHeight
+          EffectiveCaptionHeight
         );
 
-        // Adjust colors based on activation state
-        var backgroundColor = _isActive ? _currentTitleBarColor : Color.FromArgb(
-          Math.Max(0, _currentTitleBarColor.R - 15),
-          Math.Max(0, _currentTitleBarColor.G - 15),
-          Math.Max(0, _currentTitleBarColor.B - 15));
-        var foregroundColor = _isActive ? _currentTextColor : Color.FromArgb(128, 128, 128);
+        // Use consistent colors regardless of activation state
+        var backgroundColor = _currentTitleBarColor;
+        var foregroundColor = _currentTextColor;
 
         // Draw custom title bar background
         using (var brush = new SolidBrush(backgroundColor))
@@ -175,12 +212,15 @@ public class DwmTitleBar
           graphics.FillRectangle(brush, titleBarRect);
         }
 
-        // Draw title text
-        using (var font = new Font("Segoe UI", 9, FontStyle.Bold))
+        // Draw title text if enabled
+        if (ShowCaption)
         {
-          var textRect = new Rectangle(8, 0, titleBarRect.Width - 120, titleBarRect.Height);
-          TextRenderer.DrawText(graphics, _hostForm.Text, font, textRect, foregroundColor,
-            TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.PreserveGraphicsClipping);
+          using (var font = new Font("Segoe UI", 9, FontStyle.Bold))
+          {
+            var textRect = new Rectangle(8, 0, titleBarRect.Width - 120, titleBarRect.Height);
+            TextRenderer.DrawText(graphics, _hostForm.Text, font, textRect, foregroundColor,
+              TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.PreserveGraphicsClipping);
+          }
         }
 
         // Draw window control buttons
@@ -201,14 +241,11 @@ public class DwmTitleBar
     var rightPadding = isMaximized ? 8 : 0; // 8px right padding when maximized
 
     // Extend title bar to include padding area
-    var titleBarRect = new Rectangle(0, 0, _hostForm.ClientSize.Width, SystemInformation.CaptionHeight + topPadding);
+    var titleBarRect = new Rectangle(0, 0, _hostForm.ClientSize.Width, EffectiveCaptionHeight + topPadding);
 
-    // Adjust colors based on activation state
-    var backgroundColor = _isActive ? _currentTitleBarColor : Color.FromArgb(
-      Math.Max(0, _currentTitleBarColor.R - 15),
-      Math.Max(0, _currentTitleBarColor.G - 15),
-      Math.Max(0, _currentTitleBarColor.B - 15));
-    var foregroundColor = _isActive ? _currentTextColor : Color.FromArgb(128, 128, 128);
+    // Use consistent colors regardless of activation state
+    var backgroundColor = _currentTitleBarColor;
+    var foregroundColor = _currentTextColor;
 
     // Draw custom title bar background (including padding area)
     using (var brush = new SolidBrush(backgroundColor))
@@ -216,15 +253,17 @@ public class DwmTitleBar
       graphics.FillRectangle(brush, titleBarRect);
     }
 
-    // Adjust text positioning - keep it in the actual title bar area
-    var textLeftMargin = isMaximized ? 16 : 8;
-    var textRect = new Rectangle(textLeftMargin, topPadding, titleBarRect.Width - 120 - rightPadding, SystemInformation.CaptionHeight);
 
-    // Draw title text
-    using (var font = new Font("Segoe UI", 9, FontStyle.Bold))
+    // Draw title text if enabled
+    if (ShowCaption)
     {
-      TextRenderer.DrawText(graphics, _hostForm.Text, font, textRect, foregroundColor,
-        TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.PreserveGraphicsClipping);
+      var textLeftMargin = isMaximized ? 16 : 8;
+      var textRect = new Rectangle(textLeftMargin, topPadding, titleBarRect.Width - 120 - rightPadding, EffectiveCaptionHeight);
+      using (var font = new Font("Segoe UI", 9, FontStyle.Bold))
+      {
+        TextRenderer.DrawText(graphics, _hostForm.Text, font, textRect, foregroundColor,
+          TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.PreserveGraphicsClipping);
+      }
     }
 
     // Draw window control buttons
@@ -234,29 +273,23 @@ public class DwmTitleBar
   private void DrawWindowButtons(Graphics graphics, Rectangle titleBarRect, Color backgroundColor, Color foregroundColor, bool isMaximized = false, int topPadding = 0, int rightPadding = 0)
   {
     var buttonWidth = 32;
-    var buttonHeight = SystemInformation.CaptionHeight;
+    var buttonHeight = EffectiveCaptionHeight;
     var buttonY = topPadding;
 
     // Close button - account for right padding
     var closeRect = new Rectangle(titleBarRect.Width - buttonWidth - rightPadding, buttonY, buttonWidth, buttonHeight);
-    var closeBackColor = _currentHover == HoveredButton.Close ?
-        (_isActive ? _closeHoverColor : Color.FromArgb(180, 0, 0)) :
-        backgroundColor;
+    var closeBackColor = _currentHover == HoveredButton.Close ? Color.FromArgb(255, 0, 0) : backgroundColor;
     DrawButton(graphics, closeRect, "ｘ", closeBackColor, foregroundColor, TitleBarButtonStyle.Close);
 
     // Maximize button
     var maxRect = new Rectangle(titleBarRect.Width - (buttonWidth * 2) - rightPadding, buttonY, buttonWidth, buttonHeight);
     var maxText = _hostForm.WindowState == FormWindowState.Maximized ? "⧉" : "□";
-    var maxBackColor = _currentHover == HoveredButton.Maximize ?
-        (_isActive ? _hoverColor : Color.FromArgb(70, 70, 73)) :
-        backgroundColor;
+    var maxBackColor = _currentHover == HoveredButton.Maximize ? Color.FromArgb(60, 60, 60) : backgroundColor;
     DrawButton(graphics, maxRect, maxText, maxBackColor, foregroundColor, TitleBarButtonStyle.Maximize);
 
     // Minimize button
     var minRect = new Rectangle(titleBarRect.Width - (buttonWidth * 3) - rightPadding, buttonY, buttonWidth, buttonHeight);
-    var minBackColor = _currentHover == HoveredButton.Minimize ?
-        (_isActive ? _hoverColor : Color.FromArgb(70, 70, 73)) :
-        backgroundColor;
+    var minBackColor = _currentHover == HoveredButton.Minimize ? Color.FromArgb(60, 60, 60) : backgroundColor;
     DrawButton(graphics, minRect, "—", minBackColor, foregroundColor, TitleBarButtonStyle.Minimize);
   }
 
@@ -267,26 +300,159 @@ public class DwmTitleBar
       graphics.FillRectangle(brush, rect);
     }
 
-    Font font = buttonStyle switch
-    {
-      TitleBarButtonStyle.Minimize => new Font("Courier New", 9.5F, FontStyle.Regular),
-      TitleBarButtonStyle.Maximize => new Font("Courier New", 9.5F, FontStyle.Regular),
-      TitleBarButtonStyle.Close => new Font("Courier New", 9.8F, FontStyle.Bold),
-      _ => new Font("Courier New", 9.8F, FontStyle.Bold)
-    };
+    // If a custom icon is provided, draw it centered; otherwise, fallback to glyph text
+    Image? iconToDraw = null;
+    if (buttonStyle == TitleBarButtonStyle.Minimize)
+      iconToDraw = MinimizeIcon;
+    else if (buttonStyle == TitleBarButtonStyle.Maximize)
+      iconToDraw = (_hostForm.WindowState == FormWindowState.Maximized ? RestoreIcon : MaximizeIcon) ?? MaximizeIcon;
+    else if (buttonStyle == TitleBarButtonStyle.Close)
+      iconToDraw = CloseIcon;
 
-    using (font)
+    if (iconToDraw != null)
     {
-      // Adjust rectangle for close button to counteract its natural positioning
-      var drawRect = rect;
-      if (buttonStyle == TitleBarButtonStyle.Close)
+      // Compute target rectangle with padding and scale, preserving aspect ratio
+      var padded = Rectangle.Inflate(rect, -ButtonPadding, -ButtonPadding);
+      if (padded.Width > 0 && padded.Height > 0)
       {
-        // Move the close button text up slightly to align with other buttons
-        drawRect = new Rectangle(rect.X, rect.Y - 2, rect.Width, rect.Height);
-      }
+        float targetSize = Math.Min(padded.Width, padded.Height) * Math.Max(0.2f, Math.Min(1.0f, ButtonIconScale));
+        float aspect = (float) iconToDraw.Width / Math.Max(1, iconToDraw.Height);
+        SizeF iconSize = aspect >= 1
+          ? new SizeF(targetSize, targetSize / aspect)
+          : new SizeF(targetSize * aspect, targetSize);
+        var drawX = padded.X + (padded.Width - iconSize.Width) / 2f;
+        var drawY = padded.Y + (padded.Height - iconSize.Height) / 2f;
 
-      TextRenderer.DrawText(graphics, text, font, drawRect, foreColor,
+        var state = graphics.Save();
+        graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+        graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+        graphics.SmoothingMode = SmoothingMode.HighQuality;
+        graphics.CompositingQuality = CompositingQuality.HighQuality;
+        graphics.DrawImage(iconToDraw, drawX, drawY, iconSize.Width, iconSize.Height);
+        graphics.Restore(state);
+      }
+      return;
+    }
+
+    // Fallback glyph rendering
+    if (buttonStyle == TitleBarButtonStyle.Maximize)
+    {
+      // Custom drawing for maximize/restore buttons
+      DrawCustomMaximizeGlyph(graphics, rect, foreColor, _hostForm.WindowState == FormWindowState.Maximized);
+    }
+    else if (buttonStyle == TitleBarButtonStyle.Close)
+    {
+      // Custom drawing for close button
+      DrawCustomCloseGlyph(graphics, rect, foreColor);
+    }
+    else
+    {
+      using var font = buttonStyle switch
+      {
+        TitleBarButtonStyle.Minimize => new Font("Courier New", 9.5F, FontStyle.Regular),
+        _ => new Font("Courier New", 9.8F, FontStyle.Bold)
+      };
+      var drawRectText = rect;
+      TextRenderer.DrawText(graphics, text, font, drawRectText, foreColor,
         TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+    }
+  }
+
+  private void DrawCustomMaximizeGlyph(Graphics graphics, Rectangle rect, Color foreColor, bool isRestore)
+  {
+    graphics.SmoothingMode = SmoothingMode.AntiAlias;
+    graphics.PixelOffsetMode = PixelOffsetMode.Half;
+
+    // Smaller glyphs: increase vertical padding more to shrink the icons
+    int vPad = Math.Max(6, (int) Math.Round(rect.Height * 0.3f));
+    int iconSide = Math.Max(1, rect.Height - (vPad * 2));
+    int hPad = Math.Max(0, (rect.Width - iconSide) / 2);
+
+    int left = rect.X + hPad;
+    int top = rect.Y + vPad;
+    int right = left + iconSide;
+    int bottom = top + iconSide;
+
+    // Slightly thinner stroke to match smaller icon
+    float penW = Math.Max(1.1f, iconSide / 14f);
+
+    using (var pen = new Pen(foreColor, penW))
+    {
+      pen.StartCap = LineCap.Round;
+      pen.EndCap = LineCap.Round;
+
+      if (isRestore)
+      {
+        // Restore: two overlapping boxes with swapped heights
+        // Back box will be taller and positioned lower
+        // Front box will be shorter and positioned higher (only top and right sides)
+        int offset = Math.Max(2, iconSide / 7);
+
+        // Back box (taller, positioned lower) - draw full rectangle
+        int backX = left;
+        int backY = top + offset;
+        int backW = iconSide - offset;
+        int backH = iconSide - offset;
+
+        // Front box (shorter, positioned higher) - only top and right sides
+        int frontX = left + offset;
+        int frontY = top;
+        int frontW = iconSide - offset;
+        int frontH = iconSide - offset;
+
+        // Draw back box first (appears behind)
+        if (backW > 0 && backH > 0)
+        {
+          graphics.DrawRectangle(pen, new Rectangle(backX, backY, backW, backH));
+        }
+
+        // Draw front box - only top and right sides
+        if (frontW > 0 && frontH > 0)
+        {
+          // Top line
+          graphics.DrawLine(pen, frontX, frontY, frontX + frontW, frontY);
+          // Right line
+          graphics.DrawLine(pen, frontX + frontW, frontY, frontX + frontW, frontY + frontH);
+        }
+      }
+      else
+      {
+        // Maximize: single square
+        var box = new Rectangle(left, top, iconSide, iconSide);
+        if (box.Width > 0 && box.Height > 0)
+          graphics.DrawRectangle(pen, box);
+      }
+    }
+  }
+
+  private void DrawCustomCloseGlyph(Graphics graphics, Rectangle rect, Color foreColor)
+  {
+    graphics.SmoothingMode = SmoothingMode.AntiAlias;
+    graphics.PixelOffsetMode = PixelOffsetMode.Half;
+
+    // Smaller glyphs: increase vertical padding to match other buttons
+    int vPad = Math.Max(6, (int) Math.Round(rect.Height * 0.3f));
+    int iconSide = Math.Max(1, rect.Height - (vPad * 2));
+    int hPad = Math.Max(0, (rect.Width - iconSide) / 2);
+
+    int left = rect.X + hPad;
+    int top = rect.Y + vPad;
+    int right = left + iconSide;
+    int bottom = top + iconSide;
+
+    // Slightly thicker stroke for the X to make it more visible
+    float penW = Math.Max(1.5f, iconSide / 12f);
+
+    using (var pen = new Pen(foreColor, penW))
+    {
+      pen.StartCap = LineCap.Round;
+      pen.EndCap = LineCap.Round;
+
+      // Draw X: two diagonal lines forming a square cross
+      // Top-left to bottom-right
+      graphics.DrawLine(pen, left, top, right, bottom);
+      // Top-right to bottom-left
+      graphics.DrawLine(pen, right, top, left, bottom);
     }
   }
 
@@ -301,7 +467,7 @@ public class DwmTitleBar
     var isMaximized = _hostForm.WindowState == FormWindowState.Maximized;
     var topPadding = isMaximized ? 8 : 0;
     var rightPadding = isMaximized ? 8 : 0;
-    var titleBarHeight = SystemInformation.CaptionHeight + topPadding;
+    var titleBarHeight = EffectiveCaptionHeight + topPadding;
 
     if (relativePos.Y > titleBarHeight) return false;
 
@@ -429,28 +595,28 @@ public class DwmTitleBar
     var screenPoint = new Point(m.LParam.ToInt32());
     var clientPoint = _hostForm.PointToClient(screenPoint);
 
-    if (clientPoint.Y <= SystemInformation.CaptionHeight)
+    if (clientPoint.Y <= EffectiveCaptionHeight)
     {
       var buttonWidth = 32;
       var windowWidth = _hostForm.Width;
 
       if (clientPoint.X >= windowWidth - buttonWidth)
       {
-        m.Result = (IntPtr)HTCLOSE;
+        m.Result = (IntPtr) HTCLOSE;
         return true;
       }
       if (clientPoint.X >= windowWidth - (buttonWidth * 2))
       {
-        m.Result = (IntPtr)HTMAXBUTTON;
+        m.Result = (IntPtr) HTMAXBUTTON;
         return true;
       }
       if (clientPoint.X >= windowWidth - (buttonWidth * 3))
       {
-        m.Result = (IntPtr)HTMINBUTTON;
+        m.Result = (IntPtr) HTMINBUTTON;
         return true;
       }
 
-      m.Result = (IntPtr)HTCAPTION;
+      m.Result = (IntPtr) HTCAPTION;
       return true;
     }
 

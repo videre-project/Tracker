@@ -218,17 +218,42 @@ interface GameListProps {
 export function GameList({ label, games, className }: GameListProps) {
   const { state } = useSidebar()
   const isCollapsed = state === "collapsed"
+  const [showGradient, setShowGradient] = React.useState(true)
+  const scrollContainerRef = React.useRef<HTMLDivElement>(null)
 
-  if (isCollapsed) {
-    return null // Hide completely when sidebar is collapsed
-  }
+  const handleScroll = React.useCallback(() => {
+    if (!scrollContainerRef.current) return
+
+    const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current
+    const isAtBottom = scrollTop + clientHeight >= scrollHeight - 1
+
+    setShowGradient(!isAtBottom)
+  }, [])
+
+  React.useEffect(() => {
+    const container = scrollContainerRef.current
+    if (!container) return
+
+    container.addEventListener('scroll', handleScroll)
+
+    // Check initial state
+    handleScroll()
+
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [handleScroll])
+
+  if (isCollapsed) return null;
 
   return (
-    <SidebarGroup className={`flex-1 min-h-0 pr-0 ${className || ''}`}>
-      <SidebarGroupLabel>{label}</SidebarGroupLabel>
-      <SidebarContent className="flex flex-col">
-        <SidebarGroup className="flex-1 min-h-0 -p-2">
-          <SidebarGroupContent className="space-y-2 overflow-y-auto flex-1 min-h-0">
+    <SidebarGroup className={`flex-1 min-h-0 pr-0 pb-0 ${className || ''}`} style={{ contain: 'layout' }}>
+      <SidebarGroupLabel className="group-data-[collapsible=icon]:hidden w-[236px] flex-shrink-0">{label}</SidebarGroupLabel>
+      <SidebarContent className="flex flex-col relative" style={{ contain: 'layout' }}>
+        <SidebarGroup className="flex-1 min-h-0 -p-2 overflow-hidden" style={{ contain: 'layout' }}>
+          <SidebarGroupContent
+            ref={scrollContainerRef}
+            className="space-y-2 overflow-y-auto overflow-x-hidden flex-1 min-h-0 pb-2 group-data-[collapsible=icon]:hidden"
+            style={{ height: '100%', contain: 'layout' }}
+          >
             {games.map((game) => {
               const statusConfig = getStatusConfig(game.status)
               const EventTypeIcon = getEventTypeIcon(game.type)
@@ -236,8 +261,8 @@ export function GameList({ label, games, className }: GameListProps) {
               const progress = getProgressDisplay(game)
 
               return (
-                <div key={game.id} className="bg-sidebar-accent/20 p-3 rounded-md border border-sidebar-border/60 hover:bg-sidebar-accent/40 transition-colors">
-                  <div className="flex justify-between items-start mb-2">
+                <div key={game.id} className="bg-sidebar-accent/20 p-3 rounded-md border border-sidebar-border/60 hover:bg-sidebar-accent/40 transition-colors w-[236px] flex-shrink-0">
+                  <div className="flex justify-between items-start mb-1">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 mb-1">
                         <EventTypeIcon className="w-3 h-3 text-sidebar-foreground/60 shrink-0" />
@@ -299,16 +324,26 @@ export function GameList({ label, games, className }: GameListProps) {
             })}
           </SidebarGroupContent>
         </SidebarGroup>
+        {/* Gradient fade at bottom to indicate scrollable content - exclude scrollbar area */}
+        {showGradient && (
+          <div className="absolute bottom-0 left-0 right-2 h-8 pointer-events-none z-10"
+               style={{
+                 background: 'linear-gradient(to top, hsl(var(--sidebar-background)), transparent)'
+               }} />
+        )}
       </SidebarContent>
     </SidebarGroup>
   )
 }
 
-// Convenience components using the mock data
-export function ActiveGames() {
-  return <GameList label="Active Events" games={mockGames} />
+export function ActiveGames({ className }: { className?: string }) {
+  return <GameList label={`Active Events – ${mockGames.length}`}
+                   games={mockGames}
+                   className={className} />
 }
 
-export function UpcomingGames() {
-  return <GameList label="Upcoming Events" games={upcomingGames} />
+export function UpcomingGames({ className }: { className?: string }) {
+  return <GameList label={`Upcoming Events – ${upcomingGames.length}`}
+                   games={upcomingGames}
+                   className={className} />
 }
