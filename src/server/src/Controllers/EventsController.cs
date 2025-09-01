@@ -34,6 +34,18 @@ public class EventsController : APIController
   // Serialization Interfaces
   //
 
+  public interface IEventStructure
+  {
+    string Name { get; }
+
+    bool IsConstructed { get; }
+    bool IsLimited { get; }
+    bool IsDraft { get; }
+    bool IsSealed { get; }
+    bool IsSingleElimination { get; }
+    bool IsSwiss { get; }
+  }
+
   public interface ITournament
   {
     int Id { get; }
@@ -42,6 +54,8 @@ public class EventsController : APIController
     int MinimumPlayers { get; }
     int TotalPlayers { get; }
     int TotalRounds { get; }
+
+    IEventStructure EventStructure { get; }
     DateTime StartTime { get; }
     DateTime EndTime { get; }
   }
@@ -186,13 +200,13 @@ public class EventsController : APIController
   [Produces("application/x-ndjson")]
   public async Task<IActionResult> WatchTournamentUpdates()
   {
-    async Task tournamentStateCallback(Tournament tournament)
+    async Task tournamentStateCallback(Tournament tournament, TournamentState state)
     {
       // Serialize the event to the response stream
       await StreamResponse([tournament.SerializeAs<ITournamentStateUpdate>()]);
     }
 
-    return await StreamNdjsonEvent<Tournament>(
+    return await StreamNdjsonEvent<Tournament, TournamentState>(
       e => Tournament.StateChanged += e,
       e => Tournament.StateChanged -= e,
       tournamentStateCallback);

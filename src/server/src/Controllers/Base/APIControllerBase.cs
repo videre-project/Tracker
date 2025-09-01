@@ -145,6 +145,50 @@ public abstract class APIController : ControllerBase
   }
 
   /// <summary>
+  /// Streams server-sent events as newline-delimited JSON (NDJSON) for events with two parameters.
+  /// </summary>
+  /// <typeparam name="T1">The type of the first event argument.</typeparam>
+  /// <typeparam name="T2">The type of the second event argument.</typeparam>
+  /// <param name="subscribe">An action to subscribe to the event source.</param>
+  /// <param name="unsubscribe">An action to unsubscribe from the event source.</param>
+  /// <param name="onEvent">A callback to invoke when an event is received.</param>
+  /// <returns>An <see cref="IActionResult"/> that streams the events.</returns
+  [NonAction]
+  public async Task<IActionResult> StreamNdjsonEvent<T1, T2>(
+    Action<Action<T1, T2>> subscribe,
+    Action<Action<T1, T2>> unsubscribe,
+    Func<T1, T2, Task> onEvent)
+  {
+    DisableBuffering();
+    SetNdjsonContentType();
+
+    using var semaphore = new SemaphoreSlim(1, 1);
+    async void eventCallback(T1 arg1, T2 arg2)
+    {
+      await semaphore.WaitAsync(HttpContext.RequestAborted);
+      try
+      {
+        await onEvent(arg1, arg2);
+      }
+      finally
+      {
+        semaphore.Release();
+      }
+    }
+    subscribe(eventCallback);
+
+    var cts = new TaskCompletionSource<bool>();
+    HttpContext.RequestAborted.Register(() =>
+    {
+      unsubscribe(eventCallback);
+      cts.SetResult(true);
+    });
+    await cts.Task;
+
+    return Ok();
+  }
+
+  /// <summary>
   /// Streams server-sent events as newline-delimited JSON (NDJSON) for events with sender/args pattern.
   /// </summary>
   /// <typeparam name="TEventArgs">The type of event arguments to stream.</typeparam>
