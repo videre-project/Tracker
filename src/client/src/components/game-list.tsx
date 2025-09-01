@@ -10,7 +10,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 
-type EventType = "league" | "swiss" | "elimination" | "draft"
+type EventType = "league" | "swiss" | "elimination" | "draft" | "unknown"
 type GameStatus = "active" | "paused" | "scheduled" | "completed"
 
 export interface ActiveGame {
@@ -36,108 +36,8 @@ export interface ActiveGame {
   timeRemaining?: string
 }
 
-const mockGames: ActiveGame[] = [
-  {
-    id: "1",
-    name: "Modern League",
-    type: "league",
-    status: "active",
-    format: "Modern",
-    wins: 3,
-    losses: 1,
-    totalRounds: 5,
-    url: "/games/modern-league",
-    deck: "Izzet Murktide"
-  },
-  {
-    id: "2",
-    name: "Pioneer Preliminary",
-    type: "swiss",
-    status: "active",
-    format: "Pioneer",
-    currentRound: 4,
-    totalSwissRounds: 7,
-    url: "/games/pioneer-swiss",
-    deck: "Mono-G Devotion",
-    timeRemaining: "35m"
-  },
-  {
-    id: "3",
-    name: "Kaldheim Draft",
-    type: "draft",
-    status: "paused",
-    format: "KHM Draft",
-    wins: 1,
-    losses: 1,
-    url: "/games/kaldheim-draft",
-    deck: "Grixis Snow",
-    pod: "Pod 3"
-  },
-  {
-    id: "4",
-    name: "Legacy Challenge",
-    type: "elimination",
-    status: "completed",
-    format: "Legacy",
-    wins: 0,
-    losses: 2,
-    url: "/games/legacy-challenge",
-    deck: "Death & Taxes"
-  },
-  {
-    id: "5",
-    name: "Standard League",
-    type: "league",
-    status: "scheduled",
-    format: "Standard",
-    url: "/games/standard-league",
-    startTime: "16:30"
-  },
-  {
-    id: "6",
-    name: "Vintage Preliminary",
-    type: "swiss",
-    status: "active",
-    format: "Vintage",
-    currentRound: 2,
-    totalSwissRounds: 5,
-    wins: 2,
-    losses: 0,
-    url: "/games/vintage-swiss",
-    deck: "Dredge",
-    timeRemaining: "12m"
-  }
-]
 
-const upcomingGames: ActiveGame[] = [
-  {
-    id: "7",
-    name: "Modern Challenge",
-    type: "elimination",
-    status: "scheduled",
-    format: "Modern",
-    url: "/games/modern-challenge",
-    startTime: "18:00"
-  },
-  {
-    id: "8",
-    name: "Bloomburrow Draft",
-    type: "draft",
-    status: "scheduled",
-    format: "BLB Draft",
-    url: "/games/bloomburrow-draft",
-    startTime: "19:30"
-  },
-  {
-    id: "9",
-    name: "Pioneer League",
-    type: "league",
-    status: "scheduled",
-    format: "Pioneer",
-    url: "/games/pioneer-league-2",
-    startTime: "Tomorrow"
-  }
-]
+import { useActiveGames, useUpcomingGames } from '@/hooks/use-events'
 
 const getStatusConfig = (status: GameStatus) => {
   switch (status) {
@@ -337,13 +237,15 @@ export function GameList({ label, games, className }: GameListProps) {
 }
 
 export function ActiveGames({ className }: { className?: string }) {
-  return <GameList label={`Active Events – ${mockGames.length}`}
-                   games={mockGames}
-                   className={className} />
+  const { games, loading, error } = useActiveGames();
+  return <GameList label={`Active Events – ${games.length}`}
+                   games={games}
+                   className={className} />;
 }
 
 export function UpcomingGames({ className }: { className?: string }) {
-  return <GameList label={`Upcoming Events – ${upcomingGames.length}`}
-                   games={upcomingGames}
-                   className={className} />
+  const { games, loading, error } = useUpcomingGames();
+  return <GameList label={`Upcoming Events – ${games.length}`}
+                   games={games}
+                   className={className} />;
 }

@@ -9,7 +9,6 @@
     <IsPackable>false</IsPackable>
     <OutputType>WinExe</OutputType>
     <UseWindowsForms>true</UseWindowsForms>
-    <GenerateEmbeddedFilesManifest>true</GenerateEmbeddedFilesManifest>
   </PropertyGroup>
 
   <!-- Runtime Properties -->
@@ -37,10 +36,17 @@
                       LogicalName="%(RecursiveDir)%(FileName)%(Extension)" />
   </ItemGroup>
 
-  <!-- Set Application Icon -->
-  <PropertyGroup>
-    <ApplicationIcon>$(SpaRoot)\public\logo.ico</ApplicationIcon>
-  </PropertyGroup>
+  <!-- Generate Typescript types from the Web API's OpenAPI spec on build -->
+  <Target Name="GenerateOpenApiSpec" AfterTargets="Build">
+    <Exec Command="dotnet tool restore"
+          WorkingDirectory="$(ProjectDir)" />
+    <Exec Command="dotnet swagger tofile --output &quot;$(OutputPath)openapi.json&quot; &quot;$(OutputPath)$(AssemblyName).dll&quot; v1"
+          WorkingDirectory="$(ProjectDir)" />
+    <Exec Command="pnpm openapi-typescript $(ProjectDir)$(OutputPath)openapi.json --output ./src/types/api.d.ts --path-params-as-types --root-types --root-types-no-schema-prefix"
+          WorkingDirectory="$(SpaRoot)" />
+    <Exec Command="node scripts/stripNamespaceFromTypes.cjs ./src/types/api.d.ts ./src/types/api.d.ts"
+          WorkingDirectory="$(SpaRoot)" />
+  </Target>
 
   <!-- Enable XML documentation file generation for Swagger -->
   <PropertyGroup>
@@ -49,11 +55,17 @@
     <NoWarn>$(NoWarn);CS1570;CS1573;CS1574;CS1587;CS1591</NoWarn>
   </PropertyGroup>
 
+  <!-- Set Application Icon -->
+  <PropertyGroup>
+    <ApplicationIcon>$(SpaRoot)\public\logo.ico</ApplicationIcon>
+  </PropertyGroup>
+
   <!-- Publishing Configuration -->
   <PropertyGroup>
     <PublishSingleFile>true</PublishSingleFile>
     <DebugType>embedded</DebugType>
     <StaticWebAssetsEnabled>false</StaticWebAssetsEnabled>
+    <GenerateEmbeddedFilesManifest>true</GenerateEmbeddedFilesManifest>
     <IsWebConfigTransformDisabled>true</IsWebConfigTransformDisabled>
     <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
   </PropertyGroup>
