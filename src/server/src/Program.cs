@@ -98,7 +98,11 @@ public class Program
     RedirectConsole(); // Ensure console output is redirected.
 #endif
 
-    var options = new ApplicationOptions(args);
+    var options = new ApplicationOptions(args)
+    {
+      // Disable UI if the application is loading this assembly via reflection.
+      DisableUI = Application.ProductName != ProductInfo.Name,
+    };
     Theme.Initialize(options);
 
     Application.SetHighDpiMode(HighDpiMode.SystemAware);
@@ -106,8 +110,19 @@ public class Program
     Application.SetCompatibleTextRenderingDefault(false);
 
     // Configure the HostForm and the WebView2 control.
-    var hostForm = new HostForm(options) { Source = options.Url };
-    hostForm.ControllerThread.Name ??= "UI Thread";
+    HostForm hostForm = null!;
+    if (!options.DisableUI)
+    {
+      hostForm = new HostForm(options) { Source = options.Url };
+      hostForm.ControllerThread.Name ??= "UI Thread";
+    }
+    else
+    {
+      Log.Information("UI is disabled. Running in headless mode.");
+#if DEBUG
+      AppDomain.CurrentDomain.UnhandledException += HostForm.Error_MessageBox;
+#endif
+    }
 
     // Create a new thread to run the ASP.NET Core Web API.
     var apiThread = new Thread(() =>
@@ -134,7 +149,7 @@ public class Program
       // Configure the Web API middleware.
       var api = builder.Build();
       api.UseClientMiddleware();
-      api.CreateAPIService();
+      api.CreateAPIService(options);
 
       Log.Debug("Starting the API thread.");
       api.OnShutdown(Application.Exit).Run();
@@ -146,7 +161,15 @@ public class Program
     apiThread.Start();
 
     // Start the application.
-    Log.Trace("Starting the application.");
-    Application.Run(hostForm);
+    if (!options.DisableUI && hostForm != null)
+    {
+      Log.Trace("Starting the application with UI.");
+      Application.Run(hostForm);
+    }
+    else
+    {
+      Log.Trace("Starting the application without UI.");
+      apiThread.Join();
+    }
   }
 }

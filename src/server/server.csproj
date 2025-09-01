@@ -12,6 +12,14 @@
     <GenerateEmbeddedFilesManifest>true</GenerateEmbeddedFilesManifest>
   </PropertyGroup>
 
+  <!-- Runtime Properties -->
+  <Target Name="GenerateProductName" BeforeTargets="BeforeBuild">
+    <WriteLinesToFile
+      File="Properties/ProductInfo.g.cs"
+      Lines='namespace Tracker%3B public static class ProductInfo { public const string Name = "$(AssemblyName)"%3B }'
+      Overwrite="true" />
+    </Target>
+
   <!-- Frontend SPA Configuration -->
   <PropertyGroup>
     <SpaRoot>..\client</SpaRoot>

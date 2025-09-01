@@ -393,7 +393,7 @@ public partial class HostForm : Form
     }
   }
 
-  private static void Error_MessageBox(object sender, UnhandledExceptionEventArgs e)
+  public static void Error_MessageBox(object sender, UnhandledExceptionEventArgs e)
   {
     var cts = new CancellationTokenSource();
     ThreadPool.QueueUserWorkItem(delegate

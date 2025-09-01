@@ -61,5 +61,13 @@ public class ApplicationOptions(string[] args = null!)
       typeof(Program).Assembly.GetName().Name!
     );
 
+  /// <summary>
+  /// The full path to the SQLite database file.
+  /// </summary>
   public string DatabasePath => Path.Combine(this.UserDataFolder, "Database");
+
+  /// <summary>
+  /// Whether to disable the WebView2 UI and run the Web API only.
+  /// </summary>
+  public bool DisableUI { get; internal set; } = false;
 }

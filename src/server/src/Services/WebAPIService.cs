@@ -105,18 +105,23 @@ public static class WebAPIService
   /// </summary>
   /// <param name="api">The Web API application.</param>
   /// <returns>A new <see cref="WebApplication"/> instance.</returns>
-  public static WebApplication CreateAPIService(this WebApplication api)
+  public static WebApplication CreateAPIService(
+    this WebApplication api,
+    ApplicationOptions options)
   {
     api.UseHttpsRedirection();
 
     // Use the embedded static files provided by the client.
-    api.UseFileServer(new FileServerOptions
+    if (!options.DisableUI)
     {
-      FileProvider = new ManifestEmbeddedFileProvider(Assembly.GetEntryAssembly()!),
-      EnableDefaultFiles = true,
-      EnableDirectoryBrowsing = false,
-    });
-    api.UseDefaultFiles();
+      api.UseFileServer(new FileServerOptions
+      {
+        FileProvider = new ManifestEmbeddedFileProvider(Assembly.GetEntryAssembly()!),
+        EnableDefaultFiles = true,
+        EnableDirectoryBrowsing = false,
+      });
+      api.UseDefaultFiles();
+    }
 
     // Configure the HTTP request pipeline.
     if (api.Environment.IsDevelopment())
@@ -131,7 +136,10 @@ public static class WebAPIService
     api.UseAuthorization();
 
     api.MapControllers();
-    api.MapFallbackToFile("/index.html");
+    if (!options.DisableUI)
+    {
+      api.MapFallbackToFile("/index.html");
+    }
 
     return api;
   }
