@@ -62,6 +62,10 @@ public static class WebAPIService
       // This allows for safely serializing remote objects to JSON.
       jsonOptions.Converters.Add(new JsonSerializableConverter());
       jsonOptions.Converters.Add(new JsonSerializableEnumerableConverter());
+
+      // Add support for serializing enums as strings with capitalized camel case values.
+      jsonOptions.Converters.Add(new JsonStringEnumConverter(
+        new SerializationPolicies.CapitalizedCamelCaseNamingPolicy()));
     });
 
     // Configure Swagger/OpenAPI
