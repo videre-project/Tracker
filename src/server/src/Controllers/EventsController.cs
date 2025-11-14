@@ -28,7 +28,7 @@ namespace Tracker.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/[controller]/[action]")]
-public class EventsController : APIController
+public class EventsController(ClientStateMonitor clientMonitor) : APIController
 {
   //
   // Serialization Interfaces
@@ -58,12 +58,18 @@ public class EventsController : APIController
     IEventStructure EventStructure { get; }
     DateTime StartTime { get; }
     DateTime EndTime { get; }
+
+    // ITournamentStateUpdate
+    string State { get; }
+    int CurrentRound { get; }
+    DateTime RoundEndTime { get; }
+    bool InPlayoffs { get; }
   }
 
   public interface ITournamentStateUpdate
   {
     int Id { get; }
-    TournamentState State { get; }
+    string State { get; }
     int CurrentRound { get; }
     DateTime RoundEndTime { get; }
     bool InPlayoffs { get; }
@@ -197,11 +203,22 @@ public class EventsController : APIController
   [HttpGet] // GET /api/events/watchtournamentupdates
   [ProducesResponseType(
     typeof(IEnumerable<ITournamentStateUpdate>), StatusCodes.Status200OK)]
+  [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
   [Produces("application/x-ndjson")]
   public async Task<IActionResult> WatchTournamentUpdates()
   {
+    // Check if client is ready before starting stream
+    if (!clientMonitor.IsClientReady)
+    {
+      return StatusCode(StatusCodes.Status503ServiceUnavailable,
+        new { error = "MTGO client is not ready" });
+    }
+
+    Console.WriteLine("Client connected to WatchTournamentUpdates stream");
+
     async Task tournamentStateCallback(Tournament tournament, TournamentState state)
     {
+      Console.WriteLine($"Tournament state change: {tournament} - {state}");
       // Serialize the event to the response stream
       await StreamResponse([tournament.SerializeAs<ITournamentStateUpdate>()]);
     }
@@ -209,7 +226,8 @@ public class EventsController : APIController
     return await StreamNdjsonEvent<Tournament, TournamentState>(
       e => Tournament.StateChanged += e,
       e => Tournament.StateChanged -= e,
-      tournamentStateCallback);
+      tournamentStateCallback,
+      clientMonitor.Token);
   }
 
   /// <summary>
@@ -219,9 +237,17 @@ public class EventsController : APIController
   [HttpGet] // GET /api/events/watchplayercount
   [ProducesResponseType(
     typeof(IEnumerable<ITournamentPlayerUpdate>), StatusCodes.Status200OK)]
+  [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
   [Produces("application/x-ndjson")]
   public async Task<IActionResult> WatchPlayerCount()
   {
+    // Check if client is ready before starting stream
+    if (!clientMonitor.IsClientReady)
+    {
+      return StatusCode(StatusCodes.Status503ServiceUnavailable,
+        new { error = "MTGO client is not ready" });
+    }
+
     async Task playerCountCallback(object? sender, IEnumerable<Event> events)
     {
       // Serialize the event to the response stream
@@ -231,7 +257,8 @@ public class EventsController : APIController
     return await StreamNdjsonEventHandler<IEnumerable<Event>>(
       e => GameAPIService.PlayerCountUpdated += e,
       e => GameAPIService.PlayerCountUpdated -= e,
-      playerCountCallback);
+      playerCountCallback,
+      clientMonitor.Token);
   }
 
   //

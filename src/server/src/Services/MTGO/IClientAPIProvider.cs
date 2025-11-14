@@ -3,7 +3,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -17,6 +17,11 @@ public interface IClientAPIProvider
   Client Client { get; set; }
   ClientOptions Options { get; set; }
   ushort? Pid { get; set; }
+  bool IsReady { get; }
+
+  event EventHandler? ClientStateChanged;
+
+  void CheckAndUpdateReadyState();
 
   Task WaitForRemoteClientAsync(
     ClientOptions? options = null,

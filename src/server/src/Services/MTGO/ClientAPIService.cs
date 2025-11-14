@@ -32,6 +32,9 @@ public static class ClientAPIService
     var provider = new ClientAPIProvider();
     builder.Services.AddSingleton<IClientAPIProvider>(provider);
 
+    // Register the client state monitor as scoped (per-request)
+    builder.Services.AddScoped<ClientStateMonitor>();
+
     // Start a background task to initialize the client
     SyncThread.EnqueueAsync(async () =>
     {
@@ -42,6 +45,7 @@ public static class ClientAPIService
       else
       {
         Log.Trace("MTGO client is already initialized.");
+        provider.CheckAndUpdateReadyState();
       }
     });
 

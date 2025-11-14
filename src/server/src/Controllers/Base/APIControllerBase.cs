@@ -152,23 +152,35 @@ public abstract class APIController : ControllerBase
   /// <param name="subscribe">An action to subscribe to the event source.</param>
   /// <param name="unsubscribe">An action to unsubscribe from the event source.</param>
   /// <param name="onEvent">A callback to invoke when an event is received.</param>
+  /// <param name="externalCancellationToken">Optional external cancellation token to cancel the stream.</param>
   /// <returns>An <see cref="IActionResult"/> that streams the events.</returns
   [NonAction]
   public async Task<IActionResult> StreamNdjsonEvent<T1, T2>(
     Action<Action<T1, T2>> subscribe,
     Action<Action<T1, T2>> unsubscribe,
-    Func<T1, T2, Task> onEvent)
+    Func<T1, T2, Task> onEvent,
+    CancellationToken externalCancellationToken = default)
   {
     DisableBuffering();
     SetNdjsonContentType();
 
+    using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
+      HttpContext.RequestAborted,
+      externalCancellationToken);
+
     using var semaphore = new SemaphoreSlim(1, 1);
     async void eventCallback(T1 arg1, T2 arg2)
     {
-      await semaphore.WaitAsync(HttpContext.RequestAborted);
+      if (linkedCts.Token.IsCancellationRequested) return;
+
+      await semaphore.WaitAsync(linkedCts.Token);
       try
       {
         await onEvent(arg1, arg2);
+      }
+      catch (OperationCanceledException)
+      {
+        // Stream was cancelled, ignore
       }
       finally
       {
@@ -177,15 +189,23 @@ public abstract class APIController : ControllerBase
     }
     subscribe(eventCallback);
 
-    var cts = new TaskCompletionSource<bool>();
-    HttpContext.RequestAborted.Register(() =>
+    var tcs = new TaskCompletionSource<bool>();
+    linkedCts.Token.Register(() =>
     {
       unsubscribe(eventCallback);
-      cts.SetResult(true);
+      tcs.SetResult(true);
     });
-    await cts.Task;
 
-    return Ok();
+    try
+    {
+      await tcs.Task;
+    }
+    catch (OperationCanceledException)
+    {
+      // Stream cancelled gracefully
+    }
+
+    return new EmptyResult();
   }
 
   /// <summary>
@@ -195,23 +215,35 @@ public abstract class APIController : ControllerBase
   /// <param name="subscribe">An action to subscribe to the event source.</param>
   /// <param name="unsubscribe">An action to unsubscribe from the event source.</param>
   /// <param name="onEvent">A callback to invoke when an event is received.</param>
+  /// <param name="externalCancellationToken">Optional external cancellation token to cancel the stream.</param>
   /// <returns>An <see cref="IActionResult"/> that streams the events.</returns>
   [NonAction]
   public async Task<IActionResult> StreamNdjsonEventHandler<TEventArgs>(
     Action<EventHandler<TEventArgs>> subscribe,
     Action<EventHandler<TEventArgs>> unsubscribe,
-    Func<object?, TEventArgs, Task> onEvent)
+    Func<object?, TEventArgs, Task> onEvent,
+    CancellationToken externalCancellationToken = default)
   {
     DisableBuffering();
     SetNdjsonContentType();
 
+    using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
+      HttpContext.RequestAborted,
+      externalCancellationToken);
+
     using var semaphore = new SemaphoreSlim(1, 1);
     async void eventCallback(object? sender, TEventArgs args)
     {
-      await semaphore.WaitAsync(HttpContext.RequestAborted);
+      if (linkedCts.Token.IsCancellationRequested) return;
+
+      await semaphore.WaitAsync(linkedCts.Token);
       try
       {
         await onEvent(sender, args);
+      }
+      catch (OperationCanceledException)
+      {
+        // Stream was cancelled, ignore
       }
       finally
       {
@@ -220,15 +252,23 @@ public abstract class APIController : ControllerBase
     }
     subscribe(eventCallback);
 
-    var cts = new TaskCompletionSource<bool>();
-    HttpContext.RequestAborted.Register(() =>
+    var tcs = new TaskCompletionSource<bool>();
+    linkedCts.Token.Register(() =>
     {
       unsubscribe(eventCallback);
-      cts.SetResult(true);
+      tcs.SetResult(true);
     });
-    await cts.Task;
 
-    return Ok();
+    try
+    {
+      await tcs.Task;
+    }
+    catch (OperationCanceledException)
+    {
+      // Stream cancelled gracefully
+    }
+
+    return new EmptyResult();
   }
 
   [NonAction]
