@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-    <TargetFramework>net9.0-windows</TargetFramework>
+    <TargetFramework>net10.0-windows</TargetFramework>
     <AssemblyName>Videre Tracker</AssemblyName>
     <RootNamespace>Tracker</RootNamespace>
     <Nullable>enable</Nullable>
@@ -21,7 +21,7 @@
 
   <!-- Frontend SPA Configuration -->
   <PropertyGroup>
-    <SpaRoot>..\client</SpaRoot>
+    <SpaRoot>$(MSBuildProjectDirectory)\..\client</SpaRoot>
     <SpaProxyLaunchCommand>pnpm run dev</SpaProxyLaunchCommand>
     <!-- Workaround for https://github.com/dotnet/aspnetcore/issues/45700 -->
     <SpaProxyLaunchCommand Condition="$([MSBuild]::IsOsPlatform('Windows'))">cmd.exe /s /c $(SpaProxyLaunchCommand)</SpaProxyLaunchCommand>
@@ -36,16 +36,33 @@
                       LogicalName="%(RecursiveDir)%(FileName)%(Extension)" />
   </ItemGroup>
 
+  <!--
+    Prevent package pruning of Microsoft.Extensions.FileProviders.Embedded
+    https://github.com/dotnet/aspnetcore/issues/63719
+  -->
+  <Target Name="_PreserveFileProvidersEmbeddedPackageReference"
+          AfterTargets="AddPrunePackageReferences">
+    <ItemGroup>
+      <PrunePackageReference Remove="Microsoft.Extensions.FileProviders.Embedded" />
+    </ItemGroup>
+  </Target>
+
   <!-- Generate Typescript types from the Web API's OpenAPI spec on build -->
   <Target Name="GenerateOpenApiSpec" AfterTargets="Build">
     <Exec Command="dotnet tool restore"
           WorkingDirectory="$(ProjectDir)" />
     <Exec Command="dotnet swagger tofile --output &quot;$(OutputPath)openapi.json&quot; &quot;$(OutputPath)$(AssemblyName).dll&quot; v1"
           WorkingDirectory="$(ProjectDir)" />
-    <Exec Command="pnpm openapi-typescript $(ProjectDir)$(OutputPath)openapi.json --output ./src/types/api.d.ts --path-params-as-types --root-types --root-types-no-schema-prefix"
-          WorkingDirectory="$(SpaRoot)" />
-    <Exec Command="node scripts/stripNamespaceFromTypes.cjs ./src/types/api.d.ts ./src/types/api.d.ts"
-          WorkingDirectory="$(SpaRoot)" />
+    
+    <PropertyGroup>
+      <OpenApiSpecPath>src/server/$(OutputPath)openapi.json</OpenApiSpecPath>
+      <OpenApiSpecPath>$(OpenApiSpecPath.Replace('\', '/'))</OpenApiSpecPath>
+    </PropertyGroup>
+
+    <Exec Command="pnpm openapi-typescript $(OpenApiSpecPath) --output src/client/src/types/api.d.ts --path-params-as-types --root-types --root-types-no-schema-prefix"
+          WorkingDirectory="$(MSBuildProjectDirectory)\..\.." />
+    <Exec Command="node src/client/scripts/stripNamespaceFromTypes.cjs src/client/src/types/api.d.ts src/client/src/types/api.d.ts"
+          WorkingDirectory="$(MSBuildProjectDirectory)\..\.." />
   </Target>
 
   <!-- Enable XML documentation file generation for Swagger -->
