@@ -1,11 +1,10 @@
 import * as React from "react"
-import { Frame, Map, PieChart } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
 import { NavFooter } from "@/components/nav-footer"
-import { NavUser } from "@/components/nav-user"
 import { NavLogo } from "./nav-logo"
 import { ActiveGames, UpcomingGames } from "@/components/game-list"
+import { useEvents } from "@/hooks/use-events"
 import {
   Sidebar,
   SidebarFooter,
@@ -14,7 +13,6 @@ import {
 } from "@/components/ui/sidebar"
 import { routes, NavType } from "@/router"
 
-// Static bits for header/footer
 const data = {
   label: {
     title: "Videre Tracker",
@@ -24,30 +22,37 @@ const data = {
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-  // Build sidebar items from route config (Primary nav only)
   const navMain = React.useMemo(
-    () =>
-      routes
+    () => {
+      const allRoutes = routes.flatMap(r => r.children || []);
+      return allRoutes
         .filter((r) => r.type === NavType.Primary && !!r.path && !!r.name)
         .map((r) => ({
           title: r.name as string,
           url: r.path as string,
           icon: r.icon,
-        })),
+        }));
+    },
     []
   )
 
   const navFooter = React.useMemo(
-    () =>
-      routes
+    () => {
+      const allRoutes = routes.flatMap(r => r.children || []);
+      return allRoutes
         .filter((r) => r.type === NavType.Footer && !!r.path && !!r.name)
         .map((r) => ({
           title: r.name as string,
           url: r.path as string,
           icon: r.icon,
-        })),
+        }));
+    },
     []
   )
+
+  const { activeGames, upcomingGames } = useEvents();
+  const activeEmpty = activeGames.length === 0;
+  const upcomingEmpty = upcomingGames.length === 0;
 
   return (
     <Sidebar collapsible="icon" {...props}>
@@ -60,8 +65,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </div>
       </SidebarHeader>
       <div className="flex flex-col flex-1 overflow-y-hidden gap-0 -mt-2 mb-2">
-        <ActiveGames />
-        <UpcomingGames className="-mt-1" />
+        <ActiveGames games={activeGames} otherListEmpty={upcomingEmpty} />
+        <UpcomingGames games={upcomingGames} className="-mt-1" otherListEmpty={activeEmpty} />
       </div>
       <SidebarFooter className="pt-1 pb-4">
         <NavFooter items={navFooter} />

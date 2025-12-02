@@ -1,32 +1,36 @@
 "use client"
 
-import { useEffect, useState } from "react";
-import { ColumnDef } from "@tanstack/react-table";
-import { DataTable } from "@/components/ui/data-table";
+import { useMemo } from "react"
+import { ColumnDef } from "@tanstack/react-table"
+import { DataTable } from "@/components/ui/data-table"
+import { Button } from "@/components/ui/button"
+import { EventsTableSkeleton } from "@/components/events-table-skeleton"
+import { usePaginatedData } from "@/hooks/use-paginated-data"
+import { ChevronLeft, ChevronRight } from "lucide-react"
 
 export interface Event {
-  id: string;
-  name: string;
-  format: string;
-  players: string;
-  rounds: number;
-  entryFee: string;
-  startTime: string;
-  endTime: string;
+  id: string
+  description: string
+  format: string
+  totalPlayers: number
+  minimumPlayers: number
+  totalRounds: number
+  startTime: string
+  endTime: string
 }
 
 function formatDate(dateString: string) {
-  const date = new Date(dateString);
+  const date = new Date(dateString)
   return date.toLocaleString(undefined, {
     year: 'numeric',
     month: 'numeric',
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
-  });
+  })
 }
 
-const columns: ColumnDef<Event, keyof Event>[] = [
+const columns: ColumnDef<Event>[] = [
   {
     accessorKey: "id",
     header: "ID",
@@ -42,6 +46,11 @@ const columns: ColumnDef<Event, keyof Event>[] = [
   {
     accessorKey: "totalPlayers",
     header: "Players",
+    cell: ({ row }) => {
+      const total = row.getValue("totalPlayers") as number
+      const min = row.original.minimumPlayers
+      return `${total} / ${min}`
+    }
   },
   {
     accessorKey: "totalRounds",
@@ -57,120 +66,79 @@ const columns: ColumnDef<Event, keyof Event>[] = [
     header: "End Time",
     cell: ({ row }) => formatDate(row.getValue("endTime")),
   },
-  {
-    accessorKey: "entryFee",
-    header: "Entry Fee",
-  }
-];
+]
 
 export default function Events() {
-  const [events, setEvents] = useState<Event[]>([]);
-
-  useEffect(() => {
-    const fetchEvents = async () => {
-      // const response = await fetch('/api/events/geteventslist');
-      // const data = await response.json();
-      // setEvents(data);
-
-      const response = await fetch('/api/events/geteventslist?stream=true');
-      if (!response.ok) {
-        console.error("Failed to fetch events:", response.statusText);
-        return;
-      }
-
-      if (!response.body) {
-        console.error("Response body is null");
-        return;
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder("utf-8");
-      let buffer = '';
-
-      const processEvent = async (buffer: string) => {
-        try {
-          const { id, description, totalPlayers, minimumPlayers, ...props } = JSON.parse(buffer);
-
-          const players = `${totalPlayers} / ${minimumPlayers}`;
-          const event = { id, name: description, ...props, players } as Event;
-
-          // Get the entry fee from the server
-          var res = await fetch(`/api/events/getentryfee/${event.id}`);
-          if (!res.ok) {
-            console.error(`Failed to fetch event ${event.id}:`, res.statusText);
-            return; // Skip this event if the fetch fails
-          }
-          event.entryFee = await res.text();
-
-          setEvents((prevEvents) => [...prevEvents, event]);
-        } catch (error) {
-          console.error("Error parsing JSON:", error, "Buffer:", buffer);
-        }
-      }
-
-      const processStream = async () => {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) {
-            // Process any remaining data in the buffer
-            if (buffer.trim()) await processEvent(buffer);
-            break;
-          }
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-
-          // Keep the last (potentially incomplete) line in the buffer
-          buffer = lines.pop() || '';
-
-          for (const line of lines) {
-            if (line.trim()) await processEvent(line);
-          }
-        }
-      }
-
-      processStream().catch(error => {
-        console.error("Error processing stream:", error);
-      });
-
-      // const idsResponse = await fetch('/api/events/geteventids');
-      // if (!idsResponse.ok) {
-      //   console.error("Failed to fetch event IDs:", idsResponse.statusText);
-      //   // Optionally, set an error state here
-      //   return;
-      // }
-      // const ids: number[] = await idsResponse.json();
-      //
-      // // Fetch `/api/events/getevent/${id}` for each ID asynchronously,
-      // // preserving the order of events based on the order of eventIds.
-      // setEvents([]);
-      // await Promise.all(
-      //   ids.map(async (id) => {
-      //     try {
-      //       const response = await fetch(`/api/events/getevent/${id}`);
-      //       if (!response.ok) {
-      //         console.error(`Failed to fetch event ${id}:`, response.statusText);
-      //         return; // Skip this event and continue with the next
-      //       }
-      //       const event: Event = await response.json();
-      //       setEvents((prevEvents) =>
-      //         [...prevEvents, event]
-      //           // Sort based on the index of the ID in eventIds
-      //           .sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id)));
-      //     } catch (error) {
-      //       console.error(`Error fetching event ${id}:`, error);
-      //       // Optionally, set an error state here
-      //     }
-      //   })
-      // );
-    };
-
-    fetchEvents();
-  }, []);
+  const {
+    data: events,
+    loading,
+    error,
+    pagination,
+    page,
+    nextPage,
+    previousPage
+  } = usePaginatedData<Event>({
+    url: '/api/events/geteventslist',
+    pageSize: 50
+  })
 
   return (
-    <div className="container mx-auto">
-      <DataTable columns={columns} data={events} />
+    <div className="container mx-auto py-4 space-y-4">
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded">
+          Error loading events: {error}
+        </div>
+      )}
+
+      {loading ? (
+        <div className="rounded-md border">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b bg-muted/50">
+                {columns.map((col, i) => (
+                  <th key={i} className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">
+                    {typeof col.header === 'string' ? col.header : ''}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              <EventsTableSkeleton rows={10} columns={columns.length} />
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <DataTable columns={columns} data={events} />
+      )}
+
+      {/* Pagination Controls */}
+      {pagination && (
+        <div className="flex items-center justify-between px-2">
+          <div className="text-sm text-muted-foreground">
+            Page {pagination.page} of {pagination.totalPages} ({pagination.totalCount} total events)
+          </div>
+          <div className="flex items-center space-x-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={previousPage}
+              disabled={!pagination.hasPreviousPage || loading}
+            >
+              <ChevronLeft className="h-4 w-4 mr-1" />
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={nextPage}
+              disabled={!pagination.hasNextPage || loading}
+            >
+              Next
+              <ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
-  );
+  )
 }

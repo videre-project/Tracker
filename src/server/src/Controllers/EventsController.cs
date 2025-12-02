@@ -44,6 +44,7 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
     bool IsSealed { get; }
     bool IsSingleElimination { get; }
     bool IsSwiss { get; }
+    bool HasPlayoffs { get; }
   }
 
   public interface ITournament
@@ -90,26 +91,60 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
   /// <summary>
   /// Get list of available tournaments/events
   /// </summary>
-  /// <param name="stream">Whether to stream results as NDJSON</param>
+  /// <param name="stream">Whether to stream all results as NDJSON (ignores pagination)</param>
+  /// <param name="page">Page number (1-based, default: 1)</param>
+  /// <param name="pageSize">Number of items per page (default: 50, max: 200)</param>
+  /// <param name="includeCount">Whether to include total count in headers (requires enumeration, default: true)</param>
   /// <returns>List of tournaments</returns>
   [HttpGet] // GET /api/events/geteventslist
   [ProducesResponseType(
     typeof(IEnumerable<ITournament>), StatusCodes.Status200OK)]
   [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-  public IActionResult GetEventsList([FromQuery] bool stream = false)
+  public IActionResult GetEventsList(
+    [FromQuery] bool stream = false,
+    [FromQuery] int page = 1,
+    [FromQuery] int pageSize = 50,
+    [FromQuery] bool includeCount = true)
   {
-    IEnumerable<ITournament> events = EventManager.FeaturedEvents
+    // Validate and clamp pagination parameters
+    page = Math.Max(1, page);
+    pageSize = Math.Clamp(pageSize, 1, 200);
+
+    // Build the query with deferred enumeration
+    var eventsQuery = EventManager.FeaturedEvents
       .Where(e => e.MinimumPlayers > 2)
-      .OrderBy(e => e.StartTime)
-      .SerializeAs<ITournament>();
+      .OrderBy(e => e.StartTime);
+
+    // Set basic pagination headers
+    Response.Headers["X-Page"] = page.ToString();
+    Response.Headers["X-Page-Size"] = pageSize.ToString();
+
+    // Optionally include count metadata (requires full enumeration)
+    if (includeCount && !stream)
+    {
+      var totalCount = eventsQuery.Count();
+      var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+
+      Response.Headers["X-Total-Count"] = totalCount.ToString();
+      Response.Headers["X-Total-Pages"] = totalPages.ToString();
+      Response.Headers["X-Has-Next-Page"] = (page < totalPages).ToString();
+      Response.Headers["X-Has-Previous-Page"] = (page > 1).ToString();
+    }
 
     if (stream)
     {
-      return NdjsonStream(events);
+      // Stream all events without pagination
+      return NdjsonStream(eventsQuery.SerializeAs<ITournament>());
     }
     else
     {
-      return Ok(events);
+      // Stream only the requested page
+      var pagedEvents = eventsQuery
+        .Skip((page - 1) * pageSize)
+        .Take(pageSize)
+        .SerializeAs<ITournament>();
+
+      return NdjsonStream(pagedEvents);
     }
   }
 
@@ -124,6 +159,33 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
   public Event GetEvent(int id)
   {
     return EventManager.GetEvent(id);
+  }
+
+  /// <summary>
+  /// Get tournament state by ID
+  /// </summary>
+  /// <param name="id">Tournament ID</param>
+  /// <returns>Tournament state information</returns>
+  [HttpGet("{id}")] // GET /api/events/gettournamentstate/{id}
+  [ProducesResponseType(typeof(ITournamentStateUpdate), StatusCodes.Status200OK)]
+  [ProducesResponseType(StatusCodes.Status404NotFound)]
+  [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+  public IActionResult GetTournamentState(int id)
+  {
+    try
+    {
+      Tournament tournament = EventManager.GetEvent(id);
+      return Ok(tournament.SerializeAs<ITournamentStateUpdate>());
+    }
+    catch (KeyNotFoundException)
+    {
+      return NotFound(new { error = $"Tournament {id} not found" });
+    }
+    catch (Exception ex)
+    {
+      return StatusCode(StatusCodes.Status503ServiceUnavailable,
+        new { error = ex.Message });
+    }
   }
 
   /// <summary>
@@ -214,11 +276,8 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
         new { error = "MTGO client is not ready" });
     }
 
-    Console.WriteLine("Client connected to WatchTournamentUpdates stream");
-
     async Task tournamentStateCallback(Tournament tournament, TournamentState state)
     {
-      Console.WriteLine($"Tournament state change: {tournament} - {state}");
       // Serialize the event to the response stream
       await StreamResponse([tournament.SerializeAs<ITournamentStateUpdate>()]);
     }
