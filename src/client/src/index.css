@@ -4,6 +4,10 @@
 
 @layer base {
 	:root {
+		--caption-font-size: 0.72rem;
+	}
+
+	:root {
 		--background: 0 0% 100%;
 		--foreground: 222.2 84% 4.9%;
 
@@ -101,7 +105,8 @@
 		--sidebar-ring: 224.3 76.3% 48%;
 	}
 
-	html, body {
+	html,
+	body {
 		@apply bg-background text-foreground;
 		height: 100%;
 		overscroll-behavior: none;
@@ -116,7 +121,7 @@
 	}
 
 	/* Ensure child elements use the full root height instead of viewport height */
-	#root > * {
+	#root>* {
 		min-height: 100% !important;
 	}
 
@@ -196,12 +201,33 @@
 
 	/* Alternative approach for containers that need true overlay scrollbars */
 	.scrollbar-overlay {
-		scrollbar-width: none; /* Firefox */
-		-ms-overflow-style: none; /* IE/Edge */
-		overflow: -moz-scrollbars-none; /* Old Firefox */
+		scrollbar-width: none;
+		/* Firefox */
+		-ms-overflow-style: none;
+		/* IE/Edge */
+		overflow: -moz-scrollbars-none;
+		/* Old Firefox */
 	}
 
 	.scrollbar-overlay::-webkit-scrollbar {
-		display: none; /* Webkit - completely hidden */
+		display: none;
+		/* Webkit - completely hidden */
+	}
+
+	/* Remove focus outlines from SVG elements (charts) */
+	svg:focus,
+	svg *:focus {
+		outline: none !important;
+	}
+
+	/* Remove focus outlines from Recharts responsive containers */
+	.recharts-responsive-container:focus,
+	.recharts-responsive-container *:focus {
+		outline: none !important;
+	}
+
+	/* Allow chart overflow for labels */
+	.recharts-surface {
+		overflow: visible !important;
 	}
 }

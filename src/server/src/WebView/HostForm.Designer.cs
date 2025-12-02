@@ -70,8 +70,8 @@ partial class HostForm : IResizableForm
     this.AutoScaleDimensions = new SizeF(8F, 20F);
     this.AutoScaleMode = AutoScaleMode.Font;
     this.StartPosition = FormStartPosition.CenterScreen;
-    this.ClientSize = new Size(1280, 768);
-    this.MinimumSize = new Size(800, 600);
+    this.ClientSize = new Size(1550, 925);
+    this.MinimumSize = new Size(1550, 925); // This matches MTGO's minimum size.
     this.Name = "HostForm";
     this.Text = Application.ProductName;
 

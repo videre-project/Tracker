@@ -176,8 +176,6 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
   // Wait for MTGO client to be ready before fetching events
   const { isReady: clientReady, loading: clientLoading } = useClientState()
 
-  console.log('[EventsProvider] Client state:', { clientReady, clientLoading, enabled: !clientLoading && clientReady })
-
   // Shared games map that both streams can access
   const gamesMapRef = useRef(new Map<string, ActiveGameWithRawTimes>())
   const retryAttempts = useRef(new Map<string, number>())
