@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/sidebar"
 
 import { RouteEntry, routes } from "@/router";
+import { EventsProvider } from "@/hooks/use-events";
 
 interface RouteFragment {
   title: string
@@ -32,16 +33,16 @@ function RouteBreadcrumb({ items }: { items: RouteFragment[] }) {
         {items.map(({ title, url }: RouteFragment, index) => (
           index < items.length - 1
             ? (<React.Fragment key={`React.Fragment-${index}`}>
-                <BreadcrumbItem className="hidden md:block"
-                                key={`BreadcrumbItem-${index}`}>
-                  <BreadcrumbLink href={url}>{title}</BreadcrumbLink>
-                </BreadcrumbItem>
-                <BreadcrumbSeparator className="hidden md:block"
-                                     key={`BreadcrumbSeparator-${index}`} />
-               </React.Fragment>)
+              <BreadcrumbItem className="hidden md:block"
+                key={`BreadcrumbItem-${index}`}>
+                <BreadcrumbLink href={url}>{title}</BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator className="hidden md:block"
+                key={`BreadcrumbSeparator-${index}`} />
+            </React.Fragment>)
             : (<BreadcrumbItem key={`BreadcrumbItem-${index}`}>
-                <BreadcrumbPage>{title}</BreadcrumbPage>
-              </BreadcrumbItem>)
+              <BreadcrumbPage>{title}</BreadcrumbPage>
+            </BreadcrumbItem>)
         ))}
       </BreadcrumbList>
     </Breadcrumb>
@@ -53,9 +54,12 @@ export default function Layout() {
   const location = useLocation();
   const fragments = location.pathname.split(/(?=\/)/);
 
+  // Routes are now nested as children under main routes
+  const allRoutes = routes.flatMap(r => r.children || []);
+
   // Extract the breadcrumbs for each segment of the path
   const breadcrumbs = fragments.reduce((acc, fragment) => {
-    const route = routes.find(({ path }) => path === fragment);
+    const route = allRoutes.find(({ path }) => path === fragment);
     if (route) {
       acc.push({ title: route.name ?? "", url: route.path! });
       if (route.children) {
@@ -70,22 +74,25 @@ export default function Layout() {
 
   return (
     <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
-      <SidebarProvider>
-        <AppSidebar />
-        <SidebarInset>
-          <header className="flex h-16 shrink-0 items-start gap-2
-                              py-4 transition-[width,height] ease-linear">
-            <div className="flex items-center gap-2 px-4">
-              <SidebarTrigger className="-ml-1" />
-              <Separator orientation="vertical" className="mr-2 h-4" />
-              <RouteBreadcrumb items={breadcrumbs} />
+      <EventsProvider>
+        <SidebarProvider>
+          <AppSidebar />
+          <SidebarInset>
+            <header className="flex h-14 shrink-0 items-center gap-2 transition-[width,height] ease-linear">
+              <div className="flex items-center gap-2 px-4">
+                <SidebarTrigger className="-ml-1" />
+                <Separator orientation="vertical" className="mr-2 h-4" />
+                <RouteBreadcrumb items={breadcrumbs} />
+              </div>
+            </header>
+            <div className="flex-1 overflow-y-auto">
+              <Suspense>
+                <Outlet />
+              </Suspense>
             </div>
-          </header>
-          <Suspense>
-            <Outlet />
-          </Suspense>
-        </SidebarInset>
-      </SidebarProvider>
+          </SidebarInset>
+        </SidebarProvider>
+      </EventsProvider>
     </ThemeProvider>
   )
 }

@@ -44,6 +44,8 @@ export interface ActiveGame {
   startTime?: string;
   endTime?: string;
   timeRemaining?: string; // e.g. '12:34' or '5:00'
+  totalPlayers?: number;
+  minimumPlayers?: number;
   // Tournament state
   state?: TournamentState;
 }
@@ -141,6 +143,8 @@ function mapTournamentToActiveGame(t: ITournament): ActiveGameWithRawTimes {
     startTime: t.startTime ? formatTimeShort(t.startTime) : undefined,
     endTime: t.endTime ? formatTimeShort(t.endTime) : undefined,
     totalRounds: t.totalRounds,
+    totalPlayers: t.totalPlayers,
+    minimumPlayers: t.minimumPlayers,
     _rawStartTime: t.startTime,
     _rawEndTime: t.endTime,
     // Pass through eventStructure for playoff/top 8 display
@@ -152,11 +156,18 @@ function mapTournamentToActiveGame(t: ITournament): ActiveGameWithRawTimes {
   }
 }
 
-/**
- * Fetch all events once and return both active and upcoming games
- * This is the recommended hook to use instead of separate hooks
- */
-export function useEvents() {
+import React, { createContext, useContext } from "react"
+
+interface EventsContextType {
+  activeGames: ActiveGame[];
+  upcomingGames: ActiveGame[];
+  loading: boolean;
+  error: string | null;
+}
+
+const EventsContext = createContext<EventsContextType | null>(null);
+
+export function EventsProvider({ children }: { children: React.ReactNode }) {
   const [activeGames, setActiveGames] = useState<ActiveGame[]>([])
   const [upcomingGames, setUpcomingGames] = useState<ActiveGame[]>([])
   const [loading, setLoading] = useState(true)
@@ -165,7 +176,7 @@ export function useEvents() {
   // Wait for MTGO client to be ready before fetching events
   const { isReady: clientReady, loading: clientLoading } = useClientState()
 
-  console.log('[useEvents] Client state:', { clientReady, clientLoading, enabled: !clientLoading && clientReady })
+  console.log('[EventsProvider] Client state:', { clientReady, clientLoading, enabled: !clientLoading && clientReady })
 
   // Shared games map that both streams can access
   const gamesMapRef = useRef(new Map<string, ActiveGameWithRawTimes>())
@@ -174,6 +185,14 @@ export function useEvents() {
 
   const updateGamesState = useCallback(() => {
     const allGames = Array.from(gamesMapRef.current.values())
+
+    // Sort by start time ascending (chronological)
+    allGames.sort((a, b) => {
+      const dateA = a._rawStartTime ? new Date(a._rawStartTime).getTime() : 0
+      const dateB = b._rawStartTime ? new Date(b._rawStartTime).getTime() : 0
+      return dateA - dateB
+    })
+
     const active = allGames.filter(g => g.status === "active")
     const upcoming = allGames.filter(g => g.status === "scheduled")
     setActiveGames(active)
@@ -269,10 +288,6 @@ export function useEvents() {
   }, [fetchTournamentState, updateGamesState])
 
   // Initial events stream
-  // Note: This stream is disabled until client is ready, allowing the client state
-  // monitor to run frequent checks. Once MTGO becomes available, this stream will
-  // automatically start. This creates a natural yielding behavior where event streams
-  // defer to the client monitor's frequent availability checks.
   useNDJSONStream<ITournament>({
     url: "/api/Events/GetEventsList?stream=true",
     enabled: !clientLoading && clientReady,
@@ -313,8 +328,6 @@ export function useEvents() {
   })
 
   // Stream tournament state updates for active events
-  // Note: Like the events list stream above, this yields to the client state monitor
-  // and only becomes active when MTGO is confirmed ready.
   useNDJSONStream<ITournamentStateUpdate>({
     url: "/api/Events/WatchTournamentUpdates",
     enabled: !clientLoading && clientReady,
@@ -423,5 +436,21 @@ export function useEvents() {
     }
   }, [clientLoading, clientReady])
 
-  return { activeGames, upcomingGames, loading, error }
+  return (
+    <EventsContext.Provider value={{ activeGames, upcomingGames, loading, error }}>
+      {children}
+    </EventsContext.Provider>
+  )
+}
+
+/**
+ * Fetch all events once and return both active and upcoming games
+ * This is the recommended hook to use instead of separate hooks
+ */
+export function useEvents() {
+  const context = useContext(EventsContext)
+  if (!context) {
+    throw new Error("useEvents must be used within an EventsProvider")
+  }
+  return context
 }

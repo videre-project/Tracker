@@ -3,23 +3,12 @@
 import { useMemo } from "react"
 import { ColumnDef } from "@tanstack/react-table"
 import { DataTable } from "@/components/ui/data-table"
-import { Button } from "@/components/ui/button"
 import { EventsTableSkeleton } from "@/components/events-table-skeleton"
-import { usePaginatedData } from "@/hooks/use-paginated-data"
-import { ChevronLeft, ChevronRight } from "lucide-react"
+import { useEvents, ActiveGame } from "@/hooks/use-events"
+import { Badge } from "@/components/ui/badge"
 
-export interface Event {
-  id: string
-  description: string
-  format: string
-  totalPlayers: number
-  minimumPlayers: number
-  totalRounds: number
-  startTime: string
-  endTime: string
-}
-
-function formatDate(dateString: string) {
+function formatDate(dateString?: string) {
+  if (!dateString) return "-"
   const date = new Date(dateString)
   return date.toLocaleString(undefined, {
     year: 'numeric',
@@ -30,13 +19,13 @@ function formatDate(dateString: string) {
   })
 }
 
-const columns: ColumnDef<Event>[] = [
+const columns: ColumnDef<ActiveGame>[] = [
   {
     accessorKey: "id",
     header: "ID",
   },
   {
-    accessorKey: "description",
+    accessorKey: "name",
     header: "Name",
   },
   {
@@ -44,11 +33,23 @@ const columns: ColumnDef<Event>[] = [
     header: "Format",
   },
   {
+    accessorKey: "status",
+    header: "Status",
+    cell: ({ row }) => {
+      const status = row.original.status
+      return (
+        <Badge variant={status === "active" ? "default" : "secondary"} className="capitalize">
+          {status}
+        </Badge>
+      )
+    }
+  },
+  {
     accessorKey: "totalPlayers",
     header: "Players",
     cell: ({ row }) => {
-      const total = row.getValue("totalPlayers") as number
-      const min = row.original.minimumPlayers
+      const total = row.original.totalPlayers ?? 0
+      const min = row.original.minimumPlayers ?? 0
       return `${total} / ${min}`
     }
   },
@@ -57,44 +58,38 @@ const columns: ColumnDef<Event>[] = [
     header: "Rounds",
   },
   {
-    accessorKey: "startTime",
+    accessorKey: "_rawStartTime",
     header: "Start Time",
-    cell: ({ row }) => formatDate(row.getValue("startTime")),
+    cell: ({ row }) => formatDate(row.original._rawStartTime),
   },
   {
-    accessorKey: "endTime",
+    accessorKey: "_rawEndTime",
     header: "End Time",
-    cell: ({ row }) => formatDate(row.getValue("endTime")),
+    cell: ({ row }) => formatDate(row.original._rawEndTime),
   },
 ]
 
 export default function Events() {
-  const {
-    data: events,
-    loading,
-    error,
-    pagination,
-    page,
-    nextPage,
-    previousPage
-  } = usePaginatedData<Event>({
-    url: '/api/events/geteventslist',
-    pageSize: 50
-  })
+  const { activeGames, upcomingGames, loading, error } = useEvents()
+
+  const events = useMemo(() => {
+    // Combine active and upcoming games (already sorted by start time in useEvents)
+    return [...activeGames, ...upcomingGames]
+  }, [activeGames, upcomingGames])
 
   return (
-    <div className="container mx-auto py-4 space-y-4">
+    <div className="container mx-auto py-4 px-4 space-y-4">
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded">
+        <div className="bg-destructive/15 text-destructive px-4 py-3 rounded-md text-sm font-medium">
           Error loading events: {error}
         </div>
       )}
 
-      {loading ? (
-        <div className="rounded-md border">
+      {loading && events.length === 0 ? (
+        <div className="rounded-md">
           <table className="w-full">
             <thead>
-              <tr className="border-b bg-muted/50">
+              <tr className="border-b border-sidebar-border/60 bg-muted/50">
                 {columns.map((col, i) => (
                   <th key={i} className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">
                     {typeof col.header === 'string' ? col.header : ''}
@@ -109,35 +104,6 @@ export default function Events() {
         </div>
       ) : (
         <DataTable columns={columns} data={events} />
-      )}
-
-      {/* Pagination Controls */}
-      {pagination && (
-        <div className="flex items-center justify-between px-2">
-          <div className="text-sm text-muted-foreground">
-            Page {pagination.page} of {pagination.totalPages} ({pagination.totalCount} total events)
-          </div>
-          <div className="flex items-center space-x-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={previousPage}
-              disabled={!pagination.hasPreviousPage || loading}
-            >
-              <ChevronLeft className="h-4 w-4 mr-1" />
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={nextPage}
-              disabled={!pagination.hasNextPage || loading}
-            >
-              Next
-              <ChevronRight className="h-4 w-4 ml-1" />
-            </Button>
-          </div>
-        </div>
       )}
     </div>
   )
