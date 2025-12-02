@@ -409,6 +409,7 @@ public partial class HostForm : Form
 
   public static void DisplayError(Exception ex, string label)
   {
+    Log.Error(label, ex);
     using var errorWindow = new ErrorWindow(ex, label);
     errorWindow.ShowDialog();
     errorWindow.BringToFront();
