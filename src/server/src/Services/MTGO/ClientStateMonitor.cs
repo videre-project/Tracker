@@ -53,9 +53,9 @@ public sealed class ClientStateMonitor : IDisposable
       {
         _cts.Cancel();
       }
-      catch (ObjectDisposedException)
+      catch (Exception ex)
       {
-        // Already disposed, ignore
+        Log.Warning("Error cancelling ClientStateMonitor token: {ex}", ex);
       }
     }
   }

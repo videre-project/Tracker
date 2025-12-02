@@ -4,10 +4,13 @@
 **/
 
 using System;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Linq;
 
 using MTGOSDK.API;
+using MTGOSDK.Core;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Remoting;
 
@@ -30,9 +33,15 @@ public class ClientAPIProvider : IClientAPIProvider
   /// </summary>
   public event EventHandler? ClientStateChanged;
 
-  private void InitializeClient(ClientOptions options)
+  public ManualResetEventSlim ReadyEvent { get; } = new(false);
+
+  public ClientAPIProvider()
   {
-    this.Client = new(options);
+  }
+
+  private void InitializeClient(ClientOptions options, Process? process = null)
+  {
+    this.Client = new(options, process: process);
     this.Pid = RemoteClient.Port;
     this.Options = options;
   }
@@ -42,15 +51,79 @@ public class ClientAPIProvider : IClientAPIProvider
   /// </summary>
   public void CheckAndUpdateReadyState()
   {
-    bool wasReady = IsReady;
-    bool clientExists = Client != null;
-    bool remoteInitialized = RemoteClient.IsInitialized;
-    IsReady = clientExists && remoteInitialized;
-
-    // Fire event if state changed
-    if (wasReady != IsReady)
+    if (RemoteClient.IsInitialized && !RemoteClient.IsDisposed)
     {
+      if (!IsReady)
+      {
+        IsReady = true;
+        OnClientStateChanged();
+      }
+    }
+    else if (IsReady)
+    {
+      IsReady = false;
       OnClientStateChanged();
+    }
+  }
+
+  public async Task RunClientLoopAsync(
+    ClientOptions options,
+    CancellationToken cancellationToken = default)
+  {
+    while (!cancellationToken.IsCancellationRequested)
+    {
+      try
+      {
+        // Mark as not ready during initialization
+        if (IsReady)
+        {
+          IsReady = false;
+          OnClientStateChanged();
+        }
+        await WaitForRemoteClientAsync(options, cancellationToken);
+
+        // Wait for the client to be disposed
+        var disposedTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var registration = cancellationToken.Register(() => disposedTcs.TrySetResult(true));
+
+        void OnRemoteDisposed(object? _, EventArgs __) => disposedTcs.TrySetResult(true);
+        RemoteClient.Disposed += OnRemoteDisposed;
+
+        // Check if we missed the event or the client failed to initialize
+        if (RemoteClient.IsDisposed ||
+            !await WaitForClientInitialization(disposedTcs, cancellationToken))
+        {
+          disposedTcs.TrySetResult(true);
+        }
+
+        try
+        {
+          Log.Debug("RunClientLoopAsync: Waiting for client disposal...");
+          await disposedTcs.Task;
+          Log.Debug("RunClientLoopAsync: Client disposal detected.");
+
+          if (IsReady)
+          {
+            IsReady = false;
+            OnClientStateChanged();
+          }
+        }
+        finally
+        {
+          RemoteClient.Disposed -= OnRemoteDisposed;
+        }
+      }
+      catch (OperationCanceledException)
+      {
+        // Graceful shutdown
+        break;
+      }
+      catch (Exception ex)
+      {
+        Log.Error("Error in client loop: {ex}", ex);
+        // Wait a bit before retrying to avoid tight loops on error
+        await Task.Delay(1000, cancellationToken);
+      }
     }
   }
 
@@ -61,63 +134,52 @@ public class ClientAPIProvider : IClientAPIProvider
     await _semaphore.WaitAsync(cancellationToken);
     try
     {
-      // Mark as not ready during initialization
-      IsReady = false;
-      OnClientStateChanged();
-
-      if (this.Client != null)
+      do
       {
-        // Wait for the previous client to dispose.
-        Log.Information("MTGO process crashed or disconnected, cleaning up previous client...");
+        if (this.Client != null)
+        {
+          // Wait for the previous client to dispose.
+          Log.Information("MTGO process crashed or disconnected, cleaning up previous client...");
+          this.Client.Dispose();
 
-        // Use a timeout to prevent hanging if disposal takes too long
-        using var disposeCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        disposeCts.CancelAfter(TimeSpan.FromSeconds(10));
+          // Use a timeout to prevent hanging if disposal takes too long
+          using var disposeCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+          disposeCts.CancelAfter(TimeSpan.FromSeconds(10));
 
+          try
+          {
+            await RemoteClient.WaitForDisposeAsync().WaitAsync(disposeCts.Token);
+            Log.Information("Previous client cleaned up successfully.");
+          }
+          catch (OperationCanceledException)
+          {
+            Log.Warning("Client cleanup timed out after 10 seconds, proceeding to reconnect anyway.");
+          }
+          catch (Exception ex)
+          {
+            Log.Error("Error during client cleanup: {ex}", ex.Message);
+          }
+
+          this.Pid = null;
+        }
+
+        Log.Trace("Waiting for a new MTGO process to start...");
+        await Client.WaitForMTGOProcess(TimeSpan.MaxValue);
+
+        // Initialize a new Client instance with the new MTGO process.
         try
         {
-          await RemoteClient.WaitForDisposeAsync().WaitAsync(disposeCts.Token);
-          Log.Information("Previous client cleaned up successfully.");
-        }
-        catch (OperationCanceledException)
-        {
-          Log.Warning("Client cleanup timed out after 10 seconds, proceeding to reconnect anyway.");
+          InitializeClient(options.HasValue ? options.Value : this.Options);
+          Log.Trace("MTGO client has finished initializing.");
+          return;
         }
         catch (Exception ex)
         {
-          Log.Error("Error during client cleanup: {ex}", ex.Message);
+          Log.Warning("Failed to initialize client: {Error}", ex.Message);
+          throw;
         }
-
-        this.Pid = null;
       }
-
-      Log.Trace("Waiting for a new MTGO process to start...");
-      await Client.WaitForMTGOProcess(TimeSpan.MaxValue);
-
-      // Log the process ID of the new MTGO process.
-      int pid = RemoteClient.MTGOProcess()!.Id;
-      Log.Trace("Found a new MTGO process with PID {pid}.", pid);
-
-      // Initialize the client (re-using the new RemoteClient instance).
-      Log.Trace("Initializing the client instance for PID {pid}...", pid);
-      InitializeClient(options.HasValue ? options.Value : this.Options);
-      if (pid != (int) this.Pid!)
-      {
-        throw new InvalidOperationException(
-          $"The MTGO process ID {pid} does not match the expected PID {this.Pid}.");
-      }
-
-      Log.Trace("Waiting for the user to log in...");
-      await this.Client!.WaitForUserLogin(TimeSpan.FromMinutes(5));
-
-      Log.Trace("Waiting for the client to finish initializing...");
-      await this.Client!.WaitForClientReady();
-
-      Log.Trace("MTGO client has finished initializing.");
-
-      // Mark as ready and notify listeners
-      IsReady = true;
-      OnClientStateChanged();
+      while (this.Pid != null && !cancellationToken.IsCancellationRequested);
     }
     finally
     {
@@ -132,8 +194,114 @@ public class ClientAPIProvider : IClientAPIProvider
     return _semaphoreReleased.Task.WaitAsync(cancellationToken);
   }
 
+  public async Task WaitForClientReadyAsync(CancellationToken cancellationToken = default)
+  {
+    if (IsReady) return;
+    await Task.Run(() => ReadyEvent.Wait(cancellationToken), cancellationToken);
+  }
+
+  public async Task WaitForClientDisconnectAsync(CancellationToken cancellationToken = default)
+  {
+    if (!IsReady) return;
+
+    var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+    using var reg = cancellationToken.Register(() => tcs.TrySetCanceled());
+
+    EventHandler handler = (s, e) =>
+    {
+      if (!IsReady) tcs.TrySetResult();
+    };
+
+    ClientStateChanged += handler;
+    try
+    {
+      // Double check in case it changed while subscribing
+      if (!IsReady) return;
+      await tcs.Task;
+    }
+    finally
+    {
+      ClientStateChanged -= handler;
+    }
+  }
+
+  public async Task<bool> WaitForClientInitialization(TaskCompletionSource<bool> disposedTcs, CancellationToken cancellationToken)
+  {
+    try
+    {
+      Log.Trace("Waiting for the user to log in...");
+      var loginTask = this.Client!.WaitForUserLogin(TimeSpan.MaxValue);
+      var completedTask = await Task.WhenAny(loginTask, disposedTcs.Task);
+
+      if (completedTask == disposedTcs.Task || disposedTcs.Task.IsCompleted)
+      {
+        Log.Warning("Client disposed while waiting for user login.");
+        // Ensure we remain not ready in this failure path
+        if (IsReady)
+        {
+          IsReady = false;
+          OnClientStateChanged();
+        }
+        return false;
+      }
+
+      if (!await loginTask)
+      {
+        Log.Warning("User login failed or timed out.");
+        return false;
+      }
+
+      Log.Trace("Waiting for the client to finish initializing...");
+      var readyTask = this.Client!.WaitForClientReady();
+      completedTask = await Task.WhenAny(readyTask, disposedTcs.Task);
+
+      if (completedTask == disposedTcs.Task || disposedTcs.Task.IsCompleted)
+      {
+        Log.Warning("Client disposed while waiting for client ready.");
+        // Ensure we remain not ready in this failure path
+        if (IsReady)
+        {
+          IsReady = false;
+          OnClientStateChanged();
+        }
+        return false;
+      }
+
+      if (!await readyTask)
+      {
+        Log.Warning("Client initialization failed or timed out.");
+        return false;
+      }
+
+      // Double check that the client is still alive before marking as ready
+      if (!RemoteClient.IsInitialized || RemoteClient.IsDisposed)
+      {
+        Log.Warning("Client disposed before initialization could complete.");
+        return false;
+      }
+
+      // Mark as ready and notify listeners
+      IsReady = true;
+      OnClientStateChanged();
+      return true;
+    }
+    catch (OperationCanceledException)
+    {
+      Log.Warning("Client initialization canceled.");
+      return false;
+    }
+  }
+
   protected virtual void OnClientStateChanged()
   {
     ClientStateChanged?.Invoke(this, EventArgs.Empty);
+    if (IsReady)
+    {
+      ReadyEvent.Set();
+    }
+    else
+    {
+      ReadyEvent.Reset();
+    }
   }
 }

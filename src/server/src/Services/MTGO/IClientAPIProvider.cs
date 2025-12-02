@@ -21,6 +21,8 @@ public interface IClientAPIProvider
 
   event EventHandler? ClientStateChanged;
 
+  ManualResetEventSlim ReadyEvent { get; }
+
   void CheckAndUpdateReadyState();
 
   Task WaitForRemoteClientAsync(
@@ -28,5 +30,11 @@ public interface IClientAPIProvider
     CancellationToken cancellationToken = default);
 
   Task WaitSemaphoreAsync(
+    CancellationToken cancellationToken = default);
+
+  Task WaitForClientReadyAsync(
+    CancellationToken cancellationToken = default);
+
+  Task WaitForClientDisconnectAsync(
     CancellationToken cancellationToken = default);
 }

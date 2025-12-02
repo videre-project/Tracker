@@ -132,21 +132,16 @@ public static class GameAPIService
 
     private volatile bool _isDisposed;
 
+    private readonly IClientAPIProvider _clientProvider =
+      serviceProvider.GetRequiredService<IClientAPIProvider>();
+
     /// <inheritdoc />
     public override void Dispose()
     {
       if (_isDisposed) return;
       _isDisposed = true;
 
-      foreach (var tracker in _matchTrackers.Values)
-      {
-        tracker.Dispose();
-      }
-      foreach (var tracker in _gameTrackers.Values)
-      {
-        tracker.Dispose();
-      }
-
+      ResetService();
       base.Dispose();
     }
 
@@ -169,56 +164,30 @@ public static class GameAPIService
       _gameTrackers.TryAdd(game.Id, tracker);
     }
 
-    /// <summary>
-    /// Initializes the game service by subscribing to MTGO events and setting
-    /// up state trackers for matches and games.
-    /// </summary>
-    public void InitializeGameService()
+    private void OnEventJoined(Event e, object _)
     {
-      Log.Debug("Initializing Game API service...");
-
-      EventManager.EventJoined += (Event e, object _) =>
+      if (_activeEvents.TryAdd(e.Id, e) &&
+          _dbWriter.TryAddEvent(e, out var _))
       {
-        if (_activeEvents.TryAdd(e.Id, e) &&
-            _dbWriter.TryAddEvent(e, out var _))
-        {
-          Log.Debug("Event Joined {Id}", e.Id);
-        }
-        if (e is Match match && _activeMatches.TryAdd(match.Id, match))
-        {
-          Log.Debug("Match Joined {Id}", match.Id);
-          CreateMatchTracker(match, e.Id);
-        }
-      };
-      EventManager.GameJoined += (Event parentEvent, Game game) =>
+        Log.Debug("Event Joined {Id}", e.Id);
+      }
+      if (e is Match match && _activeMatches.TryAdd(match.Id, match))
       {
-        // First add the parent event if needed
-        if (_activeEvents.TryAdd(parentEvent.Id, parentEvent))
-        {
-          Log.Debug("Found event {Id}", parentEvent.Id);
-          _dbWriter.TryAddEvent(parentEvent, out var _);
+        Log.Debug("Match Joined {Id}", match.Id);
+        CreateMatchTracker(match, e.Id);
+      }
+    }
 
-          // If it's a match, add it to its parent event
-          if (parentEvent is Match match)
-          {
-            // Add the match connected to its parent event
-            if (_activeMatches.TryAdd(match.Id, match))
-            {
-              Log.Debug("Match Joined {Id}", match.Id);
-              CreateMatchTracker(match, parentEvent.Id);
-            }
+    private void OnGameJoined(Event parentEvent, Game game)
+    {
+      // First add the parent event if needed
+      if (_activeEvents.TryAdd(parentEvent.Id, parentEvent))
+      {
+        Log.Debug("Found event {Id}", parentEvent.Id);
+        _dbWriter.TryAddEvent(parentEvent, out var _);
 
-            // Now add the game connected to its parent match
-            if (_activeGames.TryAdd(game.Id, game))
-            {
-              Log.Debug("Game Joined {Id}", game.Id);
-              CreateGameTracker(game, match.Id);
-            }
-          }
-        }
-        // Parent event already exists, just add the game to the match
-        else if (parentEvent is Match match &&
-                  _activeGames.TryAdd(game.Id, game))
+        // If it's a match, add it to its parent event
+        if (parentEvent is Match match)
         {
           // Add the match connected to its parent event
           if (_activeMatches.TryAdd(match.Id, match))
@@ -227,11 +196,42 @@ public static class GameAPIService
             CreateMatchTracker(match, parentEvent.Id);
           }
 
-          // Event already exists, just add the game to the match
-          Log.Debug("Game Joined {Id} for existing event", game.Id);
-          CreateGameTracker(game, match.Id);
+          // Now add the game connected to its parent match
+          if (_activeGames.TryAdd(game.Id, game))
+          {
+            Log.Debug("Game Joined {Id}", game.Id);
+            CreateGameTracker(game, match.Id);
+          }
         }
-      };
+      }
+      // Parent event already exists, just add the game to the match
+      else if (parentEvent is Match match &&
+                _activeGames.TryAdd(game.Id, game))
+      {
+        // Add the match connected to its parent event
+        if (_activeMatches.TryAdd(match.Id, match))
+        {
+          Log.Debug("Match Joined {Id}", match.Id);
+          CreateMatchTracker(match, parentEvent.Id);
+        }
+
+        // Event already exists, just add the game to the match
+        Log.Debug("Game Joined {Id} for existing event", game.Id);
+        CreateGameTracker(game, match.Id);
+      }
+    }
+
+    /// <summary>
+    /// Initializes the game service by subscribing to MTGO events and setting
+    /// up state trackers for matches and games.
+    /// </summary>
+    public void InitializeGameService()
+    {
+      Log.Debug("Initializing Game API service...");
+
+      EventManager.EventJoined += OnEventJoined;
+      EventManager.GameJoined += OnGameJoined;
+      
       Log.Information("Game API service listener has started.");
 
       // Filter events list to get all joined events
@@ -277,20 +277,23 @@ public static class GameAPIService
         events => PlayerCountUpdated?.Invoke(this, events));
     }
 
-    private void GameService_Disposed(object? sender, EventArgs e)
+    private void ResetService()
     {
-      SyncThread.Enqueue(async () =>
-      {
-        Log.Information("Game API service disposed, reinitializing...");
-        this.Dispose();
+      Log.Information("Resetting Game API service state...");
+      
+      // Unsubscribe from events
+      EventManager.EventJoined -= OnEventJoined;
+      EventManager.GameJoined -= OnGameJoined;
 
-        // Wait for a new MTGO process to start before reinitializing
-        var provider = serviceProvider.GetRequiredService<IClientAPIProvider>();
-        await provider.WaitForRemoteClientAsync();
-        RemoteClient.Disposed += GameService_Disposed;
-
-        InitializeGameService();
-      });
+      foreach (var tracker in _matchTrackers.Values) tracker.Dispose();
+      _matchTrackers.Clear();
+      
+      foreach (var tracker in _gameTrackers.Values) tracker.Dispose();
+      _gameTrackers.Clear();
+      
+      _activeEvents.Clear();
+      _activeMatches.Clear();
+      _activeGames.Clear();
     }
 
     /// <inheritdoc />
@@ -298,50 +301,44 @@ public static class GameAPIService
     {
       try
       {
-        // Wait for the game service events to be initialized
         Log.Information("Game API background service started");
-        var provider = serviceProvider.GetRequiredService<IClientAPIProvider>();
-        await provider.WaitSemaphoreAsync(stoppingToken);
-        try
-        {
-          RemoteClient.Disposed += GameService_Disposed;
-          InitializeGameService();
-        }
-        catch (Exception ex)
-        {
-          if (_isDisposed) return;
+        
+        // Start log processing in a separate task
+        var logTask = ProcessLogsAsync(stoppingToken);
 
-          Log.Critical("Failed to start Game API service", ex);
-          Log.Debug(ex.Message + "\n" + ex.StackTrace);
-        }
-
-        // Process events in the eventlog blocking collection
-        foreach (GameLogEntry entry in _eventLog.GetConsumingEnumerable(stoppingToken))
+        // Main service loop
+        while (!stoppingToken.IsCancellationRequested)
         {
-          try
+          try 
           {
-            Log.Trace("[Game {Id}] {Timestamp:O}: {Type} {Data}",
-                entry.GameId, entry.Timestamp, entry.Type, entry.Data);
-
-            if (!await _dbWriter.WaitForGameModelAsync(entry.GameId))
-            {
-              throw new InvalidOperationException(
-                $"Cannot add log entry for game {entry.GameId} " +
-                $"as the game model was not created in time.");
-            }
-            await _dbWriter.TryAddGameLogAsync(entry, stoppingToken);
+            Log.Information("GameService: Waiting for client to be ready...");
+            await _clientProvider.WaitForClientReadyAsync(stoppingToken);
+            
+            Log.Information("GameService: Client ready, initializing service...");
+            InitializeGameService();
+            
+            Log.Information("GameService: Service initialized, waiting for disconnect...");
+            await _clientProvider.WaitForClientDisconnectAsync(stoppingToken);
+            
+            Log.Information("GameService: Client disconnected, resetting service...");
+            ResetService();
           }
-          catch (Exception ex)
-          {
-            Log.Error(ex, "Error adding log entry for game {GameId}: {Message}",
-              entry.GameId, ex.Message);
-            Log.Debug(ex.StackTrace);
+          catch (OperationCanceledException) 
+          { 
+            break; 
+          }
+          catch (Exception ex) 
+          { 
+            Log.Error(ex, "Error in GameService loop");
+            // Wait a bit before retrying to avoid tight loops on error
+            await Task.Delay(1000, stoppingToken);
           }
         }
+        
+        await logTask;
       }
       catch (OperationCanceledException)
       {
-        // The service was stopped, exit gracefully
         Log.Information("Game service stopped");
       }
       catch (Exception ex)
@@ -351,14 +348,37 @@ public static class GameAPIService
       }
       finally
       {
-        // Clean up any remaining trackers
-        foreach (var tracker in _matchTrackers.Values)
+        ResetService();
+      }
+    }
+
+    private async Task ProcessLogsAsync(CancellationToken stoppingToken)
+    {
+      // Process events in the eventlog blocking collection
+      foreach (GameLogEntry entry in _eventLog.GetConsumingEnumerable(stoppingToken))
+      {
+        try
         {
-          tracker.Dispose();
+          Log.Trace("[Game {Id}] {Timestamp:O}: {Type} {Data}",
+              entry.GameId, entry.Timestamp, entry.Type, entry.Data);
+
+          if (!await _dbWriter.WaitForGameModelAsync(entry.GameId))
+          {
+            throw new InvalidOperationException(
+              $"Cannot add log entry for game {entry.GameId} " +
+              $"as the game model was not created in time.");
+          }
+          await _dbWriter.TryAddGameLogAsync(entry, stoppingToken);
         }
-        foreach (var tracker in _gameTrackers.Values)
+        catch (OperationCanceledException)
         {
-          tracker.Dispose();
+            throw;
+        }
+        catch (Exception ex)
+        {
+          Log.Error(ex, "Error adding log entry for game {GameId}: {Message}",
+            entry.GameId, ex.Message);
+          Log.Debug(ex.StackTrace);
         }
       }
     }

@@ -38,15 +38,7 @@ public static class ClientAPIService
     // Start a background task to initialize the client
     SyncThread.EnqueueAsync(async () =>
     {
-      if (provider.Client == null)
-      {
-        await provider.WaitForRemoteClientAsync(options);
-      }
-      else
-      {
-        Log.Trace("MTGO client is already initialized.");
-        provider.CheckAndUpdateReadyState();
-      }
+      await provider.RunClientLoopAsync(options);
     });
 
     return builder;
@@ -68,22 +60,47 @@ public static class ClientAPIService
       }
       catch (ProcessCrashedException)
       {
-        // Abort if the response has already started sending.
-        if (!context.Response.HasStarted) return;
+        // Don't attempt to modify response if it has already started
+        if (context.Response.HasStarted)
+        {
+          Log.Warning("MTGO process crashed during active response");
+          return;
+        }
 
         // If a new process has started since the exception was thrown,
         // reinitialize and re-register the client with the service collection.
         var provider = context.RequestServices.GetRequiredService<IClientAPIProvider>();
-        await provider.WaitForRemoteClientAsync(null, context.RequestAborted);
+        await provider.WaitSemaphoreAsync(context.RequestAborted);
 
-        // If we cannot reinitialize the client, throw the exception
-        if (!RemoteClient.IsInitialized) throw;
+        // If we cannot reinitialize the client, return service unavailable
+        if (!RemoteClient.IsInitialized)
+        {
+          context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+          await context.Response.WriteAsync("MTGO client is not available");
+          return;
+        }
 
         // Otherwise, retry the request.
         await next(context);
       }
+      catch (OperationCanceledException)
+      {
+        // Request was cancelled, this is expected behavior when client disconnects
+        if (context.Response.HasStarted)
+        {
+          Log.Information("Request cancelled during active response");
+        }
+        return;
+      }
       catch (Exception ex)
       {
+        // Don't attempt to modify response if it has already started
+        if (context.Response.HasStarted)
+        {
+          Log.Error("Error occurred during active response: {ex}", ex);
+          return;
+        }
+
         // Log the exception properly as the developer middleware does not log
         // the stacktrace of the exception.
         Log.Error("An error occurred while processing the request: {ex}", ex);
