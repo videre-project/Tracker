@@ -23,6 +23,7 @@ export type NavMenuItem = {
   url: string
   icon?: LucideIcon
   isActive?: boolean
+  disabled?: boolean
   items?: {
     title: string
     url: string
@@ -59,7 +60,7 @@ export function NavMain({
           if (!hasChildren) {
             return (
               <SidebarMenuItem key={item.title}>
-                <SidebarMenuButton asChild isActive={activeInGroup} tooltip={item.title}>
+                <SidebarMenuButton asChild isActive={activeInGroup} tooltip={item.title} aria-disabled={item.disabled} disabled={item.disabled}>
                   <NavLink to={item.url}>
                     {item.icon && <item.icon />}
                     <span>{item.title}</span>

@@ -11,7 +11,7 @@ import {
   SidebarHeader,
   SidebarRail,
 } from "@/components/ui/sidebar"
-import { routes, NavType } from "@/router"
+import { routes, NavType, DummyComponent } from "@/router"
 
 const data = {
   label: {
@@ -31,6 +31,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           title: r.name as string,
           url: r.path as string,
           icon: r.icon,
+          disabled: React.isValidElement(r.element) && r.element.type === DummyComponent,
         }));
     },
     []
@@ -45,6 +46,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           title: r.name as string,
           url: r.path as string,
           icon: r.icon,
+          disabled: React.isValidElement(r.element) && r.element.type === DummyComponent,
         }));
     },
     []

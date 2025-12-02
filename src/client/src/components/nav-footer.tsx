@@ -24,7 +24,7 @@ export function NavFooter(props: {
           {items.map((item) => (
             <SidebarMenuItem key={item.title}>
               <SidebarMenuButton asChild
-                tooltip={item.title} isActive={location.pathname === item.url}>
+                tooltip={item.title} isActive={location.pathname === item.url} aria-disabled={item.disabled} disabled={item.disabled}>
                 <NavLink to={item.url}>
                   {item.icon && <item.icon />}
                   <span className={state === "collapsed" ? "sr-only" : undefined}>{item.title}</span>
