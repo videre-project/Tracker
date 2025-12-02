@@ -4,10 +4,13 @@
 **/
 
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+
+using MTGOSDK.Core.Remoting;
 
 using Tracker.Controllers.Base;
 using Tracker.Services.MTGO;
@@ -39,6 +42,9 @@ public class ClientController : APIController
     bool IsInitialized { get; }
     ushort? ProcessId { get; }
     string Status { get; }
+    long? MemoryUsage { get; }
+    long? WorkingSet { get; }
+    long? VirtualMemory { get; }
   }
 
   //
@@ -54,13 +60,17 @@ public class ClientController : APIController
   public IActionResult GetState()
   {
     var isReady = _clientProvider.IsReady;
+    var memory = GetMemoryUsage(isReady);
 
     return Ok(new
     {
       IsConnected = isReady,
       IsInitialized = isReady,
       ProcessId = _clientProvider.Pid,
-      Status = isReady ? "ready" : "disconnected"
+      Status = isReady ? "ready" : "disconnected",
+      MemoryUsage = memory?.PrivateMemory,
+      WorkingSet = memory?.WorkingSet,
+      VirtualMemory = memory?.VirtualMemory
     });
   }
 
@@ -97,8 +107,23 @@ public class ClientController : APIController
       try
       {
         // Wait for state changes or cancellation
-        await foreach (var _ in channel.Reader.ReadAllAsync(HttpContext.RequestAborted))
+        while (!HttpContext.RequestAborted.IsCancellationRequested)
         {
+          // Wait for event or timeout (for periodic updates)
+          try 
+          {
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(HttpContext.RequestAborted);
+            cts.CancelAfter(TimeSpan.FromSeconds(1));
+            
+            await channel.Reader.WaitToReadAsync(cts.Token);
+            // Consume all available items
+            while (channel.Reader.TryRead(out _)) { }
+          }
+          catch (OperationCanceledException) when (!HttpContext.RequestAborted.IsCancellationRequested)
+          {
+            // Timeout occurred, send update anyway
+          }
+
           await SendCurrentState();
         }
       }
@@ -128,6 +153,7 @@ public class ClientController : APIController
   private async Task SendCurrentState()
   {
     var isReady = _clientProvider.IsReady;
+    var memory = GetMemoryUsage(isReady);
 
     await StreamResponse(new[]
     {
@@ -136,8 +162,31 @@ public class ClientController : APIController
         IsConnected = isReady,
         IsInitialized = isReady,
         ProcessId = _clientProvider.Pid,
-        Status = isReady ? "ready" : "disconnected"
+        Status = isReady ? "ready" : "disconnected",
+        MemoryUsage = memory?.PrivateMemory,
+        WorkingSet = memory?.WorkingSet,
+        VirtualMemory = memory?.VirtualMemory
       }
     });
+  }
+
+  private (long? PrivateMemory, long? WorkingSet, long? VirtualMemory)? GetMemoryUsage(bool isReady)
+  {
+    if (!isReady) return null;
+
+    try
+    {
+      var process = RemoteClient.ClientProcess;
+      if (process != null && !process.HasExited)
+      {
+        process.Refresh();
+        return (process.PrivateMemorySize64, process.WorkingSet64, process.VirtualMemorySize64);
+      }
+    }
+    catch
+    {
+      // Ignore race conditions with process exit
+    }
+    return null;
   }
 }

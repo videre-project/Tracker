@@ -13,6 +13,8 @@ import {
 
 import Layout from "@/layout/LayoutContent";
 import Events from "@/pages/events";
+import Home from "@/pages/home";
+import SettingsPage from "@/pages/settings";
 
 export enum NavType {
   Primary,
@@ -21,7 +23,7 @@ export enum NavType {
 }
 
 type LucideIcon = React.ForwardRefExoticComponent<Omit<LucideProps, "ref"> &
-                  React.RefAttributes<SVGSVGElement>>;
+  React.RefAttributes<SVGSVGElement>>;
 
 export type RouteEntry = RouteObject & {
   name?: string;
@@ -30,7 +32,7 @@ export type RouteEntry = RouteObject & {
   children?: RouteEntry[];
 }
 
-function DummyComponent() {
+export function DummyComponent() {
   return (
     <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
       <div className="grid auto-rows-min gap-4 md:grid-cols-3">
@@ -47,82 +49,53 @@ function DummyComponent() {
 export const routes: RouteEntry[] = [
   {
     path: "/",
-    name: "Dashboard",
-    icon: ChartArea,
-    type: NavType.Primary,
     element: <Layout />,
     children: [
       {
+        path: "/",
+        name: "Dashboard",
+        icon: ChartArea,
+        type: NavType.Primary,
         index: true,
+        element: <Home />
+      },
+      {
+        path: "/collection",
+        name: "Collection",
+        icon: LibraryBig,
+        type: NavType.Primary,
         element: <DummyComponent />
-      }
-    ],
-  },
-  {
-    path: "/collection",
-    name: "Collection",
-    icon: LibraryBig,
-    type: NavType.Primary,
-    element: <Layout />,
-    children: [
+      },
       {
-        index: true,
+        path: "/decks",
+        name: "Decks",
+        icon: BookCopy,
+        type: NavType.Primary,
         element: <DummyComponent />
-      }
-    ],
-  },
-  {
-    path: "/decks",
-    name: "Decks",
-    icon: BookCopy,
-    type: NavType.Primary,
-    element: <Layout />,
-    children: [
+      },
       {
-        index: true,
-        element: <DummyComponent />
-      }
-    ],
-  },
-  {
-    path: "/events",
-    name: "Events",
-    icon: CalendarClock,
-    type: NavType.Primary,
-    element: <Layout />,
-    children: [
-      {
-        index: true,
+        path: "/events",
+        name: "Events",
+        icon: CalendarClock,
+        type: NavType.Primary,
         element: <Events />
-      }
-    ],
-  },
-  {
-    path: "/history",
-    name: "History",
-    icon: History,
-    type: NavType.Primary,
-    element: <Layout />,
-    children: [
+      },
       {
-        index: true,
+        path: "/history",
+        name: "History",
+        icon: History,
+        type: NavType.Primary,
         element: <DummyComponent />
-      }
-    ],
-  },
-  {
-    path: "/settings",
-    name: "Settings",
-    icon: Settings,
-    type: NavType.Footer,
-    element: <Layout />,
-    children: [
+      },
       {
-        index: true,
-        element: <DummyComponent />
+        path: "/settings",
+        name: "Settings",
+        icon: Settings,
+        type: NavType.Footer,
+        element: <SettingsPage />
       }
-    ],
-  },
+    ]
+  }
 ];
 
 const router = createBrowserRouter(routes);

@@ -8,6 +8,9 @@ export interface ClientState {
   isInitialized: boolean
   processId?: number
   status: ClientStatus
+  memoryUsage?: number
+  workingSet?: number
+  virtualMemory?: number
 }
 
 /**
