@@ -94,9 +94,9 @@ public class Program
   [STAThread]
   public static void Main(string[] args)
   {
-#if DEBUG
-    RedirectConsole(); // Ensure console output is redirected.
-#endif
+// #if DEBUG
+//     RedirectConsole(); // Ensure console output is redirected.
+// #endif
 
     var options = new ApplicationOptions(args)
     {

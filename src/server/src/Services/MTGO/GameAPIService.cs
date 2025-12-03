@@ -302,25 +302,25 @@ public static class GameAPIService
       try
       {
         Log.Information("Game API background service started");
-        
-        // Start log processing in a separate task
-        var logTask = ProcessLogsAsync(stoppingToken);
+
+        // Start processing logs in a separate thread
+        Task.Run(() => ProcessLogsAsync(stoppingToken));
 
         // Main service loop
         while (!stoppingToken.IsCancellationRequested)
         {
           try 
           {
-            Log.Information("GameService: Waiting for client to be ready...");
+            Log.Information("Waiting for client to signal ready...");
             await _clientProvider.WaitForClientReadyAsync(stoppingToken);
             
-            Log.Information("GameService: Client ready, initializing service...");
+            Log.Information("Client ready, initializing game service...");
             InitializeGameService();
             
-            Log.Information("GameService: Service initialized, waiting for disconnect...");
+            Log.Information("Game service initialized, waiting for disconnect...");
             await _clientProvider.WaitForClientDisconnectAsync(stoppingToken);
             
-            Log.Information("GameService: Client disconnected, resetting service...");
+            Log.Information("Client disconnected, resetting game service...");
             ResetService();
           }
           catch (OperationCanceledException) 
@@ -334,8 +334,6 @@ public static class GameAPIService
             await Task.Delay(1000, stoppingToken);
           }
         }
-        
-        await logTask;
       }
       catch (OperationCanceledException)
       {

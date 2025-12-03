@@ -170,7 +170,7 @@ public class ClientAPIProvider : IClientAPIProvider
         try
         {
           InitializeClient(options.HasValue ? options.Value : this.Options);
-          Log.Trace("MTGO client has finished initializing.");
+          Log.Trace("Finished initializing {Client}.", this.Client);
           return;
         }
         catch (Exception ex)
