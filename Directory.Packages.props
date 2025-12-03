@@ -4,14 +4,14 @@
     <!-- Enable central package management -->
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <!-- Enable deterministic NuGet package restore -->
-    <RestoreLockedMode>true</RestoreLockedMode>
+    <!-- <RestoreLockedMode>true</RestoreLockedMode> -->
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <RestoreUseStaticGraphEvaluation>true</RestoreUseStaticGraphEvaluation>
   </PropertyGroup>
 
   <PropertyGroup Label="SDKVersions">
     <!-- <MTGOSDKVersion>0.8.6.20251008-preview.10</MTGOSDKVersion> -->
-    <MTGOSDKVersion>0.8.6.20251116-preview.0</MTGOSDKVersion>
+    <MTGOSDKVersion>0.8.7.20251203-preview.11</MTGOSDKVersion>
     <NoWarn>$(NoWarn)NU1601</NoWarn>
   </PropertyGroup>
 

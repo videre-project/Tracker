@@ -12,10 +12,14 @@
   </PropertyGroup>
 
   <!-- Runtime Properties -->
-  <Target Name="GenerateProductName" BeforeTargets="BeforeBuild">
+  <Target Name="GenerateProductInfo" BeforeTargets="BeforeBuild">
+    <!-- Read version from package.json -->
+    <Exec Command="powershell -Command &quot;(Get-Content '$(SolutionDir)/package.json' | ConvertFrom-Json).version&quot;" ConsoleToMSBuild="true">
+      <Output TaskParameter="ConsoleOutput" PropertyName="PackageVersion" />
+    </Exec>
     <WriteLinesToFile
       File="Properties/ProductInfo.g.cs"
-      Lines='namespace Tracker%3B public static class ProductInfo { public const string Name = "$(AssemblyName)"%3B }'
+      Lines='namespace Tracker%3B public static class ProductInfo { public const string Name = "$(AssemblyName)"%3B public const string Version = "$(PackageVersion)"%3B }'
       Overwrite="true" />
     </Target>
 

@@ -59,21 +59,21 @@
       },
       "MTGOSDK": {
         "type": "Direct",
-        "requested": "[0.8.6.20251116-preview.0, )",
-        "resolved": "0.8.7.20251128-preview.9",
-        "contentHash": "iQjuqdm2szaTzmH8UbvEH5foi0UKXsBkZi0RmCUZCGMo/9nB0BpY03b8iiuXWMFnOjFJTmHmDITam43Lqf+4WA==",
+        "requested": "[0.8.7.20251203-preview.11, )",
+        "resolved": "0.8.7.20251203-preview.11",
+        "contentHash": "sgeOFyV3v8i+Qwwx4mgxGwZDZZP1i8kmJfX/S1gF577+NMd4yflanDFAHETed3wmi6O5Exvdsv2beaL2Xr3TyQ==",
         "dependencies": {
           "ImpromptuInterface": "8.0.6",
-          "MTGOSDK.Win32": "0.8.7.20251128-preview.9",
+          "MTGOSDK.Win32": "0.8.7.20251203-preview.11",
           "Microsoft.Diagnostics.Runtime": "4.0.0-beta.24360.3",
           "Newtonsoft.Json": "13.0.4"
         }
       },
       "MTGOSDK.Win32": {
         "type": "Direct",
-        "requested": "[0.8.6.20251116-preview.0, )",
-        "resolved": "0.8.7.20251128-preview.9",
-        "contentHash": "7YCC97K7z03/0P+9J9F0Noqj2OWakKrKJTmhjI5k2c00atkcO5QFAx7ul8vzD0yYy4D2qGxn7uD4tAB6Y67hGw==",
+        "requested": "[0.8.7.20251203-preview.11, )",
+        "resolved": "0.8.7.20251203-preview.11",
+        "contentHash": "FD3V2I4yIdZO6RyV+e52ngfMD9O4gbv7YlPkOmCC0WJeSmifKSw4GAyrcPuojePsNUG9KqPWLbFB9CJGOvPVlA==",
         "dependencies": {
           "Iced": "1.21.0"
         }

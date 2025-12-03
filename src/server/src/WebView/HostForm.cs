@@ -5,11 +5,16 @@
 #pragma warning disable WFO1000 // .NET 9: Disable code serialization warnings.
 
 using System;
+using System.IO;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Drawing;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+
+using Microsoft.Extensions.Logging;
 
 using Microsoft.Web.WebView2.WinForms;
 using Microsoft.Web.WebView2.Core;
@@ -43,6 +48,7 @@ public partial class HostForm : Form
   private readonly DwmTitleBar? _dwmTitleBar;
   private readonly InvisibleResizePanel[] _resizePanels;
   private bool _hasUpdatedTitleBarColor;
+  private SplashForm? _splashForm;
 
   public HostForm(ApplicationOptions options)
   {
@@ -142,15 +148,86 @@ public partial class HostForm : Form
       Log.Information("Initialized WebView2 environment.");
     };
 
-    WebView.NavigationCompleted += (sender, e) =>
-    {
-      WebView.CoreWebView2.Settings.AreDevToolsEnabled = true;
-      HostForm_Show(sender, e);
+    WebView.NavigationCompleted += OnNavigationCompleted;
 
-      // Update titlebar color when page is ready
-      _ = UpdateTitleBarColorFromPage(0.5f); // 50% darker than the sidebar
-    };
+    // Initialize Splash Screen
+    InitializeSplashScreen();
   }
+
+  private async void OnNavigationCompleted(
+    object? sender,
+    CoreWebView2NavigationCompletedEventArgs e)
+  {
+    var title = WebView.CoreWebView2.DocumentTitle;
+    if (string.IsNullOrEmpty(title)) return;
+
+    // Check if there is a main-frame-error element, indicating an error.
+    try
+    {
+      if (title == "localhost" || title.Contains("Error"))
+      {
+        var errorCheck = await WebView.CoreWebView2.ExecuteScriptAsync("document.getElementById('main-frame-error') != null");
+        if (errorCheck == "true")
+        {
+          Log.Debug("Connection failed, retrying...");
+          await Task.Delay(1000);
+          WebView.Reload();
+          return;
+        }
+      }
+    }
+    catch (Exception ex)
+    {
+      Log.Error(ex, "Failed to check for main-frame-error element.");
+    }
+
+    if (title == "SPA proxy launch page")
+    {
+      Log.Debug("Waiting for SPA proxy to launch...");
+      return;
+    }
+
+    WebView.CoreWebView2.Settings.AreDevToolsEnabled = true;
+    HostForm_Show(sender, e);
+    
+    WebView.NavigationCompleted -= OnNavigationCompleted;
+
+    // Update titlebar color when page is ready
+    _ = UpdateTitleBarColorFromPage(0.5f); // 50% darker than the sidebar
+  }
+
+  private void InitializeSplashScreen()
+  {
+    // Hide HostForm initially
+    AllowShowDisplay = false;
+
+    // Set default application size immediately since we aren't morphing
+    this.MinimumSize = new Size(1550, 925);
+    this.ClientSize = new Size(1550, 925);
+    this.CenterToScreen();
+    
+    // Create and show splash form
+    _splashForm = new SplashForm();
+    _splashForm.Show();
+  }
+
+  /// <summary>
+  /// Updates the status text on the splash screen.
+  /// </summary>
+  /// <summary>
+  /// Updates the status text on the splash screen.
+  /// </summary>
+  public void UpdateSplashStatus(string message, LogLevel level = LogLevel.Information, string? timestamp = null, string? header = null, string? label = null)
+  {
+    if (_splashForm != null && !_splashForm.IsDisposed)
+    {
+      _splashForm.UpdateStatus(message, level, timestamp, header, label);
+    }
+  }
+
+
+
+
 
   private readonly SemaphoreSlim _semaphore = new(1, 1);
   private readonly ConcurrentQueue<Func<Task>> _commandQueue = new();
@@ -320,7 +397,7 @@ public partial class HostForm : Form
   /// <summary>
   /// Determines whether the Form is allowed to be displayed.
   /// </summary>
-  public bool AllowShowDisplay { get; private set; } = false;
+  public bool AllowShowDisplay { get; private set; } = true;
 
   /// <summary>
   /// Determines whether the Form is ready to be displayed.
@@ -332,17 +409,21 @@ public partial class HostForm : Form
   /// </summary>
   private void HostForm_Show(object? sender, EventArgs e)
   {
-    if (!this.Visible)
+    if (_splashForm != null)
     {
-      AllowShowDisplay = true;
-      this.Visible |= true;
-
-      // Notify any listeners that the HostForm is ready.
-      OnReady?.Invoke(this, EventArgs.Empty);
-
-      WebView.NavigationCompleted -= HostForm_Show;
-      Log.Debug("Finished initializing HostForm.");
+      _splashForm.Close();
+      _splashForm.Dispose();
+      _splashForm = null;
     }
+
+    AllowShowDisplay = true;
+    this.Visible = true;
+    this.BringToFront();
+
+    // Notify any listeners that the HostForm is ready.
+    OnReady?.Invoke(this, EventArgs.Empty);
+
+    Log.Debug("Finished initializing HostForm.");
   }
 
   /// <summary>

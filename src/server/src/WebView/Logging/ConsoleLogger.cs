@@ -92,6 +92,7 @@ public class ConsoleLogger(string name, HostForm hostForm)
       /* header      */ $"color: {GetCategoryColor(logLevel)}",
       /* label + msg */  "color: #000000");
 
+    hostForm.UpdateSplashStatus(message, logLevel, timestamp, header, label);
 #pragma warning disable CS4014
     hostForm.Exec($"{DeRefConsole(logLevel, args)}");
 #pragma warning restore CS4014
