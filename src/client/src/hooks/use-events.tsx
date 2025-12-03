@@ -48,6 +48,8 @@ export interface ActiveGame {
   minimumPlayers?: number;
   // Tournament state
   state?: TournamentState;
+  _rawStartTime?: string;
+  _rawEndTime?: string;
 }
 
 // Use EventStructure if available, fallback to format string

@@ -5,12 +5,12 @@
   "scripts": {
     "dev": "dotnet restore --no-cache --force-evaluate && dotnet run --project src/server --launch-profile Https --no-restore --configuration Debug",
     "build": "pnpm run build:client && pnpm run build:server",
-    "build:client": "pnpm run build --prefix src/client",
+    "build:client": "pnpm run -C src/client build",
     "build:server": "dotnet build --project src/server",
     "restore": "pnpm install --prefix src/client && dotnet restore",
     "publish": "pnpm run build:client && dotnet publish src/server -o ./publish"
   },
   "devDependencies": {
-    "openapi-typescript": "^6.7.6"
+    "openapi-typescript": "^7.10.1"
   }
 }

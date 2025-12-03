@@ -60,9 +60,9 @@
     </PropertyGroup>
 
     <Exec Command="pnpm openapi-typescript $(OpenApiSpecPath) --output src/client/src/types/api.d.ts --path-params-as-types --root-types --root-types-no-schema-prefix"
-          WorkingDirectory="$(MSBuildProjectDirectory)\..\.." />
+          WorkingDirectory="$(SolutionDir)" />
     <Exec Command="node src/client/scripts/stripNamespaceFromTypes.cjs src/client/src/types/api.d.ts src/client/src/types/api.d.ts"
-          WorkingDirectory="$(MSBuildProjectDirectory)\..\.." />
+          WorkingDirectory="$(SolutionDir)" />
   </Target>
 
   <!-- Enable XML documentation file generation for Swagger -->

@@ -3,502 +3,772 @@
  * Do not make direct changes to the file.
  */
 
-
 export interface paths {
-  "/api/Client/GetState": {
-    /** Get current client connection state */
-    get: {
-      responses: {
-        /** @description OK */
-        200: {
-          content: {
-            "text/plain": components["schemas"]["Tracker.Controllers.ClientController.IClientState"];
-            "application/json": components["schemas"]["Tracker.Controllers.ClientController.IClientState"];
-            "text/json": components["schemas"]["Tracker.Controllers.ClientController.IClientState"];
-          };
+    "/api/Client/GetState": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
-      };
+        /** Get current client connection state */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": IClientState;
+                        "application/json": IClientState;
+                        "text/json": IClientState;
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-  };
-  "/api/Client/WatchState": {
-    /** Stream real-time client connection state changes */
-    get: {
-      responses: {
-        /** @description OK */
-        200: {
-          content: {
-            "application/x-ndjson": components["schemas"]["Tracker.Controllers.ClientController.IClientState"];
-          };
+    "/api/Client/WatchState": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
-      };
+        /** Stream real-time client connection state changes */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/x-ndjson": IClientState;
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-  };
-  "/api/Events/GetEventsList": {
-    /** Get list of available tournaments/events */
-    get: {
-      parameters: {
-        query?: {
-          /** @description Whether to stream all results as NDJSON (ignores pagination) */
-          stream?: boolean;
-          /** @description Page number (1-based, default: 1) */
-          page?: number;
-          /** @description Number of items per page (default: 50, max: 200) */
-          pageSize?: number;
-          /** @description Whether to include total count in headers (requires enumeration, default: true) */
-          includeCount?: boolean;
+    "/api/Events/GetEventsList": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
-      };
-      responses: {
-        /** @description OK */
-        200: {
-          content: {
-            "text/plain": components["schemas"]["Tracker.Controllers.EventsController.ITournament"][];
-            "application/json": components["schemas"]["Tracker.Controllers.EventsController.ITournament"][];
-            "text/json": components["schemas"]["Tracker.Controllers.EventsController.ITournament"][];
-          };
+        /** Get list of available tournaments/events */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Whether to stream all results as NDJSON (ignores pagination) */
+                    stream?: boolean;
+                    /** @description Page number (1-based, default: 1) */
+                    page?: number;
+                    /** @description Number of items per page (default: 50, max: 200) */
+                    pageSize?: number;
+                    /** @description Whether to include total count in headers (requires enumeration, default: true) */
+                    includeCount?: boolean;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": ITournament[];
+                        "application/json": ITournament[];
+                        "text/json": ITournament[];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
         };
-        /** @description Internal Server Error */
-        500: {
-          content: never;
-        };
-      };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-  };
-  [path: `/api/Events/GetEvent/${number}`]: {
-    /** Get tournament by ID */
-    get: {
-      parameters: {
-        path: {
-          /** @description Tournament ID */
-          id: number;
+    [path: `/api/Events/GetEvent/${number}`]: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
-      };
-      responses: {
-        /** @description OK */
-        200: {
-          content: {
-            "text/plain": components["schemas"]["MTGOSDK.API.Play.Event"];
-            "application/json": components["schemas"]["MTGOSDK.API.Play.Event"];
-            "text/json": components["schemas"]["MTGOSDK.API.Play.Event"];
-          };
+        /** Get tournament by ID */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description Tournament ID */
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": Event;
+                        "application/json": Event;
+                        "text/json": Event;
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": ProblemDetails;
+                        "application/json": ProblemDetails;
+                        "text/json": ProblemDetails;
+                    };
+                };
+            };
         };
-        /** @description Not Found */
-        404: {
-          content: {
-            "text/plain": components["schemas"]["Microsoft.AspNetCore.Mvc.ProblemDetails"];
-            "application/json": components["schemas"]["Microsoft.AspNetCore.Mvc.ProblemDetails"];
-            "text/json": components["schemas"]["Microsoft.AspNetCore.Mvc.ProblemDetails"];
-          };
-        };
-      };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-  };
-  [path: `/api/Events/GetTournamentState/${number}`]: {
-    /** Get tournament state by ID */
-    get: {
-      parameters: {
-        path: {
-          /** @description Tournament ID */
-          id: number;
+    [path: `/api/Events/GetTournamentState/${number}`]: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
-      };
-      responses: {
-        /** @description OK */
-        200: {
-          content: {
-            "text/plain": components["schemas"]["Tracker.Controllers.EventsController.ITournamentStateUpdate"];
-            "application/json": components["schemas"]["Tracker.Controllers.EventsController.ITournamentStateUpdate"];
-            "text/json": components["schemas"]["Tracker.Controllers.EventsController.ITournamentStateUpdate"];
-          };
+        /** Get tournament state by ID */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description Tournament ID */
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": ITournamentStateUpdate;
+                        "application/json": ITournamentStateUpdate;
+                        "text/json": ITournamentStateUpdate;
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": ProblemDetails;
+                        "application/json": ProblemDetails;
+                        "text/json": ProblemDetails;
+                    };
+                };
+                /** @description Service Unavailable */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
         };
-        /** @description Not Found */
-        404: {
-          content: {
-            "text/plain": components["schemas"]["Microsoft.AspNetCore.Mvc.ProblemDetails"];
-            "application/json": components["schemas"]["Microsoft.AspNetCore.Mvc.ProblemDetails"];
-            "text/json": components["schemas"]["Microsoft.AspNetCore.Mvc.ProblemDetails"];
-          };
-        };
-        /** @description Service Unavailable */
-        503: {
-          content: never;
-        };
-      };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-  };
-  [path: `/api/Events/GetEntryFee/${number}`]: {
-    /** Get entry fee information for a tournament */
-    get: {
-      parameters: {
-        path: {
-          /** @description Tournament ID */
-          id: number;
+    [path: `/api/Events/GetEntryFee/${number}`]: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
-      };
-      responses: {
-        /** @description OK */
-        200: {
-          content: {
-            "text/plain": string;
-            "application/json": string;
-            "text/json": string;
-          };
+        /** Get entry fee information for a tournament */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description Tournament ID */
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": string;
+                        "application/json": string;
+                        "text/json": string;
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": ProblemDetails;
+                        "application/json": ProblemDetails;
+                        "text/json": ProblemDetails;
+                    };
+                };
+            };
         };
-        /** @description Not Found */
-        404: {
-          content: {
-            "text/plain": components["schemas"]["Microsoft.AspNetCore.Mvc.ProblemDetails"];
-            "application/json": components["schemas"]["Microsoft.AspNetCore.Mvc.ProblemDetails"];
-            "text/json": components["schemas"]["Microsoft.AspNetCore.Mvc.ProblemDetails"];
-          };
-        };
-      };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-  };
-  [path: `/api/Events/GetStandings/${number}`]: {
-    /** Get tournament standings */
-    get: {
-      parameters: {
-        query?: {
-          /** @description Whether to stream results as NDJSON */
-          stream?: boolean;
+    [path: `/api/Events/GetStandings/${number}`]: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
-        path: {
-          /** @description Tournament ID */
-          id: number;
+        /** Get tournament standings */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Whether to stream results as NDJSON */
+                    stream?: boolean;
+                };
+                header?: never;
+                path: {
+                    /** @description Tournament ID */
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": StandingRecord[];
+                        "application/json": StandingRecord[];
+                        "text/json": StandingRecord[];
+                    };
+                };
+            };
         };
-      };
-      responses: {
-        /** @description OK */
-        200: {
-          content: {
-            "text/plain": components["schemas"]["MTGOSDK.API.Play.Tournaments.StandingRecord"][];
-            "application/json": components["schemas"]["MTGOSDK.API.Play.Tournaments.StandingRecord"][];
-            "text/json": components["schemas"]["MTGOSDK.API.Play.Tournaments.StandingRecord"][];
-          };
-        };
-      };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-  };
-  "/api/Events/WatchTournamentUpdates": {
-    /** Stream real-time tournament state updates */
-    get: {
-      responses: {
-        /** @description OK */
-        200: {
-          content: {
-            "application/x-ndjson": components["schemas"]["Tracker.Controllers.EventsController.ITournamentStateUpdate"][];
-          };
+    "/api/Events/WatchTournamentUpdates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
-        /** @description Service Unavailable */
-        503: {
-          content: never;
+        /** Stream real-time tournament state updates */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/x-ndjson": ITournamentStateUpdate[];
+                    };
+                };
+                /** @description Service Unavailable */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
         };
-      };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-  };
-  "/api/Events/WatchPlayerCount": {
-    /** Stream real-time player count updates */
-    get: {
-      responses: {
-        /** @description OK */
-        200: {
-          content: {
-            "application/x-ndjson": components["schemas"]["Tracker.Controllers.EventsController.ITournamentPlayerUpdate"][];
-          };
+    "/api/Events/WatchPlayerCount": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
-        /** @description Service Unavailable */
-        503: {
-          content: never;
+        /** Stream real-time player count updates */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/x-ndjson": ITournamentPlayerUpdate[];
+                    };
+                };
+                /** @description Service Unavailable */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
         };
-      };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-  };
-  [path: `/api/Events/OpenEvent/${number}`]: {
-    /** Open a tournament in the MTGO client */
-    post: {
-      parameters: {
-        path: {
-          /** @description Tournament ID */
-          id: number;
+    [path: `/api/Events/OpenEvent/${number}`]: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
-      };
-      responses: {
-        /** @description No Content */
-        204: {
-          content: never;
+        get?: never;
+        put?: never;
+        /** Open a tournament in the MTGO client */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description Tournament ID */
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": ProblemDetails;
+                        "application/json": ProblemDetails;
+                        "text/json": ProblemDetails;
+                    };
+                };
+            };
         };
-        /** @description Not Found */
-        404: {
-          content: {
-            "text/plain": components["schemas"]["Microsoft.AspNetCore.Mvc.ProblemDetails"];
-            "application/json": components["schemas"]["Microsoft.AspNetCore.Mvc.ProblemDetails"];
-            "text/json": components["schemas"]["Microsoft.AspNetCore.Mvc.ProblemDetails"];
-          };
-        };
-      };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-  };
 }
-
 export type webhooks = Record<string, never>;
-
 export interface components {
-  schemas: {
-    "MTGOSDK.API.Collection.Card": {
-      /** Format: int32 */
-      id?: number;
-      name?: string | null;
-      description?: string | null;
-      isOpenable?: boolean;
-      isSealedProduct?: boolean;
-      isDigitalObject?: boolean;
-      isBooster?: boolean;
-      isCard?: boolean;
-      isTicket?: boolean;
-      isTradeable?: boolean;
-      hasPremiumOdds?: boolean;
-      colors?: string | null;
-      manaCost?: string | null;
-      /** Format: int32 */
-      convertedManaCost?: number;
-      rulesText?: string | null;
-      types?: (readonly string[]) | null;
-      subtypes?: (readonly string[]) | null;
-      artist?: string | null;
-      /** Format: int32 */
-      artId?: number;
-      set?: components["schemas"]["MTGOSDK.API.Collection.Set"];
-      collectorInfo?: string | null;
-      /** Format: int32 */
-      collectorNumber?: number;
-      flavorText?: string | null;
-      power?: string | null;
-      toughness?: string | null;
-      loyalty?: string | null;
-      defense?: string | null;
-      isToken?: boolean;
+    schemas: {
+        "MTGOSDK.API.Collection.Card": {
+            /** Format: int32 */
+            readonly id?: number;
+            readonly name?: string | null;
+            readonly description?: string | null;
+            readonly isOpenable?: boolean;
+            readonly isSealedProduct?: boolean;
+            readonly isDigitalObject?: boolean;
+            readonly isBooster?: boolean;
+            readonly isCard?: boolean;
+            readonly isTicket?: boolean;
+            readonly isTradeable?: boolean;
+            readonly hasPremiumOdds?: boolean;
+            readonly colors?: string | null;
+            readonly manaCost?: string | null;
+            /** Format: int32 */
+            readonly convertedManaCost?: number;
+            readonly rulesText?: string | null;
+            readonly types?: string[] | null;
+            readonly subtypes?: string[] | null;
+            readonly artist?: string | null;
+            /** Format: int32 */
+            readonly artId?: number;
+            set?: Set;
+            readonly collectorInfo?: string | null;
+            /** Format: int32 */
+            readonly collectorNumber?: number;
+            readonly flavorText?: string | null;
+            readonly power?: string | null;
+            readonly toughness?: string | null;
+            readonly loyalty?: string | null;
+            readonly defense?: string | null;
+            readonly isToken?: boolean;
+        };
+        "MTGOSDK.API.Collection.CardQuantityPair": {
+            /** Format: int32 */
+            readonly id?: number;
+            readonly name?: string | null;
+            card?: Card;
+            /** Format: int32 */
+            readonly quantity?: number;
+        };
+        "MTGOSDK.API.Collection.Deck": {
+            /** Format: int32 */
+            readonly id?: number;
+            readonly name?: string | null;
+            format?: PlayFormat;
+            /** Format: date-time */
+            readonly timestamp?: string;
+            /** Format: int32 */
+            readonly itemCount?: number;
+            /** Format: int32 */
+            readonly maxItems?: number;
+            readonly hash?: string | null;
+            readonly items?: CardQuantityPair[] | null;
+            readonly itemIds?: number[] | null;
+            readonly getFrozenCollection?: CardQuantityPair[] | null;
+            readonly regions?: components["schemas"]["MTGOSDK.API.Collection.DeckRegion"][] | null;
+            /** Format: int32 */
+            readonly deckId?: number;
+            readonly isLegal?: boolean;
+        };
+        /** @enum {string} */
+        "MTGOSDK.API.Collection.DeckRegion": "NotSet" | "MainDeck" | "Sideboard" | "CommandZone" | "Planechase" | "Vanguard" | "Hidden";
+        "MTGOSDK.API.Collection.Set": {
+            readonly code?: string | null;
+            readonly name?: string | null;
+            /** Format: date-time */
+            readonly releaseDate?: string;
+            type?: components["schemas"]["MTGOSDK.API.Collection.SetType"];
+            /** Format: int32 */
+            readonly age?: number;
+            readonly cards?: Card[] | null;
+        };
+        /** @enum {string} */
+        "MTGOSDK.API.Collection.SetType": "NotSet" | "CoreSet" | "LargeExpansionSet" | "SmallExpansionSet" | "EventTicket" | "TestSet" | "Supplemental" | "PromotionalSet" | "Ancillary" | "FixedAncillary" | "Placeholder";
+        "MTGOSDK.API.Play.Event": {
+            /** Format: int32 */
+            readonly id?: number;
+            /** Format: uuid */
+            readonly token?: string;
+            format?: PlayFormat;
+            readonly description?: string | null;
+            /** Format: int32 */
+            readonly totalPlayers?: number;
+            readonly players?: User[] | null;
+            registeredDeck?: Deck;
+            /** Format: int32 */
+            readonly minutesPerPlayer?: number;
+            /** Format: int32 */
+            readonly minimumPlayers?: number;
+            /** Format: int32 */
+            readonly maximumPlayers?: number;
+            readonly isCompleted?: boolean;
+            readonly isRemoved?: boolean;
+            readonly hasJoined?: boolean;
+            readonly isParticipant?: boolean;
+            readonly isEliminated?: boolean;
+        };
+        /** @enum {string} */
+        "MTGOSDK.API.Play.Games.GameStatus": "Invalid" | "NotStarted" | "Started" | "Finished";
+        /** @enum {string} */
+        "MTGOSDK.API.Play.MatchState": "Invalid" | "JoinRequested" | "Joined" | "RemovalRequested" | "RecruitingFreezeRequested" | "WatchRequested" | "Watching" | "AwaitingMinimumPlayers" | "AwaitingMaximumPlayers" | "AwaitingTimer" | "AwaitingPlayerStart" | "AwaitingHostStart" | "HostStartSent" | "GameStarted" | "Resuming" | "Sideboarding" | "DeckBuilding" | "DeckSubmitted" | "DeckAccepted" | "GameReplayRequested" | "GameReplaying" | "MatchCompleted" | "ConcedeRequested" | "Queue" | "Tournament" | "PremierEvent" | "Drafting" | "ChallengeMade" | "ChallengeAcceptanceSent" | "ChallengeAccepted" | "ChallengeRejectionSent" | "ChallengeRetractionSent" | "ChallengeMadeByCurrentUser" | "ChallengeReceivedByCurrentUser" | "EventUnderway" | "CurrentUserEliminated" | "EventWaitingToStart" | "EventCompleted" | "Connecting" | "Connected" | "Terminal" | "GameCompleted" | "GameClosed";
+        "MTGOSDK.API.Play.PlayFormat": {
+            readonly name?: string | null;
+            readonly code?: string | null;
+            /** Format: int32 */
+            readonly minDeckSize?: number;
+            /** Format: int32 */
+            readonly maxDeckSize?: number;
+            /** Format: int32 */
+            readonly maxCopiesPerCard?: number;
+            /** Format: int32 */
+            readonly maxSideboardSize?: number;
+            type?: components["schemas"]["MTGOSDK.API.Play.PlayFormatType"];
+            readonly legalSets?: Set[] | null;
+            readonly basicLands?: Card[] | null;
+        };
+        /** @enum {string} */
+        "MTGOSDK.API.Play.PlayFormatType": "Null" | "Constructed" | "Sealed" | "Draft";
+        "MTGOSDK.API.Play.Tournaments.GameStandingRecord": {
+            /** Format: int32 */
+            readonly id?: number;
+            gameStatus?: components["schemas"]["MTGOSDK.API.Play.Games.GameStatus"];
+            /** Format: date-span */
+            readonly completedDuration?: string | null;
+            readonly winnerIds?: number[] | null;
+        };
+        "MTGOSDK.API.Play.Tournaments.MatchStandingRecord": {
+            /** Format: int32 */
+            readonly id?: number;
+            /** Format: int32 */
+            readonly round?: number;
+            state?: components["schemas"]["MTGOSDK.API.Play.MatchState"];
+            readonly hasBye?: boolean;
+            readonly players?: User[] | null;
+            readonly winningPlayerIds?: number[] | null;
+            readonly losingPlayerIds?: number[] | null;
+            readonly gameStandingRecords?: GameStandingRecord[] | null;
+        };
+        "MTGOSDK.API.Play.Tournaments.StandingRecord": {
+            /** Format: int32 */
+            readonly rank?: number;
+            player?: User;
+            /** Format: int32 */
+            readonly points?: number;
+            readonly record?: string | null;
+            readonly opponentMatchWinPercentage?: string | null;
+            readonly gameWinPercentage?: string | null;
+            readonly opponentGameWinPercentage?: string | null;
+            readonly previousMatches?: MatchStandingRecord[] | null;
+        };
+        "MTGOSDK.API.Users.Avatar": {
+            /** Format: int32 */
+            readonly id?: number;
+            readonly name?: string | null;
+            card?: Card;
+        };
+        "MTGOSDK.API.Users.User": {
+            /** Format: int32 */
+            readonly id?: number;
+            readonly name?: string | null;
+            avatar?: Avatar;
+            readonly isGuest?: boolean;
+            readonly isBuddy?: boolean;
+            readonly isBlocked?: boolean;
+            readonly isLoggedIn?: boolean;
+            readonly lastLogin?: string | null;
+        };
+        "Microsoft.AspNetCore.Mvc.ProblemDetails": {
+            type?: string | null;
+            title?: string | null;
+            /** Format: int32 */
+            status?: number | null;
+            detail?: string | null;
+            instance?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        "Tracker.Controllers.ClientController.IClientState": {
+            readonly isConnected?: boolean;
+            readonly isInitialized?: boolean;
+            /** Format: int32 */
+            readonly processId?: number | null;
+            readonly status?: string | null;
+            /** Format: int64 */
+            readonly memoryUsage?: number | null;
+            /** Format: int64 */
+            readonly workingSet?: number | null;
+            /** Format: int64 */
+            readonly virtualMemory?: number | null;
+        };
+        "Tracker.Controllers.EventsController.IEventStructure": {
+            readonly name?: string | null;
+            readonly isConstructed?: boolean;
+            readonly isLimited?: boolean;
+            readonly isDraft?: boolean;
+            readonly isSealed?: boolean;
+            readonly isSingleElimination?: boolean;
+            readonly isSwiss?: boolean;
+            readonly hasPlayoffs?: boolean;
+        };
+        "Tracker.Controllers.EventsController.ITournament": {
+            /** Format: int32 */
+            readonly id?: number;
+            readonly description?: string | null;
+            readonly format?: string | null;
+            /** Format: int32 */
+            readonly minimumPlayers?: number;
+            /** Format: int32 */
+            readonly totalPlayers?: number;
+            /** Format: int32 */
+            readonly totalRounds?: number;
+            eventStructure?: IEventStructure;
+            /** Format: date-time */
+            readonly startTime?: string;
+            /** Format: date-time */
+            readonly endTime?: string;
+            readonly state?: string | null;
+            /** Format: int32 */
+            readonly currentRound?: number;
+            /** Format: date-time */
+            readonly roundEndTime?: string;
+            readonly inPlayoffs?: boolean;
+        };
+        "Tracker.Controllers.EventsController.ITournamentPlayerUpdate": {
+            /** Format: int32 */
+            readonly id?: number;
+            /** Format: int32 */
+            readonly totalPlayers?: number;
+            /** Format: int32 */
+            readonly totalRounds?: number;
+            /** Format: date-time */
+            readonly endTime?: string;
+        };
+        "Tracker.Controllers.EventsController.ITournamentStateUpdate": {
+            /** Format: int32 */
+            readonly id?: number;
+            readonly state?: string | null;
+            /** Format: int32 */
+            readonly currentRound?: number;
+            /** Format: date-time */
+            readonly roundEndTime?: string;
+            readonly inPlayoffs?: boolean;
+        };
     };
-    "MTGOSDK.API.Collection.CardQuantityPair": {
-      /** Format: int32 */
-      id?: number;
-      name?: string | null;
-      card?: components["schemas"]["MTGOSDK.API.Collection.Card"];
-      /** Format: int32 */
-      quantity?: number;
-    };
-    "MTGOSDK.API.Collection.Deck": {
-      /** Format: int32 */
-      id?: number;
-      name?: string | null;
-      format?: components["schemas"]["MTGOSDK.API.Play.PlayFormat"];
-      /** Format: date-time */
-      timestamp?: string;
-      /** Format: int32 */
-      itemCount?: number;
-      /** Format: int32 */
-      maxItems?: number;
-      hash?: string | null;
-      items?: (readonly components["schemas"]["MTGOSDK.API.Collection.CardQuantityPair"][]) | null;
-      itemIds?: (readonly number[]) | null;
-      getFrozenCollection?: (readonly components["schemas"]["MTGOSDK.API.Collection.CardQuantityPair"][]) | null;
-      regions?: (readonly components["schemas"]["MTGOSDK.API.Collection.DeckRegion"][]) | null;
-      /** Format: int32 */
-      deckId?: number;
-      isLegal?: boolean;
-    };
-    /** @enum {string} */
-    "MTGOSDK.API.Collection.DeckRegion": "NotSet" | "MainDeck" | "Sideboard" | "CommandZone" | "Planechase" | "Vanguard" | "Hidden";
-    "MTGOSDK.API.Collection.Set": {
-      code?: string | null;
-      name?: string | null;
-      /** Format: date-time */
-      releaseDate?: string;
-      type?: components["schemas"]["MTGOSDK.API.Collection.SetType"];
-      /** Format: int32 */
-      age?: number;
-      cards?: (readonly components["schemas"]["MTGOSDK.API.Collection.Card"][]) | null;
-    };
-    /** @enum {string} */
-    "MTGOSDK.API.Collection.SetType": "NotSet" | "CoreSet" | "LargeExpansionSet" | "SmallExpansionSet" | "EventTicket" | "TestSet" | "Supplemental" | "PromotionalSet" | "Ancillary" | "FixedAncillary" | "Placeholder";
-    "MTGOSDK.API.Play.Event": {
-      /** Format: int32 */
-      id?: number;
-      /** Format: uuid */
-      token?: string;
-      format?: components["schemas"]["MTGOSDK.API.Play.PlayFormat"];
-      description?: string | null;
-      /** Format: int32 */
-      totalPlayers?: number;
-      players?: (readonly components["schemas"]["MTGOSDK.API.Users.User"][]) | null;
-      registeredDeck?: components["schemas"]["MTGOSDK.API.Collection.Deck"];
-      /** Format: int32 */
-      minutesPerPlayer?: number;
-      /** Format: int32 */
-      minimumPlayers?: number;
-      /** Format: int32 */
-      maximumPlayers?: number;
-      isCompleted?: boolean;
-      isRemoved?: boolean;
-      hasJoined?: boolean;
-      isParticipant?: boolean;
-      isEliminated?: boolean;
-    };
-    /** @enum {string} */
-    "MTGOSDK.API.Play.Games.GameStatus": "Invalid" | "NotStarted" | "Started" | "Finished";
-    /** @enum {string} */
-    "MTGOSDK.API.Play.MatchState": "Invalid" | "JoinRequested" | "Joined" | "RemovalRequested" | "RecruitingFreezeRequested" | "WatchRequested" | "Watching" | "AwaitingMinimumPlayers" | "AwaitingMaximumPlayers" | "AwaitingTimer" | "AwaitingPlayerStart" | "AwaitingHostStart" | "HostStartSent" | "GameStarted" | "Resuming" | "Sideboarding" | "DeckBuilding" | "DeckSubmitted" | "DeckAccepted" | "GameReplayRequested" | "GameReplaying" | "MatchCompleted" | "ConcedeRequested" | "Queue" | "Tournament" | "PremierEvent" | "Drafting" | "ChallengeMade" | "ChallengeAcceptanceSent" | "ChallengeAccepted" | "ChallengeRejectionSent" | "ChallengeRetractionSent" | "ChallengeMadeByCurrentUser" | "ChallengeReceivedByCurrentUser" | "EventUnderway" | "CurrentUserEliminated" | "EventWaitingToStart" | "EventCompleted" | "Connecting" | "Connected" | "Terminal" | "GameCompleted" | "GameClosed";
-    "MTGOSDK.API.Play.PlayFormat": {
-      name?: string | null;
-      code?: string | null;
-      /** Format: int32 */
-      minDeckSize?: number;
-      /** Format: int32 */
-      maxDeckSize?: number;
-      /** Format: int32 */
-      maxCopiesPerCard?: number;
-      /** Format: int32 */
-      maxSideboardSize?: number;
-      type?: components["schemas"]["MTGOSDK.API.Play.PlayFormatType"];
-      legalSets?: (readonly components["schemas"]["MTGOSDK.API.Collection.Set"][]) | null;
-      basicLands?: (readonly components["schemas"]["MTGOSDK.API.Collection.Card"][]) | null;
-    };
-    /** @enum {string} */
-    "MTGOSDK.API.Play.PlayFormatType": "Null" | "Constructed" | "Sealed" | "Draft";
-    "MTGOSDK.API.Play.Tournaments.GameStandingRecord": {
-      /** Format: int32 */
-      id?: number;
-      gameStatus?: components["schemas"]["MTGOSDK.API.Play.Games.GameStatus"];
-      /** Format: date-span */
-      completedDuration?: string | null;
-      winnerIds?: (readonly number[]) | null;
-    };
-    "MTGOSDK.API.Play.Tournaments.MatchStandingRecord": {
-      /** Format: int32 */
-      id?: number;
-      /** Format: int32 */
-      round?: number;
-      state?: components["schemas"]["MTGOSDK.API.Play.MatchState"];
-      hasBye?: boolean;
-      players?: (readonly components["schemas"]["MTGOSDK.API.Users.User"][]) | null;
-      winningPlayerIds?: (readonly number[]) | null;
-      losingPlayerIds?: (readonly number[]) | null;
-      gameStandingRecords?: (readonly components["schemas"]["MTGOSDK.API.Play.Tournaments.GameStandingRecord"][]) | null;
-    };
-    "MTGOSDK.API.Play.Tournaments.StandingRecord": {
-      /** Format: int32 */
-      rank?: number;
-      player?: components["schemas"]["MTGOSDK.API.Users.User"];
-      /** Format: int32 */
-      points?: number;
-      record?: string | null;
-      opponentMatchWinPercentage?: string | null;
-      gameWinPercentage?: string | null;
-      opponentGameWinPercentage?: string | null;
-      previousMatches?: (readonly components["schemas"]["MTGOSDK.API.Play.Tournaments.MatchStandingRecord"][]) | null;
-    };
-    "MTGOSDK.API.Users.Avatar": {
-      /** Format: int32 */
-      id?: number;
-      name?: string | null;
-      card?: components["schemas"]["MTGOSDK.API.Collection.Card"];
-    };
-    "MTGOSDK.API.Users.User": {
-      /** Format: int32 */
-      id?: number;
-      name?: string | null;
-      avatar?: components["schemas"]["MTGOSDK.API.Users.Avatar"];
-      isGuest?: boolean;
-      isBuddy?: boolean;
-      isBlocked?: boolean;
-      isLoggedIn?: boolean;
-      lastLogin?: string | null;
-    };
-    "Microsoft.AspNetCore.Mvc.ProblemDetails": {
-      type?: string | null;
-      title?: string | null;
-      /** Format: int32 */
-      status?: number | null;
-      detail?: string | null;
-      instance?: string | null;
-      [key: string]: unknown;
-    };
-    "Tracker.Controllers.ClientController.IClientState": {
-      isConnected?: boolean;
-      isInitialized?: boolean;
-      /** Format: int32 */
-      processId?: number | null;
-      status?: string | null;
-      /** Format: int64 */
-      memoryUsage?: number | null;
-      /** Format: int64 */
-      workingSet?: number | null;
-      /** Format: int64 */
-      virtualMemory?: number | null;
-    };
-    "Tracker.Controllers.EventsController.IEventStructure": {
-      name?: string | null;
-      isConstructed?: boolean;
-      isLimited?: boolean;
-      isDraft?: boolean;
-      isSealed?: boolean;
-      isSingleElimination?: boolean;
-      isSwiss?: boolean;
-      hasPlayoffs?: boolean;
-    };
-    "Tracker.Controllers.EventsController.ITournament": {
-      /** Format: int32 */
-      id?: number;
-      description?: string | null;
-      format?: string | null;
-      /** Format: int32 */
-      minimumPlayers?: number;
-      /** Format: int32 */
-      totalPlayers?: number;
-      /** Format: int32 */
-      totalRounds?: number;
-      eventStructure?: components["schemas"]["Tracker.Controllers.EventsController.IEventStructure"];
-      /** Format: date-time */
-      startTime?: string;
-      /** Format: date-time */
-      endTime?: string;
-      state?: string | null;
-      /** Format: int32 */
-      currentRound?: number;
-      /** Format: date-time */
-      roundEndTime?: string;
-      inPlayoffs?: boolean;
-    };
-    "Tracker.Controllers.EventsController.ITournamentPlayerUpdate": {
-      /** Format: int32 */
-      id?: number;
-      /** Format: int32 */
-      totalPlayers?: number;
-      /** Format: int32 */
-      totalRounds?: number;
-      /** Format: date-time */
-      endTime?: string;
-    };
-    "Tracker.Controllers.EventsController.ITournamentStateUpdate": {
-      /** Format: int32 */
-      id?: number;
-      state?: string | null;
-      /** Format: int32 */
-      currentRound?: number;
-      /** Format: date-time */
-      roundEndTime?: string;
-      inPlayoffs?: boolean;
-    };
-  };
-  responses: never;
-  parameters: never;
-  requestBodies: never;
-  headers: never;
-  pathItems: never;
+    responses: never;
+    parameters: never;
+    requestBodies: never;
+    headers: never;
+    pathItems: never;
 }
-
+export type MtgosdkApiCollectionCard = Card;
+export type MtgosdkApiCollectionCardQuantityPair = CardQuantityPair;
+export type MtgosdkApiCollectionDeck = Deck;
+export type MtgosdkApiCollectionDeckRegion = components['schemas']['MTGOSDK.API.Collection.DeckRegion'];
+export type MtgosdkApiCollectionSet = Set;
+export type MtgosdkApiCollectionSetType = components['schemas']['MTGOSDK.API.Collection.SetType'];
+export type MtgosdkApiPlayEvent = Event;
+export type MtgosdkApiPlayGamesGameStatus = components['schemas']['MTGOSDK.API.Play.Games.GameStatus'];
+export type MtgosdkApiPlayMatchState = components['schemas']['MTGOSDK.API.Play.MatchState'];
+export type MtgosdkApiPlayPlayFormat = PlayFormat;
+export type MtgosdkApiPlayPlayFormatType = components['schemas']['MTGOSDK.API.Play.PlayFormatType'];
+export type MtgosdkApiPlayTournamentsGameStandingRecord = GameStandingRecord;
+export type MtgosdkApiPlayTournamentsMatchStandingRecord = MatchStandingRecord;
+export type MtgosdkApiPlayTournamentsStandingRecord = StandingRecord;
+export type MtgosdkApiUsersAvatar = Avatar;
+export type MtgosdkApiUsersUser = User;
+export type MicrosoftAspNetCoreMvcProblemDetails = ProblemDetails;
+export type TrackerControllersClientControllerIClientState = IClientState;
+export type TrackerControllersEventsControllerIEventStructure = IEventStructure;
+export type TrackerControllersEventsControllerITournament = ITournament;
+export type TrackerControllersEventsControllerITournamentPlayerUpdate = ITournamentPlayerUpdate;
+export type TrackerControllersEventsControllerITournamentStateUpdate = ITournamentStateUpdate;
 export type $defs = Record<string, never>;
-
-export type external = Record<string, never>;
-
 export type operations = Record<string, never>;
+
+
+export type Card = components['schemas']['MTGOSDK.API.Collection.Card'];
+export type CardQuantityPair = components['schemas']['MTGOSDK.API.Collection.CardQuantityPair'];
+export type Deck = components['schemas']['MTGOSDK.API.Collection.Deck'];
+export type Set = components['schemas']['MTGOSDK.API.Collection.Set'];
+export type Event = components['schemas']['MTGOSDK.API.Play.Event'];
+export type PlayFormat = components['schemas']['MTGOSDK.API.Play.PlayFormat'];
+export type GameStandingRecord = components['schemas']['MTGOSDK.API.Play.Tournaments.GameStandingRecord'];
+export type MatchStandingRecord = components['schemas']['MTGOSDK.API.Play.Tournaments.MatchStandingRecord'];
+export type StandingRecord = components['schemas']['MTGOSDK.API.Play.Tournaments.StandingRecord'];
+export type Avatar = components['schemas']['MTGOSDK.API.Users.Avatar'];
+export type User = components['schemas']['MTGOSDK.API.Users.User'];
+export type ProblemDetails = components['schemas']['Microsoft.AspNetCore.Mvc.ProblemDetails'];
+export type IClientState = components['schemas']['Tracker.Controllers.ClientController.IClientState'];
+export type IEventStructure = components['schemas']['Tracker.Controllers.EventsController.IEventStructure'];
+export type ITournament = components['schemas']['Tracker.Controllers.EventsController.ITournament'];
+export type ITournamentPlayerUpdate = components['schemas']['Tracker.Controllers.EventsController.ITournamentPlayerUpdate'];
+export type ITournamentStateUpdate = components['schemas']['Tracker.Controllers.EventsController.ITournamentStateUpdate'];

@@ -2,7 +2,6 @@
 // Usage: node scripts/stripNamespaceFromTypes.js <input> <output>
 
 const fs = require('fs');
-const path = require('path');
 
 if (process.argv.length < 4) {
   console.error('Usage: node scripts/stripNamespaceFromTypes.js <input> <output>');
@@ -14,37 +13,45 @@ const outputFile = process.argv[3];
 
 const content = fs.readFileSync(inputFile, 'utf8');
 
-// Helper to extract the last part after the last dot in a quoted string
-function getSimpleTypeName(schemaRef) {
-  // e.g. components["schemas"]["MTGOSDK.API.Collection.Card"] -> "Card"
-  const match = schemaRef.match(/\["([\w.]+)"\]$/);
-  if (!match) return schemaRef;
-  const full = match[1];
-  const parts = full.split('.');
-  return parts[parts.length - 1];
-}
-
-// Find all type alias definitions and build a map from schema path to alias
+// Map to store schema path -> simple alias
 const aliasMap = {};
-let newContent = content.replace(/export type ([A-Za-z0-9_]+) = components\['schemas'\]\['([\w.]+)'\];/g, (m, oldName, schema) => {
-  const simple = schema.split('.').pop();
-  aliasMap[`components['schemas']['${schema}']`] = simple;
-  aliasMap[`components[\"schemas\"][\"${schema}\"]`] = simple;
-  return `export type ${simple} = components['schemas']['${schema}'];`;
-});
+const generatedExports = [];
 
-// Replace all other instances of the schema path (single or double quoted) with the alias, except in the type alias definition itself
-const lines = newContent.split(/\r?\n/);
-const aliasDefRegex = /^export type (\w+) = components\['schemas'\]\['([\w.]+)'\];$/;
-for (let i = 0; i < lines.length; i++) {
-  const match = lines[i].match(aliasDefRegex);
-  if (match) continue; // skip alias definition line
-  for (const [schemaPath, alias] of Object.entries(aliasMap)) {
-    // Replace all occurrences of the schemaPath with the alias
-    lines[i] = lines[i].replace(new RegExp(schemaPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), alias);
+// Regex to find schema definitions in components.schemas
+// Matches: "Namespace.Type": {
+// We rely on the fact that namespaced types contain dots.
+const schemaDefRegex = /"([\w.]+)"\s*:\s*{/g;
+
+let match;
+while ((match = schemaDefRegex.exec(content)) !== null) {
+  const fullSchemaName = match[1];
+
+  // We only care about namespaced types (containing dots)
+  if (fullSchemaName.includes('.')) {
+    const simpleName = fullSchemaName.split('.').pop();
+
+    // Add to alias map for replacing references
+    // Handle both single and double quotes styles that might appear in references
+    aliasMap[`components['schemas']['${fullSchemaName}']`] = simpleName;
+    aliasMap[`components["schemas"]["${fullSchemaName}"]`] = simpleName;
+
+    generatedExports.push(`export type ${simpleName} = components['schemas']['${fullSchemaName}'];`);
   }
 }
-const finalContent = lines.join('\n');
+
+// Replace references in the content
+let lines = content.split(/\r?\n/);
+
+for (let i = 0; i < lines.length; i++) {
+  for (const [schemaPath, alias] of Object.entries(aliasMap)) {
+    // Replace all occurrences of the schemaPath with the alias
+    const escapedPath = schemaPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    lines[i] = lines[i].replace(new RegExp(escapedPath, 'g'), alias);
+  }
+}
+
+// Append the generated exports
+const finalContent = lines.join('\n') + '\n\n' + generatedExports.join('\n');
 
 fs.writeFileSync(outputFile, finalContent, 'utf8');
 console.log(`Stripped namespaces from exported types and replaced references in ${outputFile}`);
