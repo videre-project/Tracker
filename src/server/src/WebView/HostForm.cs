@@ -6,6 +6,7 @@
 
 using System;
 using System.IO;
+using System.Reflection;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Drawing;
@@ -59,6 +60,13 @@ public partial class HostForm : Form
     this.SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.DoubleBuffer | ControlStyles.ResizeRedraw, true);
 
     InitializeComponent();
+
+    // Set the application icon
+    try
+    {
+      this.Icon = Icon.ExtractAssociatedIcon(Assembly.GetExecutingAssembly().Location);
+    }
+    catch { /* Ignore icon load failure */ }
 
     // Initialize resize panels for custom title bar mode
     _resizePanels = new InvisibleResizePanel[8];
