@@ -304,7 +304,7 @@ public static class GameAPIService
         Log.Information("Game API background service started");
 
         // Start processing logs in a separate thread
-        Task.Run(() => ProcessLogsAsync(stoppingToken));
+        _ = Task.Run(() => ProcessLogsAsync(stoppingToken));
 
         // Main service loop
         while (!stoppingToken.IsCancellationRequested)
