@@ -70,4 +70,14 @@ public class ApplicationOptions(string[] args = null!)
   /// Whether to disable the WebView2 UI and run the Web API only.
   /// </summary>
   public bool DisableUI { get; internal set; } = false;
+
+  /// <summary>
+  /// The base URL for the NBAC (Naive Bayes Archetype Classification) API.
+  /// </summary>
+  /// <remarks>
+  /// Defaults to the production endpoint. Can be overridden via NBAC_API_URL environment variable.
+  /// </remarks>
+  public string NbacApiUrl { get; internal set; } =
+    Environment.GetEnvironmentVariable("NBAC_API_URL")
+      ?? "https://ml.videreproject.com/nbac";
 }

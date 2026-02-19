@@ -7,6 +7,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -65,6 +66,26 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
           {
             // If it doesn't exist, create a new DeckModel entry
             deckModel = DeckModel.ToModel(deck);
+
+            // Fetch archetype and featured card from NBAC API
+            try
+            {
+              var httpClientFactory = scope.ServiceProvider.GetService<IHttpClientFactory>();
+              var appOptions = scope.ServiceProvider.GetService<ApplicationOptions>();
+              if (httpClientFactory != null && appOptions != null)
+              {
+                var httpClient = httpClientFactory.CreateClient();
+                // PopulateArchetypeAsync sets both Archetype and FeaturedCard
+                deckModel.PopulateArchetypeAsync(httpClient, appOptions.NbacApiUrl)
+                  .GetAwaiter().GetResult();
+              }
+            }
+            catch (Exception ex)
+            {
+              Log.Warning("Failed to fetch archetype for deck {DeckHash}: {Message}",
+                deck.Hash, ex.Message);
+            }
+
             context.Decks.Add(deckModel);
           }
 
