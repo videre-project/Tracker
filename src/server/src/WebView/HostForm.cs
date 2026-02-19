@@ -97,26 +97,21 @@ public partial class HostForm : Form
       }
 
       // Position WebView2 to account for custom title bar (use EffectiveCaptionHeight)
-      // When maximized, the window borders extend off-screen, so we need to adjust the bounds
-      var isMaximized = this.WindowState == FormWindowState.Maximized;
-      var borderPadding = isMaximized ? 8 : 0;
-      int titleBarHeight = (_dwmTitleBar?.EffectiveCaptionHeight ?? SystemInformation.CaptionHeight) + borderPadding;
+      int titleBarHeight = _dwmTitleBar?.EffectiveCaptionHeight ?? SystemInformation.CaptionHeight;
       
       this.webView21.SetBounds(
-          borderPadding, 
+          0, 
           titleBarHeight,
-          this.ClientSize.Width - borderPadding,
+          this.ClientSize.Width,
           this.ClientSize.Height - titleBarHeight);
 
       this.SizeChanged += (s, e) => {
-        var isMaximized = this.WindowState == FormWindowState.Maximized;
-        var borderPadding = isMaximized ? 8 : 0;
-        int titleBarHeight = (_dwmTitleBar?.EffectiveCaptionHeight ?? SystemInformation.CaptionHeight) + borderPadding;
+        int titleBarHeight = _dwmTitleBar?.EffectiveCaptionHeight ?? SystemInformation.CaptionHeight;
 
         this.webView21.SetBounds(
-            borderPadding, 
+            0, 
             titleBarHeight,
-            this.ClientSize.Width - borderPadding,
+            this.ClientSize.Width,
             this.ClientSize.Height - titleBarHeight);
 
         // Hide resize panels when maximized, show when normal

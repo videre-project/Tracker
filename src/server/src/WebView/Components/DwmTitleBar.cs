@@ -58,11 +58,57 @@ public class DwmTitleBar
   private const int WM_NCCALCSIZE = 0x83;
   private const int WM_WINDOWPOSCHANGED = 0x0047;
   private const int WM_SIZE = 0x0005;
+  private const int SIZE_RESTORED = 0;
+  private const int SIZE_MAXIMIZED = 2;
+  private const int WM_GETMINMAXINFO = 0x0024;
   private const int HTCAPTION = 2;
   private const int HTCLIENT = 1;
   private const int HTMINBUTTON = 8;
   private const int HTMAXBUTTON = 9;
   private const int HTCLOSE = 20;
+
+  [StructLayout(LayoutKind.Sequential)]
+  public struct POINT
+  {
+    public int x;
+    public int y;
+  }
+
+  [StructLayout(LayoutKind.Sequential)]
+  public struct MINMAXINFO
+  {
+    public POINT ptReserved;
+    public POINT ptMaxSize;
+    public POINT ptMaxPosition;
+    public POINT ptMinTrackSize;
+    public POINT ptMaxTrackSize;
+  }
+
+  private const int GWL_STYLE = -16;
+  private const int WS_MAXIMIZE = 0x01000000;
+  private const int WS_THICKFRAME = 0x00040000;
+  private const int WS_CAPTION = 0x00C00000;
+  private const int MONITOR_DEFAULTTONEAREST = 0x00000002;
+  private const int SWP_NOSIZE = 0x0001;
+  private const int SWP_NOMOVE = 0x0002;
+  private const int SWP_NOZORDER = 0x0004;
+  private const int SWP_NOACTIVATE = 0x0010;
+  private const int SWP_FRAMECHANGED = 0x0020;
+
+  [DllImport("user32.dll", SetLastError = true)]
+  private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
+
+  [DllImport("user32.dll")]
+  private static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
+
+  [DllImport("user32.dll")]
+  private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+
+  [DllImport("user32.dll")]
+  private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint dwFlags);
+
+  [DllImport("user32.dll")]
+  private static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFO lpmi);
 
   [DllImport("user32.dll")]
   private static extern bool RedrawWindow(
@@ -72,11 +118,41 @@ public class DwmTitleBar
     uint flags
   );
 
+  [DllImport("user32.dll")]
+  private static extern int GetSystemMetricsForDpi(int nIndex, uint dpi);
+
+  [DllImport("user32.dll")]
+  private static extern uint GetDpiForWindow(IntPtr hwnd);
+
+  private const int SM_CXFRAME = 32;
+  private const int SM_CXPADDEDBORDER = 92;
+
+  [DllImport("dwmapi.dll")]
+  private static extern int DwmExtendFrameIntoClientArea(IntPtr hWnd, ref MARGINS pMarInset);
+
+  [StructLayout(LayoutKind.Sequential)]
+  public struct MARGINS
+  {
+    public int cxLeftWidth;
+    public int cxRightWidth;
+    public int cyTopHeight;
+    public int cyBottomHeight;
+  }
+
   private readonly Form _hostForm;
 
   // Dynamic colors that can be updated
   private Color _currentTitleBarColor;
   private Color _currentTextColor;
+
+  public void EnableDwmDropShadow(bool maximized = false)
+  {
+    var margins = maximized 
+      ? new MARGINS { cxLeftWidth = 0, cxRightWidth = 0, cyTopHeight = 0, cyBottomHeight = 0 }
+      : new MARGINS { cxLeftWidth = 0, cxRightWidth = 0, cyTopHeight = 1, cyBottomHeight = 0 };
+      
+    DwmExtendFrameIntoClientArea(_hostForm.Handle, ref margins);
+  }
 
   /// <summary>
   /// If true, show the window caption (title text) in the titlebar. If false, hide it.
@@ -123,6 +199,9 @@ public class DwmTitleBar
     // Default to a neutral color, but will be updated from client CSS
     _currentTitleBarColor = Color.FromArgb(45, 45, 48);
     _currentTextColor = Color.White;
+
+    // Extend frame into client area to fix window border artifacts
+    EnableDwmDropShadow();
   }
 
   /// <summary>
@@ -138,6 +217,47 @@ public class DwmTitleBar
   {
     switch (m.Msg)
     {
+      case WM_SIZE:
+        {
+          // When maximizing, remove the WS_THICKFRAME and WS_CAPTION styles to achieve a
+          // truly borderless window. This prevents the OS from drawing grey borders around
+          // the edges.
+          // ALSO, we must update DWM margins to 0 to prevent a thin grey bar at the top.
+          
+          int wParam = m.WParam.ToInt32();
+          if (wParam == SIZE_MAXIMIZED)
+          {
+            int style = GetWindowLong(_hostForm.Handle, GWL_STYLE);
+            style &= ~(WS_THICKFRAME | WS_CAPTION);
+            SetWindowLong(_hostForm.Handle, GWL_STYLE, style);
+            
+            EnableDwmDropShadow(true); // Margins = 0
+
+            // Force style update
+            SetWindowPos(_hostForm.Handle, IntPtr.Zero, 0, 0, 0, 0,
+              SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+            
+            _hostForm.Padding = new Padding(0);
+          }
+          else if (wParam == SIZE_RESTORED)
+          {
+            int style = GetWindowLong(_hostForm.Handle, GWL_STYLE);
+            style |= (WS_THICKFRAME | WS_CAPTION);
+            SetWindowLong(_hostForm.Handle, GWL_STYLE, style);
+            
+            EnableDwmDropShadow(false); // Margins = 0,0,1,0
+
+            // Force style update
+            SetWindowPos(_hostForm.Handle, IntPtr.Zero, 0, 0, 0, 0,
+              SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+              
+             _hostForm.Padding = new Padding(0);
+          }
+        
+          _hostForm.Invalidate();
+          return false;
+        }
+
       case WM_NCACTIVATE:
         _isActive = m.WParam.ToInt32() != 0;
         // Only invalidate the title bar area to prevent flashing
@@ -156,15 +276,66 @@ public class DwmTitleBar
       case WM_NCCALCSIZE:
         if (m.WParam.ToInt32() == 1)
         {
-          // Extend the client area to cover the entire window
-          // This removes the default title bar
+          var nccsp = (NCCALCSIZE_PARAMS)Marshal.PtrToStructure(m.LParam, typeof(NCCALCSIZE_PARAMS));
+
+          // When maximized, the window bounds are inherently expanded by the system to conceal the sizeable border behind the screen edges.
+          // Because we don't draw a border, our client area (which is the whole window) gets pushed off-screen.
+          // We must shrink the client area rect back to the monitor bounds.
+          if (_hostForm.WindowState == FormWindowState.Maximized)
+          {
+            var hMonitor = MonitorFromWindow(_hostForm.Handle, MONITOR_DEFAULTTONEAREST);
+            var monitorInfo = new MONITORINFO();
+            monitorInfo.cbSize = Marshal.SizeOf(typeof(MONITORINFO));
+
+            if (GetMonitorInfo(hMonitor, ref monitorInfo))
+            {
+                // Shrink the rect to precisely the monitor's work area
+                nccsp.rect0.Left = monitorInfo.rcWork.Left;
+                nccsp.rect0.Top = monitorInfo.rcWork.Top;
+                nccsp.rect0.Right = monitorInfo.rcWork.Right;
+                nccsp.rect0.Bottom = monitorInfo.rcWork.Bottom;
+                
+                Marshal.StructureToPtr(nccsp, m.LParam, false);
+            }
+          }
+
           m.Result = IntPtr.Zero;
           return true;
         }
         return false;
 
+      case WM_GETMINMAXINFO:
+        {
+          // Constrain the window's maximized size to the monitor's work area.
+          // This prevents the window from extending underneath/over the taskbar.
+
+          var hMonitor = MonitorFromWindow(_hostForm.Handle, MONITOR_DEFAULTTONEAREST);
+          var monitorInfo = new MONITORINFO();
+          monitorInfo.cbSize = Marshal.SizeOf(typeof(MONITORINFO));
+
+          if (GetMonitorInfo(hMonitor, ref monitorInfo))
+          {
+            var mmi = (MINMAXINFO)Marshal.PtrToStructure(m.LParam, typeof(MINMAXINFO));
+            
+            // Set the maximized position relative to the monitor bounds (no inflation)
+            mmi.ptMaxPosition.x = monitorInfo.rcWork.Left - monitorInfo.rcMonitor.Left;
+            mmi.ptMaxPosition.y = monitorInfo.rcWork.Top - monitorInfo.rcMonitor.Top;
+            
+            // Set the maximized size strictly to the Work Area size
+            mmi.ptMaxSize.x = monitorInfo.rcWork.Right - monitorInfo.rcWork.Left;
+            mmi.ptMaxSize.y = monitorInfo.rcWork.Bottom - monitorInfo.rcWork.Top;
+
+            // Track Size must also match
+            mmi.ptMaxTrackSize = mmi.ptMaxSize;
+
+            Marshal.StructureToPtr(mmi, m.LParam, true);
+          }
+          
+          m.Result = IntPtr.Zero;
+          return true;
+        }
+
       case WM_WINDOWPOSCHANGED:
-      case WM_SIZE:
         // Let the form handle repainting
         _hostForm.Invalidate();
         return false;
@@ -186,68 +357,20 @@ public class DwmTitleBar
     }
   }
 
-  private void PaintTitleBar()
-  {
-    var hdc = GetWindowDC(_hostForm.Handle);
-    if (hdc == IntPtr.Zero) return;
+  // Removed GetPaddedBorderThickness and UpdateFormPadding as they are no longer needed.
 
-    try
-    {
-      using (var graphics = Graphics.FromHdc(hdc))
-      {
-        GetWindowRect(_hostForm.Handle, out var windowRect);
-        var titleBarRect = new Rectangle(
-          0, 0,
-          windowRect.Right - windowRect.Left,
-          EffectiveCaptionHeight
-        );
 
-        // Use consistent colors regardless of activation state
-        var backgroundColor = _currentTitleBarColor;
-        var foregroundColor = _currentTextColor;
-
-        // Draw custom title bar background
-        using (var brush = new SolidBrush(backgroundColor))
-        {
-          graphics.FillRectangle(brush, titleBarRect);
-        }
-
-        // Draw title text if enabled
-        if (ShowCaption)
-        {
-          using (var font = new Font("Segoe UI", 9, FontStyle.Bold))
-          {
-            var textRect = new Rectangle(8, 0, titleBarRect.Width - 120, titleBarRect.Height);
-            TextRenderer.DrawText(graphics, _hostForm.Text, font, textRect, foregroundColor,
-              TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.PreserveGraphicsClipping);
-          }
-        }
-
-        // Draw window control buttons
-        DrawWindowButtons(graphics, titleBarRect, backgroundColor, foregroundColor);
-      }
-    }
-    finally
-    {
-      ReleaseDC(_hostForm.Handle, hdc);
-    }
-  }
 
   public void PaintTitleBarInClientArea(Graphics graphics)
   {
-    // When maximized, add padding to compensate for missing window frame
-    var isMaximized = _hostForm.WindowState == FormWindowState.Maximized;
-    var topPadding = isMaximized ? 8 : 0;   // 8px top padding when maximized
-    var rightPadding = isMaximized ? 8 : 0; // 8px right padding when maximized
-
-    // Extend title bar to include padding area
-    var titleBarRect = new Rectangle(0, 0, _hostForm.ClientSize.Width, EffectiveCaptionHeight + topPadding);
+    // Extend title bar to include padding area (0 padding now)
+    var titleBarRect = new Rectangle(0, 0, _hostForm.ClientSize.Width, EffectiveCaptionHeight);
 
     // Use consistent colors regardless of activation state
     var backgroundColor = _currentTitleBarColor;
     var foregroundColor = _currentTextColor;
 
-    // Draw custom title bar background (including padding area)
+    // Draw custom title bar background
     using (var brush = new SolidBrush(backgroundColor))
     {
       graphics.FillRectangle(brush, titleBarRect);
@@ -257,8 +380,8 @@ public class DwmTitleBar
     // Draw title text if enabled
     if (ShowCaption)
     {
-      var textLeftMargin = isMaximized ? 16 : 8;
-      var textRect = new Rectangle(textLeftMargin, topPadding, titleBarRect.Width - 120 - rightPadding, EffectiveCaptionHeight);
+      var textLeftMargin = 8;
+      var textRect = new Rectangle(textLeftMargin, 0, titleBarRect.Width - 120, EffectiveCaptionHeight);
       using (var font = new Font("Segoe UI", 9, FontStyle.Bold))
       {
         TextRenderer.DrawText(graphics, _hostForm.Text, font, textRect, foregroundColor,
@@ -267,28 +390,28 @@ public class DwmTitleBar
     }
 
     // Draw window control buttons
-    DrawWindowButtons(graphics, titleBarRect, backgroundColor, foregroundColor, isMaximized, topPadding, rightPadding);
+    DrawWindowButtons(graphics, titleBarRect, backgroundColor, foregroundColor);
   }
 
-  private void DrawWindowButtons(Graphics graphics, Rectangle titleBarRect, Color backgroundColor, Color foregroundColor, bool isMaximized = false, int topPadding = 0, int rightPadding = 0)
+  private void DrawWindowButtons(Graphics graphics, Rectangle titleBarRect, Color backgroundColor, Color foregroundColor)
   {
     var buttonWidth = 32;
     var buttonHeight = EffectiveCaptionHeight;
-    var buttonY = topPadding;
+    var buttonY = 0;
 
-    // Close button - account for right padding
-    var closeRect = new Rectangle(titleBarRect.Width - buttonWidth - rightPadding, buttonY, buttonWidth, buttonHeight);
+    // Close button
+    var closeRect = new Rectangle(titleBarRect.Width - buttonWidth, buttonY, buttonWidth, buttonHeight);
     var closeBackColor = _currentHover == HoveredButton.Close ? Color.FromArgb(255, 0, 0) : backgroundColor;
     DrawButton(graphics, closeRect, "ｘ", closeBackColor, foregroundColor, TitleBarButtonStyle.Close);
 
     // Maximize button
-    var maxRect = new Rectangle(titleBarRect.Width - (buttonWidth * 2) - rightPadding, buttonY, buttonWidth, buttonHeight);
+    var maxRect = new Rectangle(titleBarRect.Width - (buttonWidth * 2), buttonY, buttonWidth, buttonHeight);
     var maxText = _hostForm.WindowState == FormWindowState.Maximized ? "⧉" : "□";
     var maxBackColor = _currentHover == HoveredButton.Maximize ? Color.FromArgb(60, 60, 60) : backgroundColor;
     DrawButton(graphics, maxRect, maxText, maxBackColor, foregroundColor, TitleBarButtonStyle.Maximize);
 
     // Minimize button
-    var minRect = new Rectangle(titleBarRect.Width - (buttonWidth * 3) - rightPadding, buttonY, buttonWidth, buttonHeight);
+    var minRect = new Rectangle(titleBarRect.Width - (buttonWidth * 3), buttonY, buttonWidth, buttonHeight);
     var minBackColor = _currentHover == HoveredButton.Minimize ? Color.FromArgb(60, 60, 60) : backgroundColor;
     DrawButton(graphics, minRect, "—", minBackColor, foregroundColor, TitleBarButtonStyle.Minimize);
   }
@@ -464,28 +587,24 @@ public class DwmTitleBar
     var relativePos = new Point(clickPos.X - windowRect.Left, clickPos.Y - windowRect.Top);
 
     // Check if click is in title bar area
-    var isMaximized = _hostForm.WindowState == FormWindowState.Maximized;
-    var topPadding = isMaximized ? 8 : 0;
-    var rightPadding = isMaximized ? 8 : 0;
-    var titleBarHeight = EffectiveCaptionHeight + topPadding;
+    var titleBarHeight = EffectiveCaptionHeight;
 
-    if (relativePos.Y > titleBarHeight) return false;
+    if (relativePos.Y < 0 || relativePos.Y > titleBarHeight) return false;
 
     var buttonWidth = 32;
+    // Calculate the logical window width
     var windowWidth = windowRect.Right - windowRect.Left;
 
-    // Check which button was clicked - account for padding
-    if (relativePos.X >= windowWidth - buttonWidth - rightPadding &&
-        relativePos.X < windowWidth - rightPadding &&
-        relativePos.Y >= topPadding)
+    // Check which button was clicked
+    if (relativePos.X >= windowWidth - buttonWidth &&
+        relativePos.X < windowWidth)
     {
       // Close button
       _hostForm.Close();
       return true;
     }
-    else if (relativePos.X >= windowWidth - (buttonWidth * 2) - rightPadding &&
-             relativePos.X < windowWidth - buttonWidth - rightPadding &&
-             relativePos.Y >= topPadding)
+    else if (relativePos.X >= windowWidth - (buttonWidth * 2) &&
+             relativePos.X < windowWidth - buttonWidth)
     {
       // Maximize button
       _hostForm.WindowState = _hostForm.WindowState == FormWindowState.Maximized
@@ -497,9 +616,8 @@ public class DwmTitleBar
       _hostForm.Invalidate();
       return true;
     }
-    else if (relativePos.X >= windowWidth - (buttonWidth * 3) - rightPadding &&
-             relativePos.X < windowWidth - (buttonWidth * 2) - rightPadding &&
-             relativePos.Y >= topPadding)
+    else if (relativePos.X >= windowWidth - (buttonWidth * 3) &&
+             relativePos.X < windowWidth - (buttonWidth * 2))
     {
       // Minimize button
       _hostForm.WindowState = FormWindowState.Minimized;
@@ -517,12 +635,9 @@ public class DwmTitleBar
     var relativePos = new Point(mousePos.X - windowRect.Left, mousePos.Y - windowRect.Top);
 
     // Check if mouse is in title bar area
-    var isMaximized = _hostForm.WindowState == FormWindowState.Maximized;
-    var topPadding = isMaximized ? 8 : 0;
-    var rightPadding = isMaximized ? 8 : 0;
-    var titleBarHeight = SystemInformation.CaptionHeight + topPadding;
+    var titleBarHeight = SystemInformation.CaptionHeight;
 
-    if (relativePos.Y > titleBarHeight)
+    if (relativePos.Y < 0 || relativePos.Y > titleBarHeight)
     {
       if (_currentHover != HoveredButton.None)
       {
@@ -536,22 +651,19 @@ public class DwmTitleBar
     var windowWidth = windowRect.Right - windowRect.Left;
     var newHover = HoveredButton.None;
 
-    // Determine which button is being hovered - account for padding
-    if (relativePos.X >= windowWidth - buttonWidth - rightPadding &&
-        relativePos.X < windowWidth - rightPadding &&
-        relativePos.Y >= topPadding)
+    // Determine which button is being hovered
+    if (relativePos.X >= windowWidth - buttonWidth &&
+        relativePos.X < windowWidth)
     {
       newHover = HoveredButton.Close;
     }
-    else if (relativePos.X >= windowWidth - (buttonWidth * 2) - rightPadding &&
-             relativePos.X < windowWidth - buttonWidth - rightPadding &&
-             relativePos.Y >= topPadding)
+    else if (relativePos.X >= windowWidth - (buttonWidth * 2) &&
+             relativePos.X < windowWidth - buttonWidth)
     {
       newHover = HoveredButton.Maximize;
     }
-    else if (relativePos.X >= windowWidth - (buttonWidth * 3) - rightPadding &&
-             relativePos.X < windowWidth - (buttonWidth * 2) - rightPadding &&
-             relativePos.Y >= topPadding)
+    else if (relativePos.X >= windowWidth - (buttonWidth * 3) &&
+             relativePos.X < windowWidth - (buttonWidth * 2))
     {
       newHover = HoveredButton.Minimize;
     }
@@ -571,9 +683,7 @@ public class DwmTitleBar
     if (_currentHover != HoveredButton.None)
     {
       _currentHover = HoveredButton.None;
-      var isMaximized = _hostForm.WindowState == FormWindowState.Maximized;
-      var topPadding = isMaximized ? 8 : 0;
-      var titleBarHeight = SystemInformation.CaptionHeight + topPadding;
+      var titleBarHeight = SystemInformation.CaptionHeight;
       _hostForm.Invalidate(new Rectangle(0, 0, _hostForm.ClientSize.Width, titleBarHeight));
     }
     return false;
@@ -595,30 +705,31 @@ public class DwmTitleBar
     var screenPoint = new Point(m.LParam.ToInt32());
     var clientPoint = _hostForm.PointToClient(screenPoint);
 
-    if (clientPoint.Y <= EffectiveCaptionHeight)
-    {
-      var buttonWidth = 32;
-      var windowWidth = _hostForm.Width;
+      if (clientPoint.Y <= EffectiveCaptionHeight)
+      {
+        var buttonWidth = 32;
+        var windowWidth = _hostForm.Width;
+        var xCheck = clientPoint.X;
 
-      if (clientPoint.X >= windowWidth - buttonWidth)
-      {
-        m.Result = (IntPtr) HTCLOSE;
-        return true;
-      }
-      if (clientPoint.X >= windowWidth - (buttonWidth * 2))
-      {
-        m.Result = (IntPtr) HTMAXBUTTON;
-        return true;
-      }
-      if (clientPoint.X >= windowWidth - (buttonWidth * 3))
-      {
-        m.Result = (IntPtr) HTMINBUTTON;
-        return true;
-      }
+        if (xCheck >= windowWidth - buttonWidth)
+        {
+          m.Result = (IntPtr) HTCLOSE;
+          return true;
+        }
+        if (xCheck >= windowWidth - (buttonWidth * 2))
+        {
+          m.Result = (IntPtr) HTMAXBUTTON;
+          return true;
+        }
+        if (xCheck >= windowWidth - (buttonWidth * 3))
+        {
+          m.Result = (IntPtr) HTMINBUTTON;
+          return true;
+        }
 
-      m.Result = (IntPtr) HTCAPTION;
-      return true;
-    }
+        m.Result = (IntPtr) HTCAPTION;
+        return true;
+      }
 
     // It's genuinely the client area (the WebView).
     return true;
@@ -635,5 +746,14 @@ public class DwmTitleBar
   {
     public RECT rect0, rect1, rect2;
     public IntPtr lppos;
+  }
+
+  [StructLayout(LayoutKind.Sequential)]
+  public struct MONITORINFO
+  {
+    public int cbSize;
+    public RECT rcMonitor;
+    public RECT rcWork;
+    public uint dwFlags;
   }
 }
