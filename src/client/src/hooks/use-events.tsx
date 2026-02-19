@@ -10,6 +10,7 @@ import { useEffect, useState, useRef, useCallback } from "react"
 import type { ITournament, IEventStructure, ITournamentStateUpdate } from "@/types/api"
 import { useClientState } from "./use-client-state"
 import { useNDJSONStream } from "./use-ndjson-stream"
+import { getApiUrl } from "../utils/api-config"
 
 // Tournament state type (will be replaced when OpenAPI types are regenerated)
 type TournamentState =
@@ -182,6 +183,9 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
   const gamesMapRef = useRef(new Map<string, ActiveGameWithRawTimes>())
   const retryAttempts = useRef(new Map<string, number>())
   const retryTimeouts = useRef(new Map<string, NodeJS.Timeout>())
+  
+  // Dirty flag to track if we need to update React state
+  const isDirtyRef = useRef(false)
 
   const updateGamesState = useCallback(() => {
     const allGames = Array.from(gamesMapRef.current.values())
@@ -201,12 +205,26 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
       window.__activeEvents = active
       window.__upcomingEvents = upcoming
     }
+    
+    // Reset dirty flag
+    isDirtyRef.current = false
   }, [])
+
+  // Poll for updates to prevent render flooding
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (isDirtyRef.current) {
+        updateGamesState()
+      }
+    }, 200) // Update UI at most 5 times per second
+
+    return () => clearInterval(interval)
+  }, [updateGamesState])
 
   // Helper function to fetch tournament state when roundEndTime is missing
   const fetchTournamentState = useCallback(async (tournamentId: string) => {
     try {
-      const response = await fetch(`/api/Events/GetTournamentState/${tournamentId}`)
+      const response = await fetch(getApiUrl(`/api/Events/GetTournamentState/${tournamentId}`))
 
       if (!response.ok) {
         if (response.status === 404) {
@@ -262,7 +280,9 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
             updatedGame.currentRound = stateUpdate.currentRound
             updatedGame.state = stateUpdate.state as TournamentState
             updatedGame.inPlayoffs = stateUpdate.inPlayoffs
-            updateGamesState()
+            
+            // Mark as dirty instead of immediate update
+            isDirtyRef.current = true
 
             // Clear retry tracking
             retryAttempts.current.delete(tournamentId)
@@ -285,11 +305,11 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
 
     retryTimeouts.current.set(tournamentId, timeout)
     retryAttempts.current.set(tournamentId, currentAttempts + 1)
-  }, [fetchTournamentState, updateGamesState])
+  }, [fetchTournamentState])
 
   // Initial events stream
   useNDJSONStream<ITournament>({
-    url: "/api/Events/GetEventsList?stream=true",
+    url: getApiUrl("/api/Events/GetEventsList?stream=true"),
     enabled: !clientLoading && clientReady,
     onMessage: (t) => {
       const game = mapTournamentToActiveGame(t)
@@ -306,7 +326,8 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
       }
 
       gamesMapRef.current.set(game.id, game)
-      updateGamesState()
+      // Mark as dirty instead of immiediate update
+      isDirtyRef.current = true
 
       // Trigger retry mechanism if roundEndTime is missing for active tournaments
       if (game.status === "active" && !game.roundEndTime) {
@@ -317,6 +338,7 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
     onEnd: () => {
       console.log("Events list fully loaded")
       setLoading(false)
+      // Force immediate update on completion
       updateGamesState()
     },
     onError: (e) => {
@@ -329,7 +351,7 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
 
   // Stream tournament state updates for active events
   useNDJSONStream<ITournamentStateUpdate>({
-    url: "/api/Events/WatchTournamentUpdates",
+    url: getApiUrl("/api/Events/WatchTournamentUpdates"),
     enabled: !clientLoading && clientReady,
     onMessage: (update) => {
       const eventId = String(update.id)
@@ -337,7 +359,6 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
 
       if (!game) {
         // Ignore updates for tournaments we don't have in our list
-        console.log(`Received state update for unknown event ${eventId}, skipping`)
         return
       }
 
@@ -349,8 +370,6 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
         game.roundEndTime !== update.roundEndTime
 
       if (!hasChanges) {
-        // Ignore redundant updates (common on initial connection)
-        console.log(`Ignoring redundant state update for event ${eventId}`)
         return
       }
 
@@ -416,8 +435,8 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
       // Update the shared map
       gamesMapRef.current.set(eventId, game)
 
-      // Update React state
-      updateGamesState()
+      // Mark as dirty
+      isDirtyRef.current = true
     },
     onError: (e) => {
       console.error("Tournament state updates stream error:", e)

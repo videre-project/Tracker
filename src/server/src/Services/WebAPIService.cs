@@ -13,10 +13,11 @@ using System.Text.Json.Serialization;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.Hosting;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
-using Microsoft.OpenApi.Models;
+using Microsoft.Extensions.Hosting;
+using Microsoft.OpenApi;
 
 using Scalar.AspNetCore;
 
@@ -33,18 +34,30 @@ public static class WebAPIService
   /// <summary>
   /// Initializes the builder for the Web API host.
   /// </summary>
-  /// <param name="options">The application options.</param>
+  /// <param name="appOptions">The application options.</param>
   /// <returns>A new <see cref="WebApplicationBuilder"/> instance.</returns>
-  public static WebApplicationBuilder CreateHostBuilder(ApplicationOptions options)
+  public static WebApplicationBuilder CreateHostBuilder(
+    ApplicationOptions appOptions)
   {
     var builder = WebApplication.CreateBuilder(new WebApplicationOptions
     {
-      Args = options.Args,
-      ContentRootPath = options.ContentRootPath,
+      Args = appOptions.Args,
+      ContentRootPath = appOptions.ContentRootPath,
     });
 
-    // Set the HTTPS endpoint for the Web API.
-    builder.WebHost.UseUrls(options.Url.ToString());
+    // Register ApplicationOptions as a singleton for dependency injection
+    builder.Services.AddSingleton(appOptions);
+
+    // Configure Kestrel with HTTP/2 over HTTPS (multiplexes streams over single connection)
+    builder.WebHost.ConfigureKestrel(options =>
+    {
+      options.ListenLocalhost(appOptions.Url.Port, listenOptions =>
+      {
+        listenOptions.UseHttps();
+        // Enable HTTP/2 with HTTP/1.1 fallback
+        listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
+      });
+    });
 
     // Add services to the container.
     builder.Services.AddControllers().AddJsonOptions(options =>
@@ -66,6 +79,21 @@ public static class WebAPIService
       // Add support for serializing enums as strings with capitalized camel case values.
       jsonOptions.Converters.Add(new JsonStringEnumConverter(
         new SerializationPolicies.CapitalizedCamelCaseNamingPolicy()));
+    });
+
+    // Register HttpClient factory for external API calls
+    builder.Services.AddHttpClient();
+
+    // Enable CORS for frontend development
+    builder.Services.AddCors(options =>
+    {
+      options.AddDefaultPolicy(policy =>
+      {
+        policy.SetIsOriginAllowed(origin => new Uri(origin).Host == "localhost")
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials();
+      });
     });
 
     // Configure Swagger/OpenAPI
@@ -137,6 +165,7 @@ public static class WebAPIService
       api.MapScalarApiReference(endpointPrefix: "/docs");
     }
     api.UseRouting();
+    api.UseCors();
     api.UseAuthorization();
 
     api.MapControllers();

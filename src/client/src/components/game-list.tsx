@@ -1,5 +1,6 @@
 import * as React from "react"
 import { Play, Pause, Clock, Square, Trophy, Target, Calendar } from "lucide-react"
+import { getApiUrl } from "@/utils/api-config"
 
 import {
   SidebarContent,
@@ -420,7 +421,7 @@ export function GameList({ label, games, className, placeholder, isUpcoming }: G
                           <h3 className="font-semibold text-sm text-sidebar-foreground truncate">
                             <button
                               onClick={() => {
-                                fetch(`/api/events/openevent/${game.id}`, { method: 'POST' })
+                                fetch(getApiUrl(`/api/events/openevent/${game.id}`), { method: 'POST' })
                                   .catch(err => console.error('Failed to open event:', err));
                               }}
                               className="hover:text-sidebar-accent-foreground transition-colors cursor-pointer text-left w-full truncate"
@@ -525,7 +526,7 @@ export function GameList({ label, games, className, placeholder, isUpcoming }: G
 
                       <button
                         onClick={() => {
-                          fetch(`/api/events/openevent/${game.id}`, { method: 'POST' })
+                          fetch(getApiUrl(`/api/events/openevent/${game.id}`), { method: 'POST' })
                             .catch(err => console.error('Failed to open event:', err));
                         }}
                         className="text-blue-400 hover:underline shrink-0 cursor-pointer"

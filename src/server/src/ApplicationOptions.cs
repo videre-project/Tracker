@@ -26,6 +26,42 @@ public class ApplicationOptions(string[] args = null!)
   /// </summary>
   public Uri Url => new($"https://localhost:{Port}");
 
+  /// <summary>
+  /// The URL that the WebView2 UI should load.
+  /// </summary>
+  /// <remarks>
+  /// In Development, this defaults to the Vite dev server.
+  /// Override with the <c>TRACKER_UI_URL</c> environment variable.
+  /// </remarks>
+  public Uri UiUrl
+  {
+    get
+    {
+      var overrideUrl = Environment.GetEnvironmentVariable("TRACKER_UI_URL");
+      if (!string.IsNullOrWhiteSpace(overrideUrl) &&
+          Uri.TryCreate(overrideUrl, UriKind.Absolute, out var uiUrl))
+      {
+        return uiUrl;
+      }
+
+      if (IsDevelopment)
+      {
+        // Keep in sync with the SpaProxyServerUrl in server.csproj (defaults to 5279)
+        var devPort = Environment.GetEnvironmentVariable("DEV_SERVER_PORT")
+          ?? Environment.GetEnvironmentVariable("SPA_DEV_SERVER_PORT");
+
+        if (int.TryParse(devPort, out var port) && port > 0)
+        {
+          return new Uri($"https://localhost:{port}");
+        }
+
+        return new Uri("https://localhost:5279");
+      }
+
+      return Url;
+    }
+  }
+
   public bool IsDarkMode { get; internal set; } =
     Environment.GetEnvironmentVariable("APP_THEME") == "Dark";
 

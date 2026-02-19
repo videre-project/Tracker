@@ -30,7 +30,7 @@
     <!-- Workaround for https://github.com/dotnet/aspnetcore/issues/45700 -->
     <SpaProxyLaunchCommand Condition="$([MSBuild]::IsOsPlatform('Windows'))">cmd.exe /s /c $(SpaProxyLaunchCommand)</SpaProxyLaunchCommand>
     <SpaProxyLaunchCommand Condition="$([MSBuild]::IsOSUnixLike())">sh -c %5C&quot;$(SpaProxyLaunchCommand)%5C&quot;</SpaProxyLaunchCommand>
-    <SpaProxyServerUrl>https://localhost:52797</SpaProxyServerUrl>
+    <SpaProxyServerUrl>https://localhost:5279</SpaProxyServerUrl>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="$(SpaRoot)\client.esproj"

@@ -97,6 +97,8 @@ public class Program
 // #if DEBUG
 //     RedirectConsole(); // Ensure console output is redirected.
 // #endif
+    // Optimize thread pool for bursty workloads
+    ThreadPool.SetMinThreads(32, 32);
 
     var options = new ApplicationOptions(args)
     {
@@ -113,7 +115,7 @@ public class Program
     HostForm hostForm = null!;
     if (!options.DisableUI)
     {
-      hostForm = new HostForm(options) { Source = options.Url };
+      hostForm = new HostForm(options) { Source = options.UiUrl };
       hostForm.ControllerThread.Name ??= "UI Thread";
     }
     else

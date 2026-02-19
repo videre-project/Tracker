@@ -83,10 +83,9 @@ public class ClientController : APIController
   [Produces("application/x-ndjson")]
   public async Task<IActionResult> WatchState()
   {
-    // Set up SSE headers
+    // Set up streaming headers
     Response.Headers.Append("Content-Type", "application/x-ndjson");
     Response.Headers.Append("Cache-Control", "no-cache");
-    Response.Headers.Append("Connection", "keep-alive");
 
     try
     {
