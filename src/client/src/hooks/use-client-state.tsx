@@ -1,5 +1,6 @@
-import { useState } from "react"
+import { useState, createContext, useContext, ReactNode } from "react"
 import { useNDJSONStream } from "./use-ndjson-stream"
+import { getApiUrl } from "../utils/api-config"
 
 export type ClientStatus = "disconnected" | "connecting" | "ready"
 
@@ -13,11 +14,18 @@ export interface ClientState {
   virtualMemory?: number
 }
 
+interface ClientStateContextType {
+  state: ClientState
+  loading: boolean
+  isReady: boolean
+}
+
+const ClientStateContext = createContext<ClientStateContextType | undefined>(undefined)
+
 /**
- * Watch the MTGO client connection state in real-time
- * Returns the current state and whether we're ready to make API calls
+ * Provider to manage MTGO client state globally across navigations.
  */
-export function useClientState() {
+export function ClientStateProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<ClientState>({
     isConnected: false,
     isInitialized: false,
@@ -26,7 +34,7 @@ export function useClientState() {
   const [loading, setLoading] = useState(true)
 
   useNDJSONStream<ClientState>({
-    url: "/api/Client/WatchState",
+    url: getApiUrl("/api/Client/WatchState"),
     onMessage: (update) => {
       setState({
         isConnected: update.isConnected,
@@ -53,9 +61,25 @@ export function useClientState() {
     useConstantRetry: true
   })
 
-  return {
-    state,
-    loading,
-    isReady: state.isInitialized && state.status === "ready"
+  return (
+    <ClientStateContext.Provider value={{
+      state,
+      loading,
+      isReady: state.isInitialized && state.status === "ready"
+    }}>
+      {children}
+    </ClientStateContext.Provider>
+  )
+}
+
+/**
+ * Watch the MTGO client connection state in real-time
+ * Consumes the global ClientStateProvider context.
+ */
+export function useClientState() {
+  const context = useContext(ClientStateContext)
+  if (context === undefined) {
+    throw new Error("useClientState must be used within a ClientStateProvider")
   }
+  return context
 }

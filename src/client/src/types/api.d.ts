@@ -78,6 +78,634 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/Collection/cards/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Stream rendered card images as PNG data */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    [path: `/api/Collection/cards/${string}/image`]: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a single rendered card image as PNG */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description Card name */
+                    name: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": string;
+                        "application/json": string;
+                        "text/json": string;
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": ProblemDetails;
+                        "application/json": ProblemDetails;
+                        "text/json": ProblemDetails;
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    [path: `/api/Collection/cards/${string}/art`]: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a card's art image as JPEG (from MTGO client) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description Card name */
+                    name: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": string;
+                        "application/json": string;
+                        "text/json": string;
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": ProblemDetails;
+                        "application/json": ProblemDetails;
+                        "text/json": ProblemDetails;
+                    };
+                };
+                /** @description Service Unavailable */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/Collection/cards/art/batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get card art for multiple cards in parallel (streams as NDJSON) */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Comma-separated list of card names */
+                    cards?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Service Unavailable */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/Collection/cache/clear": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Clears the image cache */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/Decks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get all decks grouped by format */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": {
+                            [key: string]: DeckDTO[];
+                        };
+                        "application/json": {
+                            [key: string]: DeckDTO[];
+                        };
+                        "text/json": {
+                            [key: string]: DeckDTO[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/Decks/identifiers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a flat list of all deck identifiers */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": DeckIdentifierDTO[];
+                        "application/json": DeckIdentifierDTO[];
+                        "text/json": DeckIdentifierDTO[];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    [path: `/api/Decks/${string}`]: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a single deck by hash with full card details */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description Deck hash */
+                    hash: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": DeckDetailDTO;
+                        "application/json": DeckDetailDTO;
+                        "text/json": DeckDetailDTO;
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": ProblemDetails;
+                        "application/json": ProblemDetails;
+                        "text/json": ProblemDetails;
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/Decks/sheet": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Render a deck as a grid sheet image */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Deck name (looks up from MTGO client) */
+                    name?: string;
+                    /** @description Deck hash/ID (looks up from DB and caches) */
+                    id?: string;
+                    /** @description Number of columns (default: 5) */
+                    columns?: number;
+                    /** @description Card height in pixels (default: 300) */
+                    cardHeight?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": string;
+                        "application/json": string;
+                        "text/json": string;
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": ProblemDetails;
+                        "application/json": ProblemDetails;
+                        "text/json": ProblemDetails;
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/Decks/sortable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get sortable card metadata for a deck.
+         *     Uses fast parallel serialization that matches MTGO's NonPileByName order.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Deck name (looks up from MTGO client) */
+                    name?: string;
+                    /** @description Deck hash/ID (looks up from DB and caches) */
+                    id?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": SortableCardEntry[];
+                        "application/json": SortableCardEntry[];
+                        "text/json": SortableCardEntry[];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": ProblemDetails;
+                        "application/json": ProblemDetails;
+                        "text/json": ProblemDetails;
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    [path: `/api/Decks/${string}/archetype`]: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get archetype information for a deck from the NBAC API */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description Deck hash */
+                    hash: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": unknown;
+                        "application/json": unknown;
+                        "text/json": unknown;
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": ProblemDetails;
+                        "application/json": ProblemDetails;
+                        "text/json": ProblemDetails;
+                    };
+                };
+                /** @description Bad Gateway */
+                502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    [path: `/api/Decks/${string}/colors`]: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get the colors of a deck by analyzing all cards in the mainboard */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description Deck hash */
+                    hash: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": DeckColorsDTO;
+                        "application/json": DeckColorsDTO;
+                        "text/json": DeckColorsDTO;
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": ProblemDetails;
+                        "application/json": ProblemDetails;
+                        "text/json": ProblemDetails;
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/Decks/archetypes/aggregated": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get aggregated archetype statistics across all decks with win/loss data */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Minimum event start date */
+                    minDate?: string;
+                    /** @description Maximum event start date */
+                    maxDate?: string;
+                    /** @description Format filter */
+                    format?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": AggregatedArchetypeDTO[];
+                        "application/json": AggregatedArchetypeDTO[];
+                        "text/json": AggregatedArchetypeDTO[];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/Events/GetEventsList": {
         parameters: {
             query?: never;
@@ -473,6 +1101,125 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/Games/formats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": string[];
+                        "application/json": string[];
+                        "text/json": string[];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/Games/dashboard-stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    minDate?: string;
+                    maxDate?: string;
+                    format?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": DashboardStatsDTO;
+                        "application/json": DashboardStatsDTO;
+                        "text/json": DashboardStatsDTO;
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/Games/performance-trend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    minDate?: string;
+                    maxDate?: string;
+                    format?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": PerformanceTrendDTO[];
+                        "application/json": PerformanceTrendDTO[];
+                        "text/json": PerformanceTrendDTO[];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -510,6 +1257,7 @@ export interface components {
             readonly loyalty?: string | null;
             readonly defense?: string | null;
             readonly isToken?: boolean;
+            readonly rarity?: string | null;
         };
         "MTGOSDK.API.Collection.CardQuantityPair": {
             /** Format: int32 */
@@ -629,6 +1377,8 @@ export interface components {
             readonly opponentGameWinPercentage?: string | null;
             readonly previousMatches?: MatchStandingRecord[] | null;
         };
+        /** @enum {string} */
+        "MTGOSDK.API.Play.Tournaments.TournamentState": "NotSet" | "Fired" | "WaitingToStart" | "Drafting" | "Deckbuilding" | "DeckbuildingDeckSubmitted" | "WaitingForFirstRoundToStart" | "RoundInProgress" | "BetweenRounds" | "Finished";
         "MTGOSDK.API.Users.Avatar": {
             /** Format: int32 */
             readonly id?: number;
@@ -656,6 +1406,23 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        "Tracker.Controllers.AggregatedArchetypeDTO": {
+            archetype: string | null;
+            colors: string[] | null;
+            /** Format: int32 */
+            matches: number;
+            /** Format: int32 */
+            wins: number;
+            /** Format: int32 */
+            losses: number;
+            /** Format: double */
+            winrate: number;
+            topCard: string | null;
+            /** Format: double */
+            topCardAvgScore: number;
+            /** Format: double */
+            topCardAvgQuantity: number;
+        };
         "Tracker.Controllers.ClientController.IClientState": {
             readonly isConnected?: boolean;
             readonly isInitialized?: boolean;
@@ -668,6 +1435,67 @@ export interface components {
             readonly workingSet?: number | null;
             /** Format: int64 */
             readonly virtualMemory?: number | null;
+        };
+        "Tracker.Controllers.DashboardStatsDTO": {
+            /** Format: double */
+            overallWinrate?: number;
+            /** Format: int32 */
+            totalMatches?: number;
+            /** Format: int32 */
+            wins?: number;
+            /** Format: int32 */
+            losses?: number;
+            /** Format: int32 */
+            ties?: number;
+            /** Format: double */
+            playWinrate?: number;
+            /** Format: int32 */
+            playMatches?: number;
+            /** Format: double */
+            drawWinrate?: number;
+            /** Format: int32 */
+            drawMatches?: number;
+            averageDuration?: string | null;
+            durationTwoGames?: string | null;
+            durationThreeGames?: string | null;
+        };
+        "Tracker.Controllers.DeckColorsDTO": {
+            hash: string | null;
+            colors: string[] | null;
+            colorString: string | null;
+        };
+        "Tracker.Controllers.DeckDTO": {
+            hash: string | null;
+            /** Format: int32 */
+            id: number;
+            name: string | null;
+            format: string | null;
+            /** Format: date-time */
+            timestamp: string;
+            /** Format: int32 */
+            mainboardCount: number;
+            /** Format: int32 */
+            sideboardCount: number;
+            archetype?: string | null;
+            colors?: string[] | null;
+        };
+        "Tracker.Controllers.DeckDetailDTO": {
+            hash: string | null;
+            /** Format: int32 */
+            id: number;
+            name: string | null;
+            format: string | null;
+            /** Format: date-time */
+            timestamp: string;
+            mainboard: CardEntry[] | null;
+            sideboard: CardEntry[] | null;
+        };
+        "Tracker.Controllers.DeckIdentifierDTO": {
+            hash: string | null;
+            /** Format: int32 */
+            id: number;
+            name: string | null;
+            format: string | null;
         };
         "Tracker.Controllers.EventsController.IEventStructure": {
             readonly name?: string | null;
@@ -695,7 +1523,7 @@ export interface components {
             readonly startTime?: string;
             /** Format: date-time */
             readonly endTime?: string;
-            readonly state?: string | null;
+            state?: components["schemas"]["MTGOSDK.API.Play.Tournaments.TournamentState"];
             /** Format: int32 */
             readonly currentRound?: number;
             /** Format: date-time */
@@ -715,12 +1543,49 @@ export interface components {
         "Tracker.Controllers.EventsController.ITournamentStateUpdate": {
             /** Format: int32 */
             readonly id?: number;
-            readonly state?: string | null;
+            state?: components["schemas"]["MTGOSDK.API.Play.Tournaments.TournamentState"];
             /** Format: int32 */
             readonly currentRound?: number;
             /** Format: date-time */
             readonly roundEndTime?: string;
             readonly inPlayoffs?: boolean;
+        };
+        "Tracker.Controllers.PerformanceTrendDTO": {
+            date: string | null;
+            /** Format: date-time */
+            rawDate: string;
+            /** Format: double */
+            winrate?: number | null;
+            /** Format: int32 */
+            matches?: number;
+            /** Format: double */
+            rollingAvg?: number | null;
+            ci95?: number[] | null;
+            ci80?: number[] | null;
+            ci50?: number[] | null;
+        };
+        /** @description Card entry with sortable metadata (CMC, Colors, Types) */
+        "Tracker.Controllers.SortableCardEntry": {
+            /** Format: int32 */
+            index?: number;
+            /** Format: int32 */
+            originalIndex?: number;
+            name: string | null;
+            /** Format: int32 */
+            quantity?: number;
+            /** Format: int32 */
+            cmc?: number;
+            colors?: string[] | null;
+            types?: string[] | null;
+            rarity: string | null;
+            zone?: string | null;
+        };
+        "Tracker.Database.Models.CardEntry": {
+            /** Format: int32 */
+            catalogId?: number;
+            name?: string | null;
+            /** Format: int32 */
+            quantity?: number;
         };
     };
     responses: never;
@@ -743,14 +1608,24 @@ export type MtgosdkApiPlayPlayFormatType = components['schemas']['MTGOSDK.API.Pl
 export type MtgosdkApiPlayTournamentsGameStandingRecord = GameStandingRecord;
 export type MtgosdkApiPlayTournamentsMatchStandingRecord = MatchStandingRecord;
 export type MtgosdkApiPlayTournamentsStandingRecord = StandingRecord;
+export type MtgosdkApiPlayTournamentsTournamentState = components['schemas']['MTGOSDK.API.Play.Tournaments.TournamentState'];
 export type MtgosdkApiUsersAvatar = Avatar;
 export type MtgosdkApiUsersUser = User;
 export type MicrosoftAspNetCoreMvcProblemDetails = ProblemDetails;
+export type TrackerControllersAggregatedArchetypeDto = AggregatedArchetypeDTO;
 export type TrackerControllersClientControllerIClientState = IClientState;
+export type TrackerControllersDashboardStatsDto = DashboardStatsDTO;
+export type TrackerControllersDeckColorsDto = DeckColorsDTO;
+export type TrackerControllersDeckDto = DeckDTO;
+export type TrackerControllersDeckDetailDto = DeckDetailDTO;
+export type TrackerControllersDeckIdentifierDto = DeckIdentifierDTO;
 export type TrackerControllersEventsControllerIEventStructure = IEventStructure;
 export type TrackerControllersEventsControllerITournament = ITournament;
 export type TrackerControllersEventsControllerITournamentPlayerUpdate = ITournamentPlayerUpdate;
 export type TrackerControllersEventsControllerITournamentStateUpdate = ITournamentStateUpdate;
+export type TrackerControllersPerformanceTrendDto = PerformanceTrendDTO;
+export type TrackerControllersSortableCardEntry = SortableCardEntry;
+export type TrackerDatabaseModelsCardEntry = CardEntry;
 export type $defs = Record<string, never>;
 export type operations = Record<string, never>;
 
@@ -767,8 +1642,17 @@ export type StandingRecord = components['schemas']['MTGOSDK.API.Play.Tournaments
 export type Avatar = components['schemas']['MTGOSDK.API.Users.Avatar'];
 export type User = components['schemas']['MTGOSDK.API.Users.User'];
 export type ProblemDetails = components['schemas']['Microsoft.AspNetCore.Mvc.ProblemDetails'];
+export type AggregatedArchetypeDTO = components['schemas']['Tracker.Controllers.AggregatedArchetypeDTO'];
 export type IClientState = components['schemas']['Tracker.Controllers.ClientController.IClientState'];
+export type DashboardStatsDTO = components['schemas']['Tracker.Controllers.DashboardStatsDTO'];
+export type DeckColorsDTO = components['schemas']['Tracker.Controllers.DeckColorsDTO'];
+export type DeckDTO = components['schemas']['Tracker.Controllers.DeckDTO'];
+export type DeckDetailDTO = components['schemas']['Tracker.Controllers.DeckDetailDTO'];
+export type DeckIdentifierDTO = components['schemas']['Tracker.Controllers.DeckIdentifierDTO'];
 export type IEventStructure = components['schemas']['Tracker.Controllers.EventsController.IEventStructure'];
 export type ITournament = components['schemas']['Tracker.Controllers.EventsController.ITournament'];
 export type ITournamentPlayerUpdate = components['schemas']['Tracker.Controllers.EventsController.ITournamentPlayerUpdate'];
 export type ITournamentStateUpdate = components['schemas']['Tracker.Controllers.EventsController.ITournamentStateUpdate'];
+export type PerformanceTrendDTO = components['schemas']['Tracker.Controllers.PerformanceTrendDTO'];
+export type SortableCardEntry = components['schemas']['Tracker.Controllers.SortableCardEntry'];
+export type CardEntry = components['schemas']['Tracker.Database.Models.CardEntry'];
