@@ -86,6 +86,8 @@ public class ClientController : APIController
     // Set up streaming headers
     Response.Headers.Append("Content-Type", "application/x-ndjson");
     Response.Headers.Append("Cache-Control", "no-cache");
+    // NOTE: Do not set the "Connection" header.
+    // It's illegal for HTTP/2 and can cause the response to fail.
 
     try
     {

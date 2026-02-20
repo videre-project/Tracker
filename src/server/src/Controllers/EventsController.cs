@@ -6,10 +6,15 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 using MTGOSDK.API.Play;
 using MTGOSDK.API.Play.Tournaments;
@@ -18,6 +23,7 @@ using static MTGOSDK.Core.Reflection.DLRWrapper;
 using MTGOSDK.Core.Remoting;
 
 using Tracker.Controllers.Base;
+using Tracker.Database;
 using Tracker.Services.MTGO;
 
 
@@ -61,7 +67,7 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
     DateTime EndTime { get; }
 
     // ITournamentStateUpdate
-    string State { get; }
+    TournamentState State { get; }
     int CurrentRound { get; }
     DateTime RoundEndTime { get; }
     bool InPlayoffs { get; }
@@ -70,7 +76,7 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
   public interface ITournamentStateUpdate
   {
     int Id { get; }
-    string State { get; }
+    TournamentState State { get; }
     int CurrentRound { get; }
     DateTime RoundEndTime { get; }
     bool InPlayoffs { get; }
@@ -110,10 +116,7 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
     page = Math.Max(1, page);
     pageSize = Math.Clamp(pageSize, 1, 200);
 
-    // Build the query with deferred enumeration
-    var eventsQuery = EventManager.FeaturedEvents
-      .Where(e => e.MinimumPlayers > 2)
-      .OrderBy(e => e.StartTime);
+
 
     // Set basic pagination headers
     Response.Headers["X-Page"] = page.ToString();
@@ -122,7 +125,7 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
     // Optionally include count metadata (requires full enumeration)
     if (includeCount && !stream)
     {
-      var totalCount = eventsQuery.Count();
+      var totalCount = EventManager.FeaturedEventsCount;
       var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
 
       Response.Headers["X-Total-Count"] = totalCount.ToString();
@@ -133,18 +136,19 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
 
     if (stream)
     {
-      // Stream all events without pagination
-      return NdjsonStream(eventsQuery.SerializeAs<ITournament>());
+      // Use batch serialization for efficient cross-event property fetching
+      var serializedEvents = EventManager.SerializeEventsAs<ITournament>(
+        EventManager.EventCollection.Featured);
+      return NdjsonStream(serializedEvents);
     }
     else
     {
-      // Stream only the requested page
-      var pagedEvents = eventsQuery
+      // For paginated (non-streaming), use batch serialization with pagination
+      var serializedEvents = EventManager.SerializeEventsAs<ITournament>(
+        EventManager.EventCollection.Featured)
         .Skip((page - 1) * pageSize)
-        .Take(pageSize)
-        .SerializeAs<ITournament>();
-
-      return NdjsonStream(pagedEvents);
+        .Take(pageSize);
+      return NdjsonStream(serializedEvents);
     }
   }
 
@@ -333,8 +337,6 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
   [ProducesResponseType(StatusCodes.Status404NotFound)]
   public IActionResult OpenEvent(int id)
   {
-    EventManager.NavigateToEvent(id);
-    RemoteClient.FocusWindow();
     return NoContent();
   }
 }

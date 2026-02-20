@@ -37,6 +37,21 @@ public abstract class APIController : ControllerBase
     }
   }
 
+  public class NdjsonStreamAsyncActionResult<T>(
+    APIController controller,
+    IAsyncEnumerable<T> asyncEnumerable)
+      : IActionResult
+  {
+    public async Task ExecuteResultAsync(ActionContext context)
+    {
+      if (context == null) throw new ArgumentNullException(nameof(context));
+
+      controller.DisableBuffering();
+      controller.SetNdjsonContentType();
+      await controller.StreamResponse(asyncEnumerable);
+    }
+  }
+
   private readonly byte[] _ndDelimiter = Encoding.UTF8.GetBytes("\n");
 
   private JsonSerializerOptions _serializerOptions = null!;
@@ -275,5 +290,11 @@ public abstract class APIController : ControllerBase
   protected NdjsonStreamActionResult<T> NdjsonStream<T>(IEnumerable<T> enumerable)
   {
     return new NdjsonStreamActionResult<T>(this, enumerable);
+  }
+
+  [NonAction]
+  protected NdjsonStreamAsyncActionResult<T> NdjsonStream<T>(IAsyncEnumerable<T> asyncEnumerable)
+  {
+    return new NdjsonStreamAsyncActionResult<T>(this, asyncEnumerable);
   }
 }

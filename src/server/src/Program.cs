@@ -9,6 +9,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -21,6 +22,7 @@ using Tracker.Database;
 using Tracker.Services;
 using Tracker.Services.MTGO;
 using Tracker.WebView;
+using Tracker.Testing;
 
 
 namespace Tracker;
@@ -94,9 +96,10 @@ public class Program
   [STAThread]
   public static void Main(string[] args)
   {
-// #if DEBUG
-//     RedirectConsole(); // Ensure console output is redirected.
-// #endif
+#if DEBUG
+    RedirectConsole(); // Ensure console output is redirected.
+#endif
+
     // Optimize thread pool for bursty workloads
     ThreadPool.SetMinThreads(32, 32);
 
@@ -141,7 +144,12 @@ public class Program
               BackgroundServiceExceptionBehavior.Ignore;
         });
       }
-      builder.UseConsole(hostForm);
+
+      // Redirect logging to the WebView2 console if the UI is enabled.
+      if (!options.DisableUI)
+      {
+        builder.UseConsole(hostForm);
+      }
 
       // Configure API services and database context.
       builder.UseDatabase<EventContext>(options);
@@ -152,6 +160,28 @@ public class Program
       var api = builder.Build();
       api.UseClientMiddleware();
       api.CreateAPIService(options);
+
+      // // Start the tournament importer task
+      // Task.Run(async () =>
+      // {
+      //   return;
+      //   try
+      //   {
+      //     var clientProvider = api.Services.GetRequiredService<IClientAPIProvider>();
+      //     Log.Information("Waiting for client to be ready for tournament import...");
+      //     await clientProvider.WaitForClientReadyAsync();
+      //
+      //     Log.Information("Client ready. Starting tournament import...");
+      //     var currentUser = clientProvider.Client.CurrentUser.Name;
+      //     await TournamentImporter.ImportTournaments(api.Services, currentUser);
+      //     Log.Information("Tournament import completed.");
+      //   }
+      //   catch (Exception ex)
+      //   {
+      //     Log.Error(ex, "Failed to import tournaments.");
+      //     Log.Debug(ex.ToString());
+      //   }
+      // });
 
       Log.Debug("Starting the API thread.");
       api.OnShutdown(Application.Exit).Run();

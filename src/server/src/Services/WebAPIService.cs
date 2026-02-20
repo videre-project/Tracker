@@ -124,8 +124,8 @@ public static class WebAPIService
       // Support for streaming responses
       options.MapType<IAsyncEnumerable<object>>(() => new OpenApiSchema
       {
-        Type = "array",
-        Items = new OpenApiSchema { Type = "object" }
+        Type = JsonSchemaType.Array,
+        Items = new OpenApiSchema { Type = JsonSchemaType.Object }
       });
     });
 
