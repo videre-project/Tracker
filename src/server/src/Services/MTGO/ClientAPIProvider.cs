@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using System.Linq;
 
 using MTGOSDK.API;
+using MTGOSDK.API.Graphics;
 using MTGOSDK.Core;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Remoting;
@@ -44,6 +45,9 @@ public class ClientAPIProvider : IClientAPIProvider
     this.Client = new(options, process: process);
     this.Pid = RemoteClient.Port;
     this.Options = options;
+
+    // Ensure remote rendering infrastructure is ready
+    GridRenderer.Initialize();
   }
 
   /// <summary>

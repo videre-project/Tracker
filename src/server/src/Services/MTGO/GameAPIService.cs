@@ -9,8 +9,8 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 using MTGOSDK.API.Play;
 using MTGOSDK.API.Play.Games;
@@ -127,6 +127,7 @@ public static class GameAPIService
     private readonly ConcurrentDictionary<int, Match> _activeMatches = new();
     private readonly ConcurrentDictionary<int, Game> _activeGames = new();
 
+    private readonly ConcurrentDictionary<int, EventTracker> _eventTrackers = new();
     private readonly ConcurrentDictionary<int, MatchTracker> _matchTrackers = new();
     private readonly ConcurrentDictionary<int, GameTracker> _gameTrackers = new();
 
@@ -147,6 +148,12 @@ public static class GameAPIService
 
     private readonly BlockingCollection<GameLogEntry> _eventLog = new();
     private readonly EventDatabaseWriter _dbWriter = new(serviceProvider);
+
+    private void CreateEventTracker(Event eventObj)
+    {
+      EventTracker tracker = new(eventObj, _dbWriter);
+      _eventTrackers.TryAdd(eventObj.Id, tracker);
+    }
 
     private void CreateMatchTracker(Match match, int eventId)
     {
@@ -170,6 +177,7 @@ public static class GameAPIService
           _dbWriter.TryAddEvent(e, out var _))
       {
         Log.Debug("Event Joined {Id}", e.Id);
+        CreateEventTracker(e);
       }
       if (e is Match match && _activeMatches.TryAdd(match.Id, match))
       {
@@ -184,7 +192,10 @@ public static class GameAPIService
       if (_activeEvents.TryAdd(parentEvent.Id, parentEvent))
       {
         Log.Debug("Found event {Id}", parentEvent.Id);
-        _dbWriter.TryAddEvent(parentEvent, out var _);
+        if (_dbWriter.TryAddEvent(parentEvent, out var _))
+        {
+          CreateEventTracker(parentEvent);
+        }
 
         // If it's a match, add it to its parent event
         if (parentEvent is Match match)
@@ -229,68 +240,79 @@ public static class GameAPIService
     {
       Log.Debug("Initializing Game API service...");
 
-      EventManager.EventJoined += OnEventJoined;
-      EventManager.GameJoined += OnGameJoined;
-      
-      Log.Information("Game API service listener has started.");
+      // Hook up the GameAPIService's EventManager event handlers
+      SyncThread.Enqueue(() =>
+      {
+        EventManager.EventJoined += OnEventJoined;
+        EventManager.GameJoined += OnGameJoined;
+        
+        // // Poll active events every 5 seconds to check for player count changes.
+        // WatchPlayerCountAsync(
+        //   EventManager.FeaturedEvents,
+        //   events => PlayerCountUpdated?.Invoke(this, events));
+
+        Log.Information("Game API service listener has started.");
+      });
 
       // Filter events list to get all joined events
-      Log.Information("Finding all joined events and matches...");
-      foreach (Event joinedEvent in EventManager.JoinedEvents)
+      if (EventManager.JoinedEventsCount > 0)
       {
-        if (_activeEvents.TryAdd(joinedEvent.Id, joinedEvent))
+        Log.Information("Finding all joined events and matches...");
+        foreach (Event joinedEvent in EventManager.JoinedEvents)
         {
-          Log.Information("Found event {Id}", joinedEvent.Id);
-          SyncThread.Enqueue(() =>
+          if (_activeEvents.TryAdd(joinedEvent.Id, joinedEvent))
           {
-            // Add the event to the database
-            if (_dbWriter.TryAddEvent(joinedEvent, out var _))
+            Log.Information("Found event {Id}", joinedEvent.Id);
+            SyncThread.Enqueue(() =>
             {
-              Log.Debug("Added event {Id} to database", joinedEvent.Id);
-            }
-          });
-        }
-        // Add any active games from any joined matches
-        if (joinedEvent is Match match)
-        {
-          if (_activeMatches.TryAdd(match.Id, match))
-          {
-            Log.Information("Found match {Id}", match.Id);
-            SyncThread.Enqueue(() => CreateMatchTracker(match, joinedEvent.Id));
+              // Add the event to the database
+              if (_dbWriter.TryAddEvent(joinedEvent, out var _))
+              {
+                Log.Debug("Added event {Id} to database", joinedEvent.Id);
+                CreateEventTracker(joinedEvent);
+              }
+            });
           }
-
-          Game? game = match.CurrentGame;
-          if (game == null) continue;
-
-          if (_activeGames.TryAdd(game.Id, game))
+          // Add any active games from any joined matches
+          if (joinedEvent is Match match)
           {
-            Log.Information("Found game {Id}", game.Id);
-            SyncThread.Enqueue(() => CreateGameTracker(game, match.Id));
+            if (_activeMatches.TryAdd(match.Id, match))
+            {
+              Log.Information("Found match {Id}", match.Id);
+              SyncThread.Enqueue(() => CreateMatchTracker(match, joinedEvent.Id));
+            }
+
+            Game? game = match.CurrentGame;
+            if (game == null) continue;
+
+            if (_activeGames.TryAdd(game.Id, game))
+            {
+              Log.Information("Found game {Id}", game.Id);
+              SyncThread.Enqueue(() => CreateGameTracker(game, match.Id));
+            }
           }
         }
       }
       Log.Trace("Game API service finished initializing");
-
-      // Poll active events every 5 seconds to check for player count changes.
-      WatchPlayerCountAsync(
-        EventManager.FeaturedEvents,
-        events => PlayerCountUpdated?.Invoke(this, events));
     }
 
     private void ResetService()
     {
       Log.Information("Resetting Game API service state...");
-      
+
       // Unsubscribe from events
       EventManager.EventJoined -= OnEventJoined;
       EventManager.GameJoined -= OnGameJoined;
 
+      foreach (var tracker in _eventTrackers.Values) tracker.Dispose();
+      _eventTrackers.Clear();
+
       foreach (var tracker in _matchTrackers.Values) tracker.Dispose();
       _matchTrackers.Clear();
-      
+
       foreach (var tracker in _gameTrackers.Values) tracker.Dispose();
       _gameTrackers.Clear();
-      
+
       _activeEvents.Clear();
       _activeMatches.Clear();
       _activeGames.Clear();
@@ -309,28 +331,28 @@ public static class GameAPIService
         // Main service loop
         while (!stoppingToken.IsCancellationRequested)
         {
-          try 
+          try
           {
             Log.Information("Waiting for client to signal ready...");
             await _clientProvider.WaitForClientReadyAsync(stoppingToken);
-            
+
             Log.Information("Client ready, initializing game service...");
             InitializeGameService();
-            
+
             Log.Information("Game service initialized, waiting for disconnect...");
             await _clientProvider.WaitForClientDisconnectAsync(stoppingToken);
-            
+
             Log.Information("Client disconnected, resetting game service...");
             ResetService();
           }
-          catch (OperationCanceledException) 
-          { 
-            break; 
+          catch (OperationCanceledException)
+          {
+            break;
           }
-          catch (Exception ex) 
-          { 
+          catch (Exception ex)
+          {
             Log.Error(ex, "Error in GameService loop");
-            // Wait a bit before retrying to avoid tight loops on error
+            Log.Debug(ex.StackTrace);
             await Task.Delay(1000, stoppingToken);
           }
         }
@@ -370,7 +392,7 @@ public static class GameAPIService
         }
         catch (OperationCanceledException)
         {
-            throw;
+          throw;
         }
         catch (Exception ex)
         {

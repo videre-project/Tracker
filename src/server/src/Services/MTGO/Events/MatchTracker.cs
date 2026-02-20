@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Linq;
 
 using MTGOSDK.API.Collection;
@@ -134,9 +135,13 @@ public class MatchTracker: IDisposable
 
     if (matchState.HasFlag(MatchState.MatchCompleted))
     {
-      Log.Debug("Match {Id} completed", m_match.Id);
-      Dispose();
-      UpdateMatchResults();
+      // Wait for the game to finish processing events before disposing.
+      Task.Delay(10_000).ContinueWith(_ =>
+      {
+        Log.Debug("Match {Id} completed", m_match.Id);
+        Dispose();
+        UpdateMatchResults();
+      });
     }
   }
 

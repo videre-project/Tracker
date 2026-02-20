@@ -17,6 +17,7 @@ using Microsoft.Extensions.DependencyInjection;
 using MTGOSDK.API.Collection;
 using MTGOSDK.API.Play;
 using MTGOSDK.API.Play.Games;
+using MTGOSDK.API.Play.Tournaments;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection;
 
@@ -33,6 +34,7 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
 
   public bool TryAddEvent(Event eventObj, out EventModel? eventModel)
   {
+    DateTime startTime = DateTime.Now;
     using (var scope = serviceProvider.CreateScope())
     {
       var context = scope.ServiceProvider.GetRequiredService<EventContext>();
@@ -55,6 +57,7 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
           Id = eventObj.Id,
           Format = eventObj.Format,
           Description = eventObj.Description,
+          StartTime = Try(() => (eventObj as Tournament)?.StartTime) ?? startTime
         };
         if (eventObj.RegisteredDeck is Deck deck)
         {
@@ -111,6 +114,42 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
       {
         Log.Error(ex, "Error adding event {EventId}", eventObj.Id);
         eventModel = null;
+        return false;
+      }
+    }
+  }
+
+  public bool TryUpdateEventEndTime(int eventId, DateTime endTime)
+  {
+    using (var scope = serviceProvider.CreateScope())
+    {
+      var context = scope.ServiceProvider.GetRequiredService<EventContext>();
+
+      try
+      {
+        using var transaction = context.Database.BeginTransaction();
+
+        var eventModel = context.Events.FirstOrDefault(e => e.Id == eventId);
+        if (eventModel == null)
+        {
+          Log.Warning("Event {Id} not found for updating end time", eventId);
+          return false;
+        }
+
+        // Only update if EndTime is not already set (Idempotence)
+        if (eventModel.EndTime == null)
+        {
+          eventModel.EndTime = endTime;
+          context.SaveChanges();
+          transaction.Commit();
+          return true;
+        }
+        
+        return false;
+      }
+      catch (Exception ex)
+      {
+        Log.Error(ex, "Error updating end time for event {EventId}", eventId);
         return false;
       }
     }
@@ -274,7 +313,9 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
 
       // Wait until the EventModel is created before adding the log entry.
       if (!await WaitUntilAsync(async () =>
-        await context.Events.AnyAsync(e => e.Id == eventId, cancellationToken)
+        await context.Events.AnyAsync(e => e.Id == eventId, cancellationToken),
+        retries: int.MaxValue,
+        ct: cancellationToken
       ))
       {
         return false;
@@ -297,7 +338,9 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
 
       // Wait until the MatchModel is created before adding the log entry.
       if (!await WaitUntilAsync(async () =>
-        await context.Matches.AnyAsync(m => m.Id == matchId, cancellationToken)
+        await context.Matches.AnyAsync(m => m.Id == matchId, cancellationToken),
+        retries: int.MaxValue,
+        ct: cancellationToken
       ))
       {
         return false;
@@ -320,7 +363,9 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
 
       // Wait until the GameModel is created before adding the log entry.
       if (!await WaitUntilAsync(async () =>
-        await context.Games.AnyAsync(g => g.Id == gameId, cancellationToken)
+        await context.Games.AnyAsync(g => g.Id == gameId, cancellationToken),
+        retries: int.MaxValue,
+        ct: cancellationToken
       ))
       {
         return false;
