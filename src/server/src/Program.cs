@@ -95,7 +95,11 @@ public class Program
   public static void Main(string[] args)
   {
 #if DEBUG
-    RedirectConsole(); // Ensure console output is redirected.
+    // Only redirect console if we aren't running under dotnet watch, which manages its own console.
+    if (Environment.GetEnvironmentVariable("DOTNET_WATCH") != "1")
+    {
+      RedirectConsole();
+    }
 #endif
 
     // Optimize thread pool for bursty workloads
@@ -107,6 +111,24 @@ public class Program
       DisableUI = Application.ProductName != ProductInfo.Name,
     };
     Theme.Initialize(options);
+
+    //
+    // If in development and SpaProxy is missing from hosting startup assemblies, add it.
+    // This is necessary because dotnet watch may override the values from launchSettings.json.
+    //
+    // TODO: Remove this once dotnet watch is updated to support SpaProxy.
+    //
+    if (options.IsDevelopment)
+    {
+       var startupAssemblies = Environment.GetEnvironmentVariable("ASPNETCORE_HOSTINGSTARTUPASSEMBLIES") ?? "";
+       if (!startupAssemblies.Contains("Microsoft.AspNetCore.SpaProxy"))
+       {
+         startupAssemblies = string.IsNullOrEmpty(startupAssemblies) 
+           ? "Microsoft.AspNetCore.SpaProxy" 
+           : $"{startupAssemblies};Microsoft.AspNetCore.SpaProxy";
+         Environment.SetEnvironmentVariable("ASPNETCORE_HOSTINGSTARTUPASSEMBLIES", startupAssemblies);
+       }
+    }
 
     Application.SetHighDpiMode(HighDpiMode.SystemAware);
     Application.EnableVisualStyles();

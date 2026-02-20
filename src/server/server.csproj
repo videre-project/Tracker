@@ -33,12 +33,35 @@
     <SpaProxyServerUrl>https://localhost:5279</SpaProxyServerUrl>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="$(SpaRoot)\client.esproj"
-                      ReferenceOutputAssembly="false" />
     <!-- Embed the build output of the client project -->
     <EmbeddedResource Include="$(SpaRoot)\dist\**\*"
                       LogicalName="%(RecursiveDir)%(FileName)%(Extension)" />
   </ItemGroup>
+
+  <!-- Prevent dotnet watch from trying to evaluate or watch the client project -->
+  <PropertyGroup>
+    <DotNetWatchExclude>$(SpaRoot)\**\*</DotNetWatchExclude>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(DOTNET_WATCH)' == '1'">
+    <Watch Include="$(SpaRoot)\**\*" Watch="false" />
+  </ItemGroup>
+
+  <!-- Manually generate spa-proxy-config.json for the SpaProxy middleware -->
+  <Target Name="GenerateSpaProxyConfig" BeforeTargets="Build">
+    <PropertyGroup>
+      <SpaProxyConfigPath>$(OutputPath)spa-proxy-config.json</SpaProxyConfigPath>
+      <SpaProxyConfigContent>{
+  "LaunchCommand": "$(SpaProxyLaunchCommand.Replace('\', '\\'))",
+  "WorkingDirectory": "$(SpaRoot.Replace('\', '\\'))",
+  "MaxRetries": 15,
+  "ServerUrl": "$(SpaProxyServerUrl)"
+}</SpaProxyConfigContent>
+    </PropertyGroup>
+    <WriteLinesToFile File="$(SpaProxyConfigPath)" Lines="$(SpaProxyConfigContent)" Overwrite="true" WriteOnlyWhenDifferent="true" />
+    <ItemGroup>
+      <FileWrites Include="$(SpaProxyConfigPath)" />
+    </ItemGroup>
+  </Target>
 
   <!--
     Prevent package pruning of Microsoft.Extensions.FileProviders.Embedded
@@ -85,7 +108,8 @@
   <PropertyGroup>
     <PublishSingleFile>true</PublishSingleFile>
     <DebugType>embedded</DebugType>
-    <StaticWebAssetsEnabled>false</StaticWebAssetsEnabled>
+    <StaticWebAssetsEnabled Condition="'$(Configuration)' == 'Debug'">true</StaticWebAssetsEnabled>
+    <StaticWebAssetsEnabled Condition="'$(Configuration)' != 'Debug'">false</StaticWebAssetsEnabled>
     <GenerateEmbeddedFilesManifest>true</GenerateEmbeddedFilesManifest>
     <IsWebConfigTransformDisabled>true</IsWebConfigTransformDisabled>
     <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
