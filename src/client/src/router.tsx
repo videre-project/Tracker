@@ -15,6 +15,8 @@ import Layout from "@/layout/LayoutContent";
 import Events from "@/pages/events";
 import Home from "@/pages/home";
 import SettingsPage from "@/pages/settings";
+import Decks from "@/pages/decks";
+import Collection from "@/pages/collection";
 
 export enum NavType {
   Primary,
@@ -64,14 +66,14 @@ export const routes: RouteEntry[] = [
         name: "Collection",
         icon: LibraryBig,
         type: NavType.Primary,
-        element: <DummyComponent />
+        element: <Collection />
       },
       {
         path: "/decks",
         name: "Decks",
         icon: BookCopy,
         type: NavType.Primary,
-        element: <DummyComponent />
+        element: <Decks />
       },
       {
         path: "/events",
