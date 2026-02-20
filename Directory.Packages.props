@@ -10,33 +10,32 @@
   </PropertyGroup>
 
   <PropertyGroup Label="SDKVersions">
-    <!-- <MTGOSDKVersion>1.1.0.20260124</MTGOSDKVersion> -->
-    <MTGOSDKVersion>1.1.1.2026-preview.0</MTGOSDKVersion>
+    <MTGOSDKVersion>1.2.0.20260220</MTGOSDKVersion>
   </PropertyGroup>
 
   <ItemGroup Label="PackageVersions">
     <!-- ASP.NET Web API -->
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi"
-                    Version="10.0.2" />
+                    Version="10.0.3" />
     <PackageVersion Include="Microsoft.AspNetCore.SpaProxy"
-                    Version="10.0.2" />
+                    Version="10.0.3" />
     <PackageVersion Include="Scalar.AspNetCore"
-                    Version="2.11.10" />
+                    Version="2.12.46" />
     <!-- Swagger -->
     <PackageVersion Include="Swashbuckle.AspNetCore"
-                    Version="10.1.0" />
+                    Version="10.1.4" />
     <PackageVersion Include="Swashbuckle.AspNetCore.Annotations"
-                    Version="10.1.0" />
+                    Version="10.1.4" />
     <!-- SQLite Database -->
     <PackageVersion Include="Microsoft.EntityFrameworkCore"
-                    Version="10.0.2" />
+                    Version="10.0.3" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite"
-                    Version="10.0.2" />
+                    Version="10.0.3" />
     <!-- WebView2 Application -->
     <PackageVersion Include="Microsoft.Extensions.FileProviders.Embedded"
-                    Version="10.0.2" />
+                    Version="10.0.3" />
     <PackageVersion Include="Microsoft.Web.WebView2"
-                    Version="1.0.3650.58" />
+                    Version="1.0.3800.47" />
     <!-- MTGOSDK -->
     <PackageVersion Include="MTGOSDK"
                     Version="$(MTGOSDKVersion)" />
