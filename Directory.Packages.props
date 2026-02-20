@@ -4,40 +4,39 @@
     <!-- Enable central package management -->
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <!-- Enable deterministic NuGet package restore -->
-    <!-- <RestoreLockedMode>true</RestoreLockedMode> -->
+    <RestoreLockedMode>true</RestoreLockedMode>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <RestoreUseStaticGraphEvaluation>true</RestoreUseStaticGraphEvaluation>
   </PropertyGroup>
 
   <PropertyGroup Label="SDKVersions">
-    <!-- <MTGOSDKVersion>0.8.6.20251008-preview.10</MTGOSDKVersion> -->
-    <MTGOSDKVersion>0.8.7.20251203-preview.11</MTGOSDKVersion>
-    <NoWarn>$(NoWarn)NU1601</NoWarn>
+    <!-- <MTGOSDKVersion>1.1.0.20260124</MTGOSDKVersion> -->
+    <MTGOSDKVersion>1.1.1.2026-preview.0</MTGOSDKVersion>
   </PropertyGroup>
 
   <ItemGroup Label="PackageVersions">
     <!-- ASP.NET Web API -->
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi"
-                    Version="9.0.3" />
+                    Version="10.0.2" />
     <PackageVersion Include="Microsoft.AspNetCore.SpaProxy"
-                    Version="9.0.3" />
+                    Version="10.0.2" />
     <PackageVersion Include="Scalar.AspNetCore"
-                    Version="2.1.1" />
+                    Version="2.11.10" />
     <!-- Swagger -->
     <PackageVersion Include="Swashbuckle.AspNetCore"
-                    Version="9.0.3" />
+                    Version="10.1.0" />
     <PackageVersion Include="Swashbuckle.AspNetCore.Annotations"
-                    Version="9.0.3" />
+                    Version="10.1.0" />
     <!-- SQLite Database -->
     <PackageVersion Include="Microsoft.EntityFrameworkCore"
-                    Version="9.0.3" />
+                    Version="10.0.2" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite"
-                    Version="9.0.3" />
+                    Version="10.0.2" />
     <!-- WebView2 Application -->
     <PackageVersion Include="Microsoft.Extensions.FileProviders.Embedded"
-                    Version="9.0.3" />
+                    Version="10.0.2" />
     <PackageVersion Include="Microsoft.Web.WebView2"
-                    Version="1.0.3124.44" />
+                    Version="1.0.3650.58" />
     <!-- MTGOSDK -->
     <PackageVersion Include="MTGOSDK"
                     Version="$(MTGOSDKVersion)" />
