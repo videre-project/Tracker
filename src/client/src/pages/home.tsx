@@ -408,124 +408,9 @@ export default function Home() {
     return Math.min(100, (totalSeconds / 1500) * 100)
   }
 
-  if (loading || !stats) {
-    return (
-      <div className="flex flex-col gap-4 p-4 pt-0">
-        <div className="grid gap-4 lg:grid-cols-3">
-          <div className="lg:col-span-2 flex flex-col gap-4">
-            {/* Filters Skeleton */}
-            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mt-2">
-              <div className="flex items-center gap-2">
-                <Skeleton className="h-8 w-[200px]" />
-                <Skeleton className="h-8 w-[120px]" />
-              </div>
-              <Skeleton className="h-8 w-[180px]" />
-            </div>
-
-            {/* Stat Cards Skeleton */}
-            <div className="grid gap-4 md:grid-cols-3">
-              <Card className="border-sidebar-border/60">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4 pb-2">
-                  <Skeleton className="h-5 w-[100px]" />
-                  <Skeleton className="h-4 w-4" />
-                </CardHeader>
-                <CardContent className="p-4 pt-0">
-                  <Skeleton className="h-9 w-[60px] mb-4" />
-                  <Skeleton className="h-2 w-full rounded-full mb-2" />
-                  <div className="flex justify-between">
-                    <Skeleton className="h-4 w-[50px]" />
-                    <Skeleton className="h-4 w-[50px]" />
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="border-sidebar-border/60">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4 pb-2">
-                  <Skeleton className="h-5 w-[120px]" />
-                  <Skeleton className="h-4 w-4" />
-                </CardHeader>
-                <CardContent className="p-4 pt-0">
-                  <div className="space-y-4 pt-2">
-                    <div className="space-y-2">
-                      <div className="flex justify-between">
-                        <Skeleton className="h-4 w-[70px]" />
-                        <Skeleton className="h-4 w-[30px]" />
-                      </div>
-                      <Skeleton className="h-2 w-full" />
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex justify-between">
-                        <Skeleton className="h-4 w-[70px]" />
-                        <Skeleton className="h-4 w-[30px]" />
-                      </div>
-                      <Skeleton className="h-2 w-full" />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="border-sidebar-border/60">
-                <CardHeader className="flex flex-row items-start justify-between space-y-0 p-4 pb-0">
-                  <div className="space-y-1">
-                    <Skeleton className="h-5 w-[100px]" />
-                    <Skeleton className="h-4 w-[40px]" />
-                  </div>
-                  <Skeleton className="h-4 w-4" />
-                </CardHeader>
-                <CardContent className="p-4 pt-0 -mt-6">
-                  <div className="mt-2 flex justify-end">
-                    <Skeleton className="h-9 w-[80px]" />
-                  </div>
-                  <div className="mt-2 flex flex-col gap-2">
-                    <Skeleton className="h-5 w-full" />
-                    <Skeleton className="h-5 w-full" />
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Performance Trend Skeleton */}
-            <Card className="border-sidebar-border/60">
-              <CardHeader className="flex flex-row items-center justify-between px-4 py-2">
-                <Skeleton className="h-6 w-[140px]" />
-                <Skeleton className="h-6 w-[180px]" />
-              </CardHeader>
-              <CardContent className="p-4 pt-0">
-                <Skeleton className="h-[310px] w-full" />
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Right Column: Deck Performance Skeleton */}
-          <Card className="border-sidebar-border/60 h-full">
-            <CardHeader className="flex flex-row items-center justify-between px-4 py-3">
-              <Skeleton className="h-6 w-[140px]" />
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="p-4">
-                <Skeleton className="h-[175px] w-full mb-4" />
-              </div>
-              <div className="flex flex-col gap-0">
-                {[1, 2, 3, 4, 5].map(i => (
-                  <div key={i} className="flex items-center gap-3 border-b border-sidebar-border/40 p-3">
-                    <Skeleton className="h-8 w-8 rounded-full" />
-                    <div className="flex-1 space-y-1">
-                      <Skeleton className="h-3 w-[120px]" />
-                      <Skeleton className="h-2 w-[80px]" />
-                    </div>
-                    <Skeleton className="h-4 w-[40px]" />
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    )
-  }
-
   const playCI = stats ? getBetaCI(stats.playWinrate, stats.playMatches) : { start: 50, end: 50 }
   const drawCI = stats ? getBetaCI(stats.drawWinrate, stats.drawMatches) : { start: 50, end: 50 }
+
 
   return (
     <div className="flex flex-col gap-4 p-4 pt-0">
@@ -635,36 +520,49 @@ export default function Home() {
                 <Trophy className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent className="p-4 pt-0">
-                <div className="text-3xl font-bold">{stats.totalMatches > 0 ? `${stats.overallWinrate}%` : "N/A"}</div>
-                <div className="mt-4 flex flex-col gap-2">
-                  <div className="relative">
-                    <div className="absolute bottom-full right-0 mb-2 text-xs font-medium text-muted-foreground">
-                      {stats.ties} Ties
+                {!stats || loading ? (
+                  <>
+                    <Skeleton className="h-9 w-[60px] mb-4" />
+                    <Skeleton className="h-2 w-full rounded-full mb-2" />
+                    <div className="flex justify-between">
+                      <Skeleton className="h-4 w-[50px]" />
+                      <Skeleton className="h-4 w-[50px]" />
                     </div>
-                    <div className="relative flex h-2 w-full overflow-hidden rounded-full transition-all">
-                      {stats.totalMatches > 0 ? (
-                        <>
-                          <div className="h-full bg-emerald-500" style={{ width: `${stats.overallWinrate}%` }} />
-                          <div className="h-full flex-1 bg-rose-500" />
-                          <div className="h-full bg-muted-foreground/30" style={{ width: `${(stats.ties / stats.totalMatches) * 100}%` }} />
-                          <div className="absolute left-1/2 top-0 h-full w-[2px] -translate-x-1/2 bg-background" />
-                        </>
-                      ) : (
-                        <div className="h-full w-full bg-secondary" />
-                      )}
+                  </>
+                ) : (
+                  <>
+                    <div className="text-3xl font-bold">{stats.totalMatches > 0 ? `${stats.overallWinrate}%` : "N/A"}</div>
+                    <div className="mt-4 flex flex-col gap-2">
+                      <div className="relative">
+                        <div className="absolute bottom-full right-0 mb-2 text-xs font-medium text-muted-foreground">
+                          {stats.ties} Ties
+                        </div>
+                        <div className="relative flex h-2 w-full overflow-hidden rounded-full transition-all">
+                          {stats.totalMatches > 0 ? (
+                            <>
+                              <div className="h-full bg-emerald-500" style={{ width: `${stats.overallWinrate}%` }} />
+                              <div className="h-full flex-1 bg-rose-500" />
+                              <div className="h-full bg-muted-foreground/30" style={{ width: `${(stats.ties / stats.totalMatches) * 100}%` }} />
+                              <div className="absolute left-1/2 top-0 h-full w-[2px] -translate-x-1/2 bg-background" />
+                            </>
+                          ) : (
+                            <div className="h-full w-full bg-secondary" />
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        {stats.totalMatches > 0 ? (
+                          <>
+                            <span className="font-medium text-emerald-500">{stats.wins} Wins</span>
+                            <span className="font-medium text-rose-500">{stats.losses} Losses</span>
+                          </>
+                        ) : (
+                          <span className="text-muted-foreground">No matches recorded</span>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex justify-between text-xs">
-                    {stats.totalMatches > 0 ? (
-                      <>
-                        <span className="font-medium text-emerald-500">{stats.wins} Wins</span>
-                        <span className="font-medium text-rose-500">{stats.losses} Losses</span>
-                      </>
-                    ) : (
-                      <span className="text-muted-foreground">No matches recorded</span>
-                    )}
-                  </div>
-                </div>
+                  </>
+                )}
               </CardContent>
             </Card>
 
@@ -674,141 +572,160 @@ export default function Home() {
                 <Dices className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent className="p-4 pt-0">
-                <div className="flex flex-col gap-4 pt-2">
-                  {/* Play Slider */}
-                  <div className="space-y-2">
-                    <div className="relative z-10 flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground">On the Play</span>
-                      <span className={`font-bold ${stats.playMatches > 0 ? (stats.playWinrate >= 50 ? "text-emerald-500" : "text-rose-500") : "text-muted-foreground"}`}>
-                        {stats.playMatches > 0 ? `${stats.playWinrate}%` : "N/A"}
-                      </span>
+                {!stats || loading ? (
+                  <div className="space-y-4 pt-2">
+                    <div className="space-y-2">
+                      <div className="flex justify-between">
+                        <Skeleton className="h-4 w-[70px]" />
+                        <Skeleton className="h-4 w-[30px]" />
+                      </div>
+                      <Skeleton className="h-2 w-full" />
                     </div>
-                    <div
-                      className="relative h-2 w-full"
-                      onMouseMove={handleMouseMove}
-                      onMouseLeave={handleMouseLeave}
-                    >
-                      <div className="absolute top-1/2 h-1 w-full -translate-y-1/2 rounded-full bg-secondary" />
-
-                      {stats.playMatches > 0 && (
-                        <>
-                          <BetaChart
-                            winrate={stats.playWinrate}
-                            matches={stats.playMatches}
-                          />
-                          {/* CI bar with split gradient */}
-                          <div
-                            className="absolute top-1/2 h-1 -translate-y-1/2 rounded-full overflow-hidden"
-                            style={{ left: `${playCI.start}%`, width: `${playCI.end - playCI.start}%` }}
-                          >
-                            <div
-                              className="h-full w-full"
-                              style={{
-                                background: `linear-gradient(to right, #f43f5e ${Math.max(0, (50 - playCI.start) / (playCI.end - playCI.start) * 100)}%, #10b981 ${Math.max(0, (50 - playCI.start) / (playCI.end - playCI.start) * 100)}%)`
-                              }}
-                            />
-                          </div>
-                          {/* CI Whiskers - colored based on position */}
-                          <div
-                            className={`absolute top-1/2 h-2 w-px -translate-y-1/2 ${playCI.start >= 50 ? "bg-emerald-500" : "bg-rose-500"}`}
-                            style={{ left: `${playCI.start}%` }}
-                          />
-                          <div
-                            className={`absolute top-1/2 h-2 w-px -translate-y-1/2 ${playCI.end >= 50 ? "bg-emerald-500" : "bg-rose-500"}`}
-                            style={{ left: `${playCI.end}%` }}
-                          />
-                          <div className="absolute left-1/2 top-1/2 h-3 w-px -translate-y-1/2 bg-muted-foreground/30" />
-                          {hoverPercent !== null && hoverPosition && (
-                            <>
-                              <div
-                                className="absolute top-1/2 z-20 h-3 w-px -translate-y-1/2 bg-white shadow-[0_0_4px_rgba(0,0,0,0.5)]"
-                                style={{ left: `${hoverPercent}%` }}
-                              />
-                              <div
-                                className="pointer-events-none fixed z-50 rounded border bg-popover px-2 py-1 text-xs font-medium text-popover-foreground shadow-md"
-                                style={{ left: `${hoverPosition.x + 8}px`, top: `${hoverPosition.y + 8}px` }}
-                              >
-                                {hoverPercent.toFixed(1)}%
-                              </div>
-                            </>
-                          )}
-                          <div
-                            className={`absolute top-1/2 z-10 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-background shadow-sm ${stats.playWinrate >= 50 ? "bg-emerald-500" : "bg-rose-500"
-                              }`}
-                            style={{ left: `${stats.playWinrate}%` }}
-                          />
-                        </>
-                      )}
+                    <div className="space-y-2">
+                      <div className="flex justify-between">
+                        <Skeleton className="h-4 w-[70px]" />
+                        <Skeleton className="h-4 w-[30px]" />
+                      </div>
+                      <Skeleton className="h-2 w-full" />
                     </div>
                   </div>
+                ) : (
+                  <div className="flex flex-col gap-4 pt-2">
+                    {/* Play Slider */}
+                    <div className="space-y-2">
+                      <div className="relative z-10 flex items-center justify-between text-xs">
+                        <span className="text-muted-foreground">On the Play</span>
+                        <span className={`font-bold ${stats.playMatches > 0 ? (stats.playWinrate >= 50 ? "text-emerald-500" : "text-rose-500") : "text-muted-foreground"}`}>
+                          {stats.playMatches > 0 ? `${stats.playWinrate}%` : "N/A"}
+                        </span>
+                      </div>
+                      <div
+                        className="relative h-2 w-full"
+                        onMouseMove={handleMouseMove}
+                        onMouseLeave={handleMouseLeave}
+                      >
+                        <div className="absolute top-1/2 h-1 w-full -translate-y-1/2 rounded-full bg-secondary" />
 
-                  {/* Draw Slider */}
-                  <div className="space-y-2">
-                    <div className="relative z-10 flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground">On the Draw</span>
-                      <span className={`font-bold ${stats.drawMatches > 0 ? (stats.drawWinrate >= 50 ? "text-emerald-500" : "text-rose-500") : "text-muted-foreground"}`}>
-                        {stats.drawMatches > 0 ? `${stats.drawWinrate}%` : "N/A"}
-                      </span>
-                    </div>
-                    <div
-                      className="relative h-2 w-full"
-                      onMouseMove={handleMouseMove}
-                      onMouseLeave={handleMouseLeave}
-                    >
-                      <div className="absolute top-1/2 h-1 w-full -translate-y-1/2 rounded-full bg-secondary" />
-
-                      {stats.drawMatches > 0 && (
-                        <>
-                          <BetaChart
-                            winrate={stats.drawWinrate}
-                            matches={stats.drawMatches}
-                          />
-                          {/* CI bar with split gradient */}
-                          <div
-                            className="absolute top-1/2 h-1 -translate-y-1/2 rounded-full overflow-hidden"
-                            style={{ left: `${drawCI.start}%`, width: `${drawCI.end - drawCI.start}%` }}
-                          >
-                            <div
-                              className="h-full w-full"
-                              style={{
-                                background: `linear-gradient(to right, #f43f5e ${Math.max(0, (50 - drawCI.start) / (drawCI.end - drawCI.start) * 100)}%, #10b981 ${Math.max(0, (50 - drawCI.start) / (drawCI.end - drawCI.start) * 100)}%)`
-                              }}
+                        {stats.playMatches > 0 && (
+                          <>
+                            <BetaChart
+                              winrate={stats.playWinrate}
+                              matches={stats.playMatches}
                             />
-                          </div>
-                          {/* CI Whiskers - colored based on position */}
-                          <div
-                            className={`absolute top-1/2 h-2 w-px -translate-y-1/2 ${drawCI.start >= 50 ? "bg-emerald-500" : "bg-rose-500"}`}
-                            style={{ left: `${drawCI.start}%` }}
-                          />
-                          <div
-                            className={`absolute top-1/2 h-2 w-px -translate-y-1/2 ${drawCI.end >= 50 ? "bg-emerald-500" : "bg-rose-500"}`}
-                            style={{ left: `${drawCI.end}%` }}
-                          />
-                          <div className="absolute left-1/2 top-1/2 h-3 w-px -translate-y-1/2 bg-muted-foreground/30" />
-                          {hoverPercent !== null && hoverPosition && (
-                            <>
+                            {/* CI bar with split gradient */}
+                            <div
+                              className="absolute top-1/2 h-1 -translate-y-1/2 rounded-full overflow-hidden"
+                              style={{ left: `${playCI.start}%`, width: `${playCI.end - playCI.start}%` }}
+                            >
                               <div
-                                className="absolute top-1/2 z-20 h-3 w-px -translate-y-1/2 bg-white shadow-[0_0_4px_rgba(0,0,0,0.5)]"
-                                style={{ left: `${hoverPercent}%` }}
+                                className="h-full w-full"
+                                style={{
+                                  background: `linear-gradient(to right, #f43f5e ${Math.max(0, (50 - playCI.start) / (playCI.end - playCI.start) * 100)}%, #10b981 ${Math.max(0, (50 - playCI.start) / (playCI.end - playCI.start) * 100)}%)`
+                                }}
                               />
+                            </div>
+                            {/* CI Whiskers - colored based on position */}
+                            <div
+                              className={`absolute top-1/2 h-2 w-px -translate-y-1/2 ${playCI.start >= 50 ? "bg-emerald-500" : "bg-rose-500"}`}
+                              style={{ left: `${playCI.start}%` }}
+                            />
+                            <div
+                              className={`absolute top-1/2 h-2 w-px -translate-y-1/2 ${playCI.end >= 50 ? "bg-emerald-500" : "bg-rose-500"}`}
+                              style={{ left: `${playCI.end}%` }}
+                            />
+                            <div className="absolute left-1/2 top-1/2 h-3 w-px -translate-y-1/2 bg-muted-foreground/30" />
+                            {hoverPercent !== null && hoverPosition && (
+                              <>
+                                <div
+                                  className="absolute top-1/2 z-20 h-3 w-px -translate-y-1/2 bg-white shadow-[0_0_4px_rgba(0,0,0,0.5)]"
+                                  style={{ left: `${hoverPercent}%` }}
+                                />
+                                <div
+                                  className="pointer-events-none fixed z-50 rounded border bg-popover px-2 py-1 text-xs font-medium text-popover-foreground shadow-md"
+                                  style={{ left: `${hoverPosition.x + 8}px`, top: `${hoverPosition.y + 8}px` }}
+                                >
+                                  {hoverPercent.toFixed(1)}%
+                                </div>
+                              </>
+                            )}
+                            <div
+                              className={`absolute top-1/2 z-10 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-background shadow-sm ${stats.playWinrate >= 50 ? "bg-emerald-500" : "bg-rose-500"
+                                }`}
+                              style={{ left: `${stats.playWinrate}%` }}
+                            />
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Draw Slider */}
+                    <div className="space-y-2">
+                      <div className="relative z-10 flex items-center justify-between text-xs">
+                        <span className="text-muted-foreground">On the Draw</span>
+                        <span className={`font-bold ${stats.drawMatches > 0 ? (stats.drawWinrate >= 50 ? "text-emerald-500" : "text-rose-500") : "text-muted-foreground"}`}>
+                          {stats.drawMatches > 0 ? `${stats.drawWinrate}%` : "N/A"}
+                        </span>
+                      </div>
+                      <div
+                        className="relative h-2 w-full"
+                        onMouseMove={handleMouseMove}
+                        onMouseLeave={handleMouseLeave}
+                      >
+                        <div className="absolute top-1/2 h-1 w-full -translate-y-1/2 rounded-full bg-secondary" />
+
+                        {stats.drawMatches > 0 && (
+                          <>
+                            <BetaChart
+                              winrate={stats.drawWinrate}
+                              matches={stats.drawMatches}
+                            />
+                            {/* CI bar with split gradient */}
+                            <div
+                              className="absolute top-1/2 h-1 -translate-y-1/2 rounded-full overflow-hidden"
+                              style={{ left: `${drawCI.start}%`, width: `${drawCI.end - drawCI.start}%` }}
+                            >
                               <div
-                                className="pointer-events-none fixed z-50 rounded border bg-popover px-2 py-1 text-xs font-medium text-popover-foreground shadow-md"
-                                style={{ left: `${hoverPosition.x + 8}px`, top: `${hoverPosition.y + 8}px` }}
-                              >
-                                {hoverPercent.toFixed(1)}%
-                              </div>
-                            </>
-                          )}
-                          <div
-                            className={`absolute top-1/2 z-10 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-background shadow-sm ${stats.drawWinrate >= 50 ? "bg-emerald-500" : "bg-rose-500"
-                              }`}
-                            style={{ left: `${stats.drawWinrate}%` }}
-                          />
-                        </>
-                      )}
+                                className="h-full w-full"
+                                style={{
+                                  background: `linear-gradient(to right, #f43f5e ${Math.max(0, (50 - drawCI.start) / (drawCI.end - drawCI.start) * 100)}%, #10b981 ${Math.max(0, (50 - drawCI.start) / (drawCI.end - drawCI.start) * 100)}%)`
+                                }}
+                              />
+                            </div>
+                            {/* CI Whiskers - colored based on position */}
+                            <div
+                              className={`absolute top-1/2 h-2 w-px -translate-y-1/2 ${drawCI.start >= 50 ? "bg-emerald-500" : "bg-rose-500"}`}
+                              style={{ left: `${drawCI.start}%` }}
+                            />
+                            <div
+                              className={`absolute top-1/2 h-2 w-px -translate-y-1/2 ${drawCI.end >= 50 ? "bg-emerald-500" : "bg-rose-500"}`}
+                              style={{ left: `${drawCI.end}%` }}
+                            />
+                            <div className="absolute left-1/2 top-1/2 h-3 w-px -translate-y-1/2 bg-muted-foreground/30" />
+                            {hoverPercent !== null && hoverPosition && (
+                              <>
+                                <div
+                                  className="absolute top-1/2 z-20 h-3 w-px -translate-y-1/2 bg-white shadow-[0_0_4px_rgba(0,0,0,0.5)]"
+                                  style={{ left: `${hoverPercent}%` }}
+                                />
+                                <div
+                                  className="pointer-events-none fixed z-50 rounded border bg-popover px-2 py-1 text-xs font-medium text-popover-foreground shadow-md"
+                                  style={{ left: `${hoverPosition.x + 8}px`, top: `${hoverPosition.y + 8}px` }}
+                                >
+                                  {hoverPercent.toFixed(1)}%
+                                </div>
+                              </>
+                            )}
+                            <div
+                              className={`absolute top-1/2 z-10 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-background shadow-sm ${stats.drawWinrate >= 50 ? "bg-emerald-500" : "bg-rose-500"
+                                }`}
+                              style={{ left: `${stats.drawWinrate}%` }}
+                            />
+                          </>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
               </CardContent>
             </Card>
 
@@ -822,44 +739,58 @@ export default function Home() {
                 <Clock className="mt-1 h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent className="p-4 pt-0 -mt-6">
-                <div className="mt-2 text-right text-[1.6rem] font-bold">
-                  {stats.totalMatches > 0 ? stats.averageDuration : "N/A"}
-                </div>
-                <div className="mt-2 flex flex-col gap-2">
-                  <div className="relative h-5 w-full overflow-hidden rounded-md bg-secondary/50">
-                    {stats.totalMatches > 0 && (
-                      <div
-                        className="h-full bg-muted-foreground/20"
-                        style={{ width: `${getDurationPercentage(stats.durationTwoGames)}%` }}
-                      />
-                    )}
-                    <div className="absolute inset-0 grid grid-cols-2">
-                      <div className="border-r-[3px] border-background/50" />
-                      <div />
+                {!stats || loading ? (
+                  <>
+                    <div className="mt-2 flex justify-end">
+                      <Skeleton className="h-9 w-[80px]" />
                     </div>
-                    <div className="absolute inset-0 flex items-center justify-between px-2 text-xs font-medium">
-                      <span className="text-muted-foreground">2 Games</span>
-                      <span>{stats.totalMatches > 0 ? stats.durationTwoGames : "-"}</span>
+                    <div className="mt-2 flex flex-col gap-2">
+                      <Skeleton className="h-5 w-full" />
+                      <Skeleton className="h-5 w-full" />
                     </div>
-                  </div>
-                  <div className="relative h-5 w-full overflow-hidden rounded-md bg-secondary/50">
-                    {stats.totalMatches > 0 && (
-                      <div
-                        className="h-full bg-muted-foreground/20"
-                        style={{ width: `${getDurationPercentage(stats.durationThreeGames)}%` }}
-                      />
-                    )}
-                    <div className="absolute inset-0 grid grid-cols-3">
-                      <div className="border-r-[3px] border-background/50" />
-                      <div className="border-r-[3px] border-background/50" />
-                      <div />
+                  </>
+                ) : (
+                  <>
+                    <div className="mt-2 text-right text-[1.6rem] font-bold">
+                      {stats.totalMatches > 0 ? stats.averageDuration : "N/A"}
                     </div>
-                    <div className="absolute inset-0 flex items-center justify-between px-2 text-xs font-medium">
-                      <span className="text-muted-foreground">3 Games</span>
-                      <span>{stats.totalMatches > 0 ? stats.durationThreeGames : "-"}</span>
+                    <div className="mt-2 flex flex-col gap-2">
+                      <div className="relative h-5 w-full overflow-hidden rounded-md bg-secondary/50">
+                        {stats.totalMatches > 0 && (
+                          <div
+                            className="h-full bg-muted-foreground/20"
+                            style={{ width: `${getDurationPercentage(stats.durationTwoGames)}%` }}
+                          />
+                        )}
+                        <div className="absolute inset-0 grid grid-cols-2">
+                          <div className="border-r-[3px] border-background/50" />
+                          <div />
+                        </div>
+                        <div className="absolute inset-0 flex items-center justify-between px-2 text-xs font-medium">
+                          <span className="text-muted-foreground">2 Games</span>
+                          <span>{stats.totalMatches > 0 ? stats.durationTwoGames : "-"}</span>
+                        </div>
+                      </div>
+                      <div className="relative h-5 w-full overflow-hidden rounded-md bg-secondary/50">
+                        {stats.totalMatches > 0 && (
+                          <div
+                            className="h-full bg-muted-foreground/20"
+                            style={{ width: `${getDurationPercentage(stats.durationThreeGames)}%` }}
+                          />
+                        )}
+                        <div className="absolute inset-0 grid grid-cols-3">
+                          <div className="border-r-[3px] border-background/50" />
+                          <div className="border-r-[3px] border-background/50" />
+                          <div />
+                        </div>
+                        <div className="absolute inset-0 flex items-center justify-between px-2 text-xs font-medium">
+                          <span className="text-muted-foreground">3 Games</span>
+                          <span>{stats.totalMatches > 0 ? stats.durationThreeGames : "-"}</span>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
+                  </>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -890,7 +821,9 @@ export default function Home() {
               </div>
             </CardHeader>
             <CardContent className="p-4 pt-0 min-h-[310px] flex flex-col justify-center">
-              {zoomedData.length === 0 ? (
+              {loading ? (
+                <Skeleton className="h-[310px] w-full" />
+              ) : zoomedData.length === 0 ? (
                 <NoDataState 
                   icon={Clock} 
                   title="No Performance Trend"
@@ -1079,90 +1012,96 @@ export default function Home() {
             {/* Scatter Plot */}
             {(archetypesLoading || archetypes.length > 0) && (
               <div className="relative h-[175px] w-full outline-none mt-2">
-                <ResponsiveContainer width="100%" height="100%">
-                  <ScatterChart margin={{ top: 2, right: 15, bottom: 10, left: 8 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" strokeOpacity={0.3} fill="hsl(var(--muted))" fillOpacity={0.2} />
-                    <XAxis
-                      type="number"
-                      dataKey="winrate"
-                      name="Winrate"
-                      domain={[50, 80]}
-                      tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
-                      tickLine={false}
-                      axisLine={false}
-                      height={20}
-                    />
-                    <YAxis
-                      type="number"
-                      dataKey="matches"
-                      name="Matches"
-                      tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
-                      tickLine={false}
-                      axisLine={false}
-                      width={30}
-                    />
-                    <Customized component={<DensityLayer data={archetypes.slice(0, 10).map(a => ({ name: a.archetype, winrate: a.winrate, matches: a.matches, keyCard: a.topCard }))} />} />
-                    <Tooltip
-                      cursor={{ strokeDasharray: '3 3' }}
-                      content={({ active, payload }) => {
-                        if (active && payload && payload.length) {
-                          const data = payload[0].payload
-                          return (
-                            <div className="rounded-lg border bg-background p-2 shadow-sm">
-                              <div className="text-xs font-medium">{data.archetype || data.name}</div>
-                              <div className="mt-1 flex gap-3 text-xs text-muted-foreground">
-                                <span>{data.matches} matches</span>
-                                <span className={data.winrate >= 50 ? 'text-emerald-500' : 'text-rose-500'}>
-                                  {data.winrate}% WR
-                                </span>
+                {archetypesLoading ? (
+                  <div className="p-4">
+                    <Skeleton className="h-[175px] w-full mb-4" />
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ScatterChart margin={{ top: 2, right: 15, bottom: 10, left: 8 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" strokeOpacity={0.3} fill="hsl(var(--muted))" fillOpacity={0.2} />
+                      <XAxis
+                        type="number"
+                        dataKey="winrate"
+                        name="Winrate"
+                        domain={[50, 80]}
+                        tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                        tickLine={false}
+                        axisLine={false}
+                        height={20}
+                      />
+                      <YAxis
+                        type="number"
+                        dataKey="matches"
+                        name="Matches"
+                        tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                        tickLine={false}
+                        axisLine={false}
+                        width={30}
+                      />
+                      <Customized component={<DensityLayer data={archetypes.slice(0, 10).map(a => ({ name: a.archetype, winrate: a.winrate, matches: a.matches, keyCard: a.topCard }))} />} />
+                      <Tooltip
+                        cursor={{ strokeDasharray: '3 3' }}
+                        content={({ active, payload }) => {
+                          if (active && payload && payload.length) {
+                            const data = payload[0].payload
+                            return (
+                              <div className="rounded-lg border bg-background p-2 shadow-sm">
+                                <div className="text-xs font-medium">{data.archetype || data.name}</div>
+                                <div className="mt-1 flex gap-3 text-xs text-muted-foreground">
+                                  <span>{data.matches} matches</span>
+                                  <span className={data.winrate >= 50 ? 'text-emerald-500' : 'text-rose-500'}>
+                                    {data.winrate}% WR
+                                  </span>
+                                </div>
                               </div>
-                            </div>
-                          )
-                        }
-                        return null
-                      }}
-                    />
-                    <Scatter
-                      data={archetypes.slice(0, 10).map(a => ({ name: a.archetype, winrate: a.winrate, matches: a.matches, topCard: a.topCard }))}
-                      shape={(props: any) => {
-                        const { cx, cy, payload } = props
-                        const cachedUrl = getArtUrl(payload.topCard)
+                            )
+                          }
+                          return null
+                        }}
+                      />
+                      <Scatter
+                        data={archetypes.slice(0, 10).map(a => ({ name: a.archetype, winrate: a.winrate, matches: a.matches, topCard: a.topCard }))}
+                        shape={(props: any) => {
+                          const { cx, cy, payload } = props
+                          const cachedUrl = getArtUrl(payload.topCard)
 
-                        // Show skeleton circle if not cached yet
-                        if (!cachedUrl) {
+                          // Show skeleton circle if not cached yet
+                          if (!cachedUrl) {
+                            return (
+                              <circle
+                                cx={cx}
+                                cy={cy}
+                                r={7}
+                                fill="hsl(var(--muted))"
+                                opacity={0.5}
+                              >
+                                <animate
+                                  attributeName="opacity"
+                                  values="0.3;0.7;0.3"
+                                  dur="1.5s"
+                                  repeatCount="indefinite"
+                                />
+                              </circle>
+                            )
+                          }
+
                           return (
-                            <circle
-                              cx={cx}
-                              cy={cy}
-                              r={7}
-                              fill="hsl(var(--muted))"
-                              opacity={0.5}
-                            >
-                              <animate
-                                attributeName="opacity"
-                                values="0.3;0.7;0.3"
-                                dur="1.5s"
-                                repeatCount="indefinite"
-                              />
-                            </circle>
+                            <image
+                              href={cachedUrl}
+                              x={cx - 6.5}
+                              y={cy - 6.5}
+                              width={15}
+                              height={15}
+                              style={{ borderRadius: '2px', opacity: 0.9 }}
+                              preserveAspectRatio="xMidYMid slice"
+                            />
                           )
-                        }
-
-                        return (
-                          <image
-                            href={cachedUrl}
-                            x={cx - 6.5}
-                            y={cy - 6.5}
-                            width={15}
-                            height={15}
-                            style={{ borderRadius: '2px', opacity: 0.9 }}
-                            preserveAspectRatio="xMidYMid slice"
-                          />
-                        )
-                      }}
-                    />
-                  </ScatterChart>
-                </ResponsiveContainer>
+                        }}
+                      />
+                    </ScatterChart>
+                  </ResponsiveContainer>
+                )}
                 {/* Axis Labels Overlay */}
                 <div className="pointer-events-none absolute inset-0">
                   <div className="absolute bottom-8 right-5 text-[10px] font-medium text-muted-foreground">Winrate %</div>
