@@ -3,6 +3,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System;
 using System.Collections.Generic;
 
 
@@ -15,6 +16,8 @@ public class EventModel
   public required string Format { get; set; }
 
   public required string Description { get; set; }
+  public DateTime StartTime { get; set; }
+  public DateTime? EndTime { get; set; }
 
   public string? DeckHash { get; set; }
   public DeckModel? Deck { get; set; }
