@@ -67,6 +67,12 @@
     </ItemGroup>
   </Target>
 
+  <!-- Ensure local builds do not keep stale portable-mode installer bypass flags -->
+  <Target Name="ClearInstallerDisableEnvironment" BeforeTargets="Build;Publish">
+    <Exec Command="powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command &quot;[Environment]::SetEnvironmentVariable('TRACKER_DISABLE_INSTALLER',$null,'Process'); [Environment]::SetEnvironmentVariable('TRACKER_DISABLE_INSTALLER',$null,'User')&quot;"
+          ContinueOnError="true" />
+  </Target>
+
   <!--
     Prevent package pruning of Microsoft.Extensions.FileProviders.Embedded
     https://github.com/dotnet/aspnetcore/issues/63719

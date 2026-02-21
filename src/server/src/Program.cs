@@ -6,6 +6,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
@@ -18,6 +19,7 @@ using Microsoft.Win32.SafeHandles;
 using MTGOSDK.Core.Logging;
 
 using Tracker.Database;
+using Tracker.Installer;
 using Tracker.Services;
 using Tracker.Services.MTGO;
 using Tracker.WebView;
@@ -102,14 +104,23 @@ public class Program
     }
 #endif
 
-    // Optimize thread pool for bursty workloads
-    ThreadPool.SetMinThreads(32, 32);
+    Application.SetHighDpiMode(HighDpiMode.SystemAware);
+    Application.EnableVisualStyles();
+    Application.SetCompatibleTextRenderingDefault(false);
 
     var options = new ApplicationOptions(args)
     {
       DisableUI = ShouldDisableUI(args),
     };
     Theme.Initialize(options);
+
+    if (InstallationBootstrapper.EnsureInstalledAndRelaunchIfNeeded(args))
+    {
+      return;
+    }
+
+    // Optimize thread pool for bursty workloads
+    ThreadPool.SetMinThreads(32, 32);
 
     //
     // If in development and SpaProxy is missing from hosting startup assemblies, add it.
@@ -128,10 +139,6 @@ public class Program
          Environment.SetEnvironmentVariable("ASPNETCORE_HOSTINGSTARTUPASSEMBLIES", startupAssemblies);
        }
     }
-
-    Application.SetHighDpiMode(HighDpiMode.SystemAware);
-    Application.EnableVisualStyles();
-    Application.SetCompatibleTextRenderingDefault(false);
 
     // Configure the HostForm and the WebView2 control.
     HostForm hostForm = null!;

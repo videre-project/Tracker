@@ -430,6 +430,10 @@ public partial class HostForm : Form
     AllowShowDisplay = true;
     this.Visible = true;
     this.BringToFront();
+    this.TopMost = true;
+    this.TopMost = false;
+    this.Activate();
+    this.Focus();
 
     // Notify any listeners that the HostForm is ready.
     OnReady?.Invoke(this, EventArgs.Empty);
