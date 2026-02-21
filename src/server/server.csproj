@@ -83,7 +83,8 @@
     <Exec Command="dotnet tool restore"
           WorkingDirectory="$(ProjectDir)" />
     <Exec Command="dotnet swagger tofile --output &quot;$(OutputPath)openapi.json&quot; &quot;$(OutputPath)$(AssemblyName).dll&quot; v1"
-          WorkingDirectory="$(ProjectDir)" />
+          WorkingDirectory="$(ProjectDir)"
+          EnvironmentVariables="TRACKER_DISABLE_INSTALLER=1" />
     
     <PropertyGroup>
       <OpenApiSpecPath>src/server/$(OutputPath)openapi.json</OpenApiSpecPath>

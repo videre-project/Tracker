@@ -107,8 +107,7 @@ public class Program
 
     var options = new ApplicationOptions(args)
     {
-      // Disable UI if the application is loading this assembly via reflection.
-      DisableUI = Application.ProductName != ProductInfo.Name,
+      DisableUI = ShouldDisableUI(args),
     };
     Theme.Initialize(options);
 
@@ -201,5 +200,31 @@ public class Program
       Log.Trace("Starting the application without UI.");
       apiThread.Join();
     }
+  }
+
+  private static bool ShouldDisableUI(string[] args)
+  {
+    var forceDisableUi = Environment.GetEnvironmentVariable("TRACKER_DISABLE_UI");
+    if (string.Equals(forceDisableUi, "1", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(forceDisableUi, "true", StringComparison.OrdinalIgnoreCase))
+    {
+      return true;
+    }
+
+    var processPath = Environment.ProcessPath ?? string.Empty;
+    var processName = Path.GetFileNameWithoutExtension(processPath);
+    if (string.Equals(processName, "dotnet", StringComparison.OrdinalIgnoreCase))
+    {
+      var commandLine = Environment.CommandLine;
+      if (commandLine.Contains("swagger", StringComparison.OrdinalIgnoreCase)
+          || commandLine.Contains("swashbuckle", StringComparison.OrdinalIgnoreCase)
+          || commandLine.Contains("tofile", StringComparison.OrdinalIgnoreCase)
+          || (args?.Any(arg => arg.Contains("swagger", StringComparison.OrdinalIgnoreCase)) ?? false))
+      {
+        return true;
+      }
+    }
+
+    return false;
   }
 }
