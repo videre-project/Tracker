@@ -36,6 +36,9 @@
     <!-- Embed the build output of the client project -->
     <EmbeddedResource Include="$(SpaRoot)\dist\**\*"
                       LogicalName="%(RecursiveDir)%(FileName)%(Extension)" />
+    <!-- Embed installer EULA markdown from solution root -->
+    <EmbeddedResource Include="$(SolutionDir)EULA.md"
+                      LogicalName="Tracker.EULA.md" />
   </ItemGroup>
 
   <!-- Prevent dotnet watch from trying to evaluate or watch the client project -->
