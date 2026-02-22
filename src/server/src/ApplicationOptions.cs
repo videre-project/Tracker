@@ -89,13 +89,40 @@ public class ApplicationOptions(string[] args = null!)
   /// The base directory path for user application data.
   /// </summary>
   /// <remarks>
-  /// Defaults to <c>%LocalAppData%\Videre Tracker</c>
+  /// When running from a versioned install directory (e.g. <c>&lt;installRoot&gt;\v0.0.0\</c>),
+  /// this resolves to the parent <c>&lt;installRoot&gt;\</c> so that data is shared across
+  /// versions and is independent of which install root the user selected during setup.
+  /// Falls back to <c>%LocalAppData%\Videre Tracker</c> otherwise.
   /// </remarks>
-  public string UserDataFolder { get; internal set; } =
-    Path.Combine(
+  public string UserDataFolder { get; internal set; } = ResolveUserDataFolder();
+
+  private static string ResolveUserDataFolder()
+  {
+    // If running from a versioned install subdirectory (e.g. <installRoot>\v0.0.0\),
+    // use the parent as UserDataFolder so it matches the root the user chose at install time.
+    var baseDir = AppContext.BaseDirectory
+      .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+    var dirName = Path.GetFileName(baseDir);
+
+    if (!string.IsNullOrEmpty(dirName)
+        && dirName.Length > 1
+        && dirName[0] is 'v' or 'V'
+        && char.IsDigit(dirName[1]))
+    {
+      var parentDir = Path.GetDirectoryName(baseDir);
+      if (!string.IsNullOrEmpty(parentDir))
+      {
+        return parentDir;
+      }
+    }
+
+    // Default: %LocalAppData%\Videre Tracker
+    var defaultPath = Path.Combine(
       Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-      typeof(Program).Assembly.GetName().Name!
-    );
+      typeof(Program).Assembly.GetName().Name!);
+
+    return defaultPath;
+  }
 
   /// <summary>
   /// The full path to the SQLite database file.
