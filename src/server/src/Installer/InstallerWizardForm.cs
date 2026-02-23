@@ -164,7 +164,7 @@ public sealed class InstallerWizardForm : Form
     {
       Dock = DockStyle.Fill,
       BackColor = Color.FromArgb(18, 18, 20),
-      Padding = new Padding(10, 10, 10, 10),
+      Padding = new Padding(30, 10, 30, 10),
       Margin = Padding.Empty,
     };
 
