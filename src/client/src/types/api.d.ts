@@ -1570,6 +1570,8 @@ export interface components {
             index?: number;
             /** Format: int32 */
             originalIndex?: number;
+            /** Format: int32 */
+            catalogId: number;
             name: string | null;
             /** Format: int32 */
             quantity?: number;

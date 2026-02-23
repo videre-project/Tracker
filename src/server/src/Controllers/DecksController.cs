@@ -348,6 +348,7 @@ public class DecksController(
           {
             Index = -1,
             OriginalIndex = sheetIndexById.TryGetValue(card.Id, out var msi) ? msi : idx,
+            CatalogId = card.Id,
             Name = card.Name,
             Quantity = mainQty,
             Zone = "Mainboard",
@@ -363,6 +364,7 @@ public class DecksController(
           {
             Index = -1, // Assigned later
             OriginalIndex = sheetIndexById.TryGetValue(card.Id, out var ssi) ? ssi : idx,
+            CatalogId = card.Id,
             Name = card.Name,
             Quantity = sideQty,
             Zone = "Sideboard",
@@ -385,6 +387,7 @@ public class DecksController(
          {
             Index = -1,
             OriginalIndex = i,
+            CatalogId = c.Id,
             Name = c.Name,
             Quantity = c.Quantity,
             Zone = "Mainboard", // Default
@@ -772,6 +775,7 @@ public class SortableCardEntry
 {
   public int Index { get; set; }
   public int OriginalIndex { get; set; }
+  public required int CatalogId { get; set; }
   public required string Name { get; set; }
   public int Quantity { get; set; }
   public int Cmc { get; set; }

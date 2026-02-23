@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react"
-import { useDeckSheet, DeckSheetData as SheetData } from "@/hooks/use-deck-sheet"
 import { useSortableCards, groupCardsBySortMode, getSortModeColumns, unrollCards, SortMode, SortableCardEntry } from "@/hooks/use-sortable-cards"
 import { useDeckIdentifiers } from "@/hooks/use-decks"
 import { Loader2, GripVertical, LayoutGrid, PanelRightClose, PanelRightOpen } from "lucide-react"
@@ -204,7 +203,6 @@ function DeckStats({ mainboard, sideboard }: DeckStatsProps) {
 interface DeckGridProps {
   title: string
   cards: SortableCardEntry[]
-  data: SheetData | null
   loading: boolean
   sortMode: SortMode
   collapsed?: boolean
@@ -215,7 +213,6 @@ interface DeckGridProps {
 function DeckGrid({
   title,
   cards,
-  data,
   loading,
   sortMode,
   collapsed = false,
@@ -242,18 +239,18 @@ function DeckGrid({
 
   // Report natural width to parent whenever layout changes
   useEffect(() => {
-    if (cardSlots.size === 0 && !data) return
+    if (cardSlots.size === 0) return
     
     // Calculate natural width (unscaled)
-    const cardWidth = data?.cardWidth ?? DEFAULT_CARD_WIDTH
+    const cardWidth = DEFAULT_CARD_WIDTH
     let maxCol = 0
     cardSlots.forEach(slot => { if (slot.col > maxCol) maxCol = slot.col })
-    const effectiveColumns = cardSlots.size > 0 ? maxCol + 1 : (data?.columns ?? COLUMNS)
+    const effectiveColumns = cardSlots.size > 0 ? maxCol + 1 : COLUMNS
     // Add padding to natural width
     const naturalGridWidth = effectiveColumns * cardWidth + (effectiveColumns + 1) * GAP + 4
     
     onNaturalWidthChange?.(naturalGridWidth)
-  }, [data, cardSlots, collapsed, onNaturalWidthChange])
+  }, [cardSlots, collapsed, onNaturalWidthChange])
 
   useEffect(() => {
     const totalCards = unrolledCards.length
@@ -297,17 +294,17 @@ function DeckGrid({
       setCardSlots(new Map())
       setCardOrder([])
     }
-  }, [data, unrolledCards, sortMode, collapsed])
+  }, [unrolledCards, sortMode, collapsed])
 
   const cardPositions = useMemo(() => {
-    const cardWidth = data?.cardWidth ?? DEFAULT_CARD_WIDTH
-    const cardHeight = data?.cardHeight ?? DEFAULT_CARD_HEIGHT
+    const cardWidth = DEFAULT_CARD_WIDTH
+    const cardHeight = DEFAULT_CARD_HEIGHT
     const positions = new Map<number, Position>()
     cardSlots.forEach((slot, cardIndex) => {
       positions.set(cardIndex, getSlotPosition(slot.col, slot.row, cardWidth, cardHeight))
     })
     return positions
-  }, [cardSlots, data])
+  }, [cardSlots])
 
   const insertCardInColumn = useCallback((cardIndex: number, targetCol: number, targetRow: number) => {
     setCardSlots(prev => {
@@ -352,11 +349,10 @@ function DeckGrid({
 
   const handleDragStart = useCallback((index: number, e: React.MouseEvent | React.TouchEvent) => {
     e.preventDefault()
-    if (!data) return
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
     const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
     const slot = cardSlots.get(index) || { col: 0, row: 0 }
-    const pos = getSlotPosition(slot.col, slot.row, data.cardWidth, data.cardHeight)
+    const pos = getSlotPosition(slot.col, slot.row, DEFAULT_CARD_WIDTH, DEFAULT_CARD_HEIGHT)
 
     setDragState({
       index,
@@ -369,13 +365,13 @@ function DeckGrid({
       newOrder.push(index)
       return newOrder
     })
-  }, [cardSlots, data])
+  }, [cardSlots])
 
   const handleDragMove = useCallback((e: MouseEvent | TouchEvent) => {
-    if (!dragState || !data) return
+    if (!dragState) return
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
     const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
-    const startPos = getSlotPosition(dragState.startSlot.col, dragState.startSlot.row, data.cardWidth, data.cardHeight)
+    const startPos = getSlotPosition(dragState.startSlot.col, dragState.startSlot.row, DEFAULT_CARD_WIDTH, DEFAULT_CARD_HEIGHT)
     const deltaX = (clientX - dragState.startMousePos.x) / scale
     const deltaY = (clientY - dragState.startMousePos.y) / scale
     const newPos = {
@@ -383,12 +379,12 @@ function DeckGrid({
       y: Math.max(0, startPos.y + deltaY)
     }
     setDragState(prev => prev ? { ...prev, currentPos: newPos } : null)
-    const hoverSlot = findNearestSlot(newPos, data.cardWidth, data.cardHeight, data.columns)
+    const hoverSlot = findNearestSlot(newPos, DEFAULT_CARD_WIDTH, DEFAULT_CARD_HEIGHT, COLUMNS)
     const currentSlot = cardSlots.get(dragState.index)
     if (currentSlot && (currentSlot.col !== hoverSlot.col || currentSlot.row !== hoverSlot.row)) {
       insertCardInColumn(dragState.index, hoverSlot.col, hoverSlot.row)
     }
-  }, [dragState, data, scale, cardSlots, insertCardInColumn])
+  }, [dragState, scale, cardSlots, insertCardInColumn])
 
   const handleDragEnd = useCallback(() => setDragState(null), [])
 
@@ -408,15 +404,15 @@ function DeckGrid({
     }
   }, [dragState, handleDragMove, handleDragEnd])
 
-  const cardWidth = data?.cardWidth || DEFAULT_CARD_WIDTH
-  const cardHeight = data?.cardHeight || DEFAULT_CARD_HEIGHT
+  const cardWidth = DEFAULT_CARD_WIDTH
+  const cardHeight = DEFAULT_CARD_HEIGHT
   
   const actualColumns = useMemo(() => {
-    if (cardSlots.size === 0) return data?.columns || COLUMNS
+    if (cardSlots.size === 0) return COLUMNS
     let maxCol = 0
     cardSlots.forEach(slot => { if (slot.col > maxCol) maxCol = slot.col })
     return maxCol + 1
-  }, [cardSlots, data?.columns])
+  }, [cardSlots])
 
   const cardsPerColumn = new Array(actualColumns).fill(0)
   cardSlots.forEach(slot => { if (slot.col < actualColumns) cardsPerColumn[slot.col]++ })
@@ -431,7 +427,7 @@ function DeckGrid({
     return cardPositions.get(cardIndex) || { x: 0, y: 0 }
   }
 
-  if (!data && !loading && cards.length === 0) return null
+  if (!loading && cards.length === 0) return null
 
   return (
     <div
@@ -484,10 +480,11 @@ function DeckGrid({
                const pos = getCardPosition(cardIndex)
                const zIndex = cardSlots.get(cardIndex)?.row ?? 0
                const card = unrolledCards.find(c => c.index === cardIndex)
-               const sheetIndex = card?.originalIndex ?? cardIndex
-               const imageUrl = data?.cardImageUrls?.[sheetIndex]
+
+               const imageUrl = card ? `https://r2.videreproject.com/${card.catalogId}-300px.png` : ""
+
                if (imageUrl) {
-                 return <SheetCard key={cardIndex} index={cardIndex} imageUrl={imageUrl} cardWidth={data!.cardWidth} cardHeight={data!.cardHeight} position={pos} onDragStart={handleDragStart} isDragging={dragState?.index === cardIndex} zIndex={zIndex} />
+                 return <SheetCard key={cardIndex} index={cardIndex} imageUrl={imageUrl} cardWidth={DEFAULT_CARD_WIDTH} cardHeight={DEFAULT_CARD_HEIGHT} position={pos} onDragStart={handleDragStart} isDragging={dragState?.index === cardIndex} zIndex={zIndex} />
                }
                return <SkeletonCard key={cardIndex} cardWidth={DEFAULT_CARD_WIDTH} cardHeight={DEFAULT_CARD_HEIGHT} position={pos} zIndex={zIndex} />
              })}
@@ -499,7 +496,6 @@ function DeckGrid({
 
 
 export default function Collection() {
-  const { data, loading, error, fetchSheet, reset } = useDeckSheet()
   const { cards: allCards, loading: sortableLoading, fetchSortableCards, reset: resetSortable } = useSortableCards()
   const { identifiers: decks, loading: decksLoading } = useDeckIdentifiers()
   const [selectedDeckHash, setSelectedDeckHash] = useState<string>("")
@@ -546,12 +542,10 @@ export default function Collection() {
     fetchAbortRef.current = abortController
 
     if (!selectedDeckHash) {
-      reset()
       resetSortable()
       return 
     }
 
-    reset()
     resetSortable()
 
     const fetchParallel = async () => {
@@ -560,14 +554,7 @@ export default function Collection() {
 
       try {
         const deckId = selectedDeckHash
-        // Run both fetches concurrently: sortable cards (fast) and sheet
-        // rendering (slow). The sheet streams NDJSON so the hook updates
-        // incrementally — sortable cards will finish first and skeleton cards
-        // will appear before the first rendered batch arrives.
-        await Promise.all([
-          fetchSortableCards(selectedDeckName, deckId || undefined),
-          fetchSheet(selectedDeckName, deckId, COLUMNS, 300),
-        ])
+        await fetchSortableCards(selectedDeckName, deckId || undefined)
       } catch (e) {
         if ((e as Error).name !== 'AbortError') throw e
       }
@@ -575,7 +562,7 @@ export default function Collection() {
     fetchParallel()
 
     return () => abortController.abort()
-  }, [fetchSheet, fetchSortableCards, selectedDeckName, selectedDeckHash])
+  }, [fetchSortableCards, selectedDeckName, selectedDeckHash])
 
   const sharedScale = useMemo(() => {
      if (containerWidth === 0 || mainNaturalWidth === 0) return 1
@@ -645,7 +632,7 @@ export default function Collection() {
             </Select>
           </div>
 
-          {(loading || sortableLoading) && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
+          {sortableLoading && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
 
           {sideboardCards.length > 0 && (
             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setIsSideboardCollapsed(prev => !prev)}>
@@ -658,7 +645,7 @@ export default function Collection() {
         <div ref={containerRef} className="flex-1 flex min-h-0 relative">
           {/* Shared Loading Overlay — only shown while we have no card data at all.
                Once sortable cards arrive, skeleton cards are shown instead. */}
-          {allCards.length === 0 && (loading || sortableLoading) && (
+          {allCards.length === 0 && sortableLoading && (
             <div className="absolute inset-0 flex items-center justify-center z-50 bg-background/50 backdrop-blur-[1px]">
               <div className="flex flex-col items-center gap-3">
                 <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
@@ -677,8 +664,7 @@ export default function Collection() {
               <DeckGrid
                 title="Mainboard"
                 cards={mainboardCards}
-                data={data}
-                loading={loading || sortableLoading}
+                loading={sortableLoading}
                 sortMode={sortMode}
                 onNaturalWidthChange={setMainNaturalWidth}
                 forceScale={sharedScale}
@@ -695,8 +681,7 @@ export default function Collection() {
               <DeckGrid
                 title="Sideboard"
                 cards={sideboardCards}
-                data={data}
-                loading={loading || sortableLoading}
+                loading={sortableLoading}
                 sortMode={sortMode}
                 collapsed={isSideboardCollapsed}
                 onNaturalWidthChange={setSideNaturalWidth}

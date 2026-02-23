@@ -4,6 +4,7 @@ import { getApiUrl } from "../utils/api-config"
 export interface SortableCardEntry {
   index: number
   originalIndex: number // Original index in the sheet (before unrolling)
+  catalogId: number
   name: string
   quantity: number
   cmc: number
