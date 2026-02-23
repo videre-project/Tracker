@@ -22,6 +22,7 @@ using MTGOSDK.API.Play;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection.Serialization;
 
+using Tracker.Controllers.Base;
 using Tracker.Database;
 using Tracker.Database.Models;
 using Tracker.Services.MTGO;
@@ -39,7 +40,7 @@ public class DecksController(
   IHttpClientFactory httpClientFactory,
   IServiceScopeFactory scopeFactory,
   ApplicationOptions appOptions,
-  IClientAPIProvider clientProvider) : ControllerBase
+  IClientAPIProvider clientProvider) : APIController
 {
   //
   // Serialization Interfaces
@@ -166,63 +167,92 @@ public class DecksController(
   private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, CachedDeck> s_deckCache = new();
 
   /// <summary>
-  /// Render a deck as a grid sheet image
+  /// Render a deck as a streaming NDJSON sequence of framed card images.
+  ///
+  /// Line 1: <c>{"type":"meta", columns, cardWidth, cardHeight, total}</c>
+  ///   — emitted immediately so the client can pre-size its canvas.
+  /// Remaining lines: <c>{"type":"cards", startIndex, cards: string[]}</c>
+  ///   — emitted in two phases so the first visible row arrives before the
+  ///   full deck finishes rendering.
   /// </summary>
-  /// <param name="name">Deck name (looks up from MTGO client)</param>
-  /// <param name="id">Deck hash/ID (looks up from DB and caches)</param>
-  /// <param name="columns">Number of columns (default: 5)</param>
-  /// <param name="cardHeight">Card height in pixels (default: 300)</param>
-  /// <returns>PNG image with grid metadata in headers</returns>
   [HttpGet("sheet")] // GET /api/decks/sheet?name=Plains&id=HASH
-  [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
+  [ProducesResponseType(StatusCodes.Status200OK)]
   [ProducesResponseType(StatusCodes.Status404NotFound)]
-  public async Task<ActionResult> GetDeckSheet(
+  public async Task<IActionResult> GetDeckSheet(
     [FromQuery] string? name = null,
     [FromQuery] string? id = null,
     [FromQuery] int columns = 5,
     [FromQuery] int cardHeight = 300)
   {
-    Deck? deck = null;
+    int[] catalogIds;
 
     // Prioritize ID/Hash lookup (DB -> Cache -> SDK)
     if (!string.IsNullOrEmpty(id))
     {
       var cached = await GetOrLoadDeck(id);
       if (cached == null)
-      {
         return NotFound(new { error = $"Deck with hash {id} not found in database" });
-      }
-      deck = cached.Deck;
+
+      // Union of mainboard + sideboard (both grids share the same sheet image).
+      // Deduped in DB order — must match the ordering used by GetSortableCards.
+      catalogIds = cached.Mainboard
+        .Concat(cached.Sideboard)
+        .Select(c => c.Id)
+        .Distinct()
+        .ToArray();
     }
-    // Fallback to Name lookup (Client)
+    // Fallback to Name lookup (live MTGO client)
     else if (!string.IsNullOrEmpty(name))
     {
-      deck = CollectionManager.GetDeck(name);
+      var deck = CollectionManager.GetDeck(name);
       if (deck == null)
-      {
         return NotFound(new { error = $"Deck '{name}' not found in MTGO client" });
-      }
+
+      // Sort by name (matches GetSortableCards name-path ordering)
+      var cardData = await deck.SerializeItemsAsAsync<ICardData>();
+      catalogIds = cardData
+        .OrderBy(c => GetSortableName(c.Name))
+        .ThenBy(c => c.Id)
+        .Select(c => c.Id)
+        .Distinct()
+        .ToArray();
     }
     else
     {
       return BadRequest(new { error = "Must provide either 'id' or 'name' parameter" });
     }
 
-    // Render to PNG bytes
-    var (pngBytes, width, height, cardWidth, remoteSlotCount) =
-      GridRenderer.RenderDeckToPngBytes(deck, columns, cardHeight);
+    int cardWidth = (int)Math.Ceiling(cardHeight * (5.0 / 7.0));
+    int total     = catalogIds.Length;
 
-    // Add grid metadata in response headers
-    Response.Headers["X-Grid-Columns"] = columns.ToString();
-    Response.Headers["X-Card-Width"] = cardWidth.ToString();
-    Response.Headers["X-Card-Height"] = cardHeight.ToString();
-    Response.Headers["X-Image-Width"] = width.ToString();
-    Response.Headers["X-Image-Height"] = height.ToString();
-    Response.Headers["X-Slot-Count"] = remoteSlotCount.ToString();
+    DisableBuffering();
+    SetNdjsonContentType();
 
-    // Return PNG image
-    var filename = !string.IsNullOrEmpty(id) ? $"deck-{id}.png" : $"{name}-sheet.png";
-    return File(pngBytes, "image/png", filename);
+    var opts    = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+    var newline = new byte[] { (byte)'\n' };
+
+    async Task WriteLineAsync<T>(T obj)
+    {
+      await JsonSerializer.SerializeAsync(Response.Body, obj, opts, HttpContext.RequestAborted);
+      await Response.Body.WriteAsync(newline, HttpContext.RequestAborted);
+      await Response.Body.FlushAsync(HttpContext.RequestAborted);
+    }
+
+    // Line 1 — metadata: client pre-sizes the canvas and hides the overlay.
+    await WriteLineAsync(new { type = "meta", columns, cardWidth, cardHeight, total });
+
+    // Stream one row at a time. RenderCardsRowByRow does a single WPF render
+    // pass for all cards, then yields each row as soon as its parallel
+    // crop+encode finishes — no second render pass, no double overhead.
+    int startIndex = 0;
+    foreach (var rowCards in CardRenderer.RenderCardsRowByRow(catalogIds, columns, cardHeight))
+    {
+      if (HttpContext.RequestAborted.IsCancellationRequested) break;
+      await WriteLineAsync(new { type = "cards", startIndex, cards = rowCards });
+      startIndex += rowCards.Length;
+    }
+
+    return new EmptyResult();
   }
 
   /// <summary>
@@ -288,7 +318,16 @@ public class DecksController(
         .OrderBy(c => GetSortableName(c.Name))
         .ThenBy(c => c.Id)
         .ToList();
-        
+
+      // Build a lookup: catalogId → sheet slot index, matching GetDeckSheet's
+      // catalogIds ordering (mainboard ∪ sideboard deduped in DB order).
+      var sheetIndexById = cachedDeck.Mainboard
+        .Concat(cachedDeck.Sideboard)
+        .Select(c => c.Id)
+        .Distinct()
+        .Select((id, i) => (id, i))
+        .ToDictionary(t => t.id, t => t.i);
+
       for (int idx = 0; idx < sortedSDKCards.Count; idx++)
       {
         var card = sortedSDKCards[idx];
@@ -308,7 +347,7 @@ public class DecksController(
           resultList.Add(new SortableCardEntry
           {
             Index = -1,
-            OriginalIndex = idx,
+            OriginalIndex = sheetIndexById.TryGetValue(card.Id, out var msi) ? msi : idx,
             Name = card.Name,
             Quantity = mainQty,
             Zone = "Mainboard",
@@ -323,7 +362,7 @@ public class DecksController(
           resultList.Add(new SortableCardEntry
           {
             Index = -1, // Assigned later
-            OriginalIndex = idx,
+            OriginalIndex = sheetIndexById.TryGetValue(card.Id, out var ssi) ? ssi : idx,
             Name = card.Name,
             Quantity = sideQty,
             Zone = "Sideboard",

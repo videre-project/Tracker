@@ -442,17 +442,21 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Render a deck as a grid sheet image */
+        /**
+         * Render a deck as a streaming NDJSON sequence of framed card images.
+         *
+         *     Line 1: `{"type":"meta", columns, cardWidth, cardHeight, total}`
+         *       — emitted immediately so the client can pre-size its canvas.
+         *     Remaining lines: `{"type":"cards", startIndex, cards: string[]}`
+         *       — emitted in two phases so the first visible row arrives before the
+         *       full deck finishes rendering.
+         */
         get: {
             parameters: {
                 query?: {
-                    /** @description Deck name (looks up from MTGO client) */
                     name?: string;
-                    /** @description Deck hash/ID (looks up from DB and caches) */
                     id?: string;
-                    /** @description Number of columns (default: 5) */
                     columns?: number;
-                    /** @description Card height in pixels (default: 300) */
                     cardHeight?: number;
                 };
                 header?: never;
@@ -466,11 +470,7 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content: {
-                        "text/plain": string;
-                        "application/json": string;
-                        "text/json": string;
-                    };
+                    content?: never;
                 };
                 /** @description Not Found */
                 404: {

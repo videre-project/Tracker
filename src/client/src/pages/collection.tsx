@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react"
-import { useDeckSheet, getCardCropPosition, DeckSheetData as SheetData } from "@/hooks/use-deck-sheet"
+import { useDeckSheet, DeckSheetData as SheetData } from "@/hooks/use-deck-sheet"
 import { useSortableCards, groupCardsBySortMode, getSortModeColumns, unrollCards, SortMode, SortableCardEntry } from "@/hooks/use-sortable-cards"
 import { useDeckIdentifiers } from "@/hooks/use-decks"
 import { Loader2, GripVertical, LayoutGrid, PanelRightClose, PanelRightOpen } from "lucide-react"
@@ -35,9 +35,7 @@ interface GridSlot {
 
 interface SheetCardProps {
   index: number
-  sheetIndex: number
-  sheetUrl: string
-  columns: number
+  imageUrl: string
   cardWidth: number
   cardHeight: number
   position: Position
@@ -48,9 +46,7 @@ interface SheetCardProps {
 
 function SheetCard({
   index,
-  sheetIndex,
-  sheetUrl,
-  columns,
+  imageUrl,
   cardWidth,
   cardHeight,
   position,
@@ -58,8 +54,6 @@ function SheetCard({
   isDragging,
   zIndex
 }: SheetCardProps) {
-  const cropPos = getCardCropPosition(sheetIndex, columns, cardWidth, cardHeight)
-
   return (
     <div
       className={cn(
@@ -81,14 +75,12 @@ function SheetCard({
       onTouchStart={(e) => onDragStart(index, e)}
     >
       <div className="relative w-full h-full group">
-        <div
-          style={{
-            width: cardWidth,
-            height: cardHeight,
-            backgroundImage: `url(${sheetUrl})`,
-            backgroundPosition: `-${cropPos.x}px -${cropPos.y}px`,
-            backgroundSize: "auto"
-          }}
+        <img
+          src={imageUrl}
+          width={cardWidth}
+          height={cardHeight}
+          draggable={false}
+          style={{ display: "block", width: cardWidth, height: cardHeight }}
         />
         <div className={`
           absolute top-2 right-2 p-1 rounded
@@ -230,7 +222,6 @@ function DeckGrid({
   forceScale,
   onNaturalWidthChange
 }: DeckGridProps) {
-  const [imageReady, setImageReady] = useState(false)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   
   const [cardSlots, setCardSlots] = useState<Map<number, GridSlot>>(new Map())
@@ -248,20 +239,6 @@ function DeckGrid({
   const unrolledCards = useMemo(() => {
     return cards.length > 0 ? unrollCards(cards) : []
   }, [cards])
-
-  useEffect(() => {
-    if (!data?.imageUrl) {
-      setImageReady(false)
-      return
-    }
-    const img = new Image()
-    img.onload = () => setImageReady(true)
-    img.onerror = () => {
-      console.error("[DeckGrid] Failed to preload sheet image")
-      setImageReady(false)
-    }
-    img.src = data.imageUrl
-  }, [data?.imageUrl])
 
   // Report natural width to parent whenever layout changes
   useEffect(() => {
@@ -506,10 +483,11 @@ function DeckGrid({
              {cardOrder.map((cardIndex) => {
                const pos = getCardPosition(cardIndex)
                const zIndex = cardSlots.get(cardIndex)?.row ?? 0
-               if (data && imageReady) {
-                 const card = unrolledCards.find(c => c.index === cardIndex)
-                 const sheetIndex = card?.originalIndex ?? cardIndex
-                 return <SheetCard key={cardIndex} index={cardIndex} sheetIndex={sheetIndex} sheetUrl={data.imageUrl} columns={data.columns} cardWidth={data.cardWidth} cardHeight={data.cardHeight} position={pos} onDragStart={handleDragStart} isDragging={dragState?.index === cardIndex} zIndex={zIndex} />
+               const card = unrolledCards.find(c => c.index === cardIndex)
+               const sheetIndex = card?.originalIndex ?? cardIndex
+               const imageUrl = data?.cardImageUrls?.[sheetIndex]
+               if (imageUrl) {
+                 return <SheetCard key={cardIndex} index={cardIndex} imageUrl={imageUrl} cardWidth={data!.cardWidth} cardHeight={data!.cardHeight} position={pos} onDragStart={handleDragStart} isDragging={dragState?.index === cardIndex} zIndex={zIndex} />
                }
                return <SkeletonCard key={cardIndex} cardWidth={DEFAULT_CARD_WIDTH} cardHeight={DEFAULT_CARD_HEIGHT} position={pos} zIndex={zIndex} />
              })}
@@ -579,13 +557,17 @@ export default function Collection() {
     const fetchParallel = async () => {
       console.log(`[Collection] Fetching data for ${selectedDeckName} (${selectedDeckHash})...`)
       if (abortController.signal.aborted) return
-      
+
       try {
         const deckId = selectedDeckHash
-        await fetchSortableCards(selectedDeckName, deckId || undefined)
-        if (!abortController.signal.aborted) {
-          await fetchSheet(selectedDeckName, deckId, COLUMNS, 300)
-        }
+        // Run both fetches concurrently: sortable cards (fast) and sheet
+        // rendering (slow). The sheet streams NDJSON so the hook updates
+        // incrementally — sortable cards will finish first and skeleton cards
+        // will appear before the first rendered batch arrives.
+        await Promise.all([
+          fetchSortableCards(selectedDeckName, deckId || undefined),
+          fetchSheet(selectedDeckName, deckId, COLUMNS, 300),
+        ])
       } catch (e) {
         if ((e as Error).name !== 'AbortError') throw e
       }
@@ -674,8 +656,9 @@ export default function Collection() {
 
         {/* Side-by-side grid panes */}
         <div ref={containerRef} className="flex-1 flex min-h-0 relative">
-          {/* Shared Loading Overlay */}
-          {!data && (loading || sortableLoading) && (
+          {/* Shared Loading Overlay — only shown while we have no card data at all.
+               Once sortable cards arrive, skeleton cards are shown instead. */}
+          {allCards.length === 0 && (loading || sortableLoading) && (
             <div className="absolute inset-0 flex items-center justify-center z-50 bg-background/50 backdrop-blur-[1px]">
               <div className="flex flex-col items-center gap-3">
                 <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
