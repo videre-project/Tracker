@@ -18,9 +18,9 @@ const aliasMap = {};
 const generatedExports = [];
 
 // Regex to find schema definitions in components.schemas
-// Matches: "Namespace.Type": {
+// Matches: "Namespace.Type": { (object types) and "Namespace.Type": "Value" (enum types)
 // We rely on the fact that namespaced types contain dots.
-const schemaDefRegex = /"([\w.]+)"\s*:\s*{/g;
+const schemaDefRegex = /"([\w.]+)"\s*:\s*[{"]/g;
 
 let match;
 while ((match = schemaDefRegex.exec(content)) !== null) {

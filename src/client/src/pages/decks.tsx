@@ -16,7 +16,6 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
 import { ChevronDown, ChevronRight, Loader2 } from "lucide-react"
 
 function formatDate(dateString?: string) {
@@ -70,19 +69,14 @@ function DeckRow({ deck, isExpanded, onToggle }: DeckRowProps) {
               <span className="text-muted-foreground text-sm italic">Unknown</span>
             )}
             {deck.colors.length > 0 && (
-              <div className="flex gap-0.5">
+              <div className="flex items-center gap-0.5">
                 {deck.colors.map(color => (
-                  <span
+                  <img
                     key={color}
-                    className={`w-4 h-4 rounded-full text-xs font-bold flex items-center justify-center ${color === 'W' ? 'bg-amber-100 text-amber-800' :
-                        color === 'U' ? 'bg-blue-500 text-white' :
-                          color === 'B' ? 'bg-gray-800 text-white' :
-                            color === 'R' ? 'bg-red-500 text-white' :
-                              color === 'G' ? 'bg-green-600 text-white' : 'bg-gray-400'
-                      }`}
-                  >
-                    {color}
-                  </span>
+                    src={`/mana-symbols/${color}.svg`}
+                    alt={color}
+                    className="h-4 w-4"
+                  />
                 ))}
               </div>
             )}
@@ -195,7 +189,7 @@ export default function Decks() {
           No decks found in the database.
         </div>
       ) : (
-        <div className="rounded-md border">
+        <div className="rounded-md border border-sidebar-border/60">
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/50">

@@ -223,6 +223,123 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    [path: `/api/Collection/cards/${number}/image`]: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a single rendered card image as PNG by catalog ID */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": string;
+                        "application/json": string;
+                        "text/json": string;
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": ProblemDetails;
+                        "application/json": ProblemDetails;
+                        "text/json": ProblemDetails;
+                    };
+                };
+                /** @description Service Unavailable */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    [path: `/api/Collection/cards/${number}/art`]: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a card's art image by catalog ID (from MTGO client) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description Card catalog ID */
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": string;
+                        "application/json": string;
+                        "text/json": string;
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": ProblemDetails;
+                        "application/json": ProblemDetails;
+                        "text/json": ProblemDetails;
+                    };
+                };
+                /** @description Service Unavailable */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/Collection/cards/art/batch": {
         parameters: {
             query?: never;
@@ -706,6 +823,306 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/Diagnostics/WatchMetrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Stream real-time SDK and Diver diagnostics as NDJSON (polled every 500ms). */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/Diagnostics/GetMetrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a single diagnostics snapshot. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/Diagnostics/WatchLogs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Stream unified SDK/Tracker + Diver logs as NDJSON. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/Diagnostics/HeapSnapshot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Takes a heap snapshot: aggregated type stats + builds cached reverse
+         *     reference map for subsequent retain path queries.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    topN?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/Diagnostics/RetainChain": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Computes the retain chain for the largest instance of the given type
+         *     using batched reverse BFS. Requires a prior heap snapshot.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    typeName?: string;
+                    maxDepth?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/Diagnostics/TypeInstances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Returns the largest instances of the specified type
+         *     (uses cached data from last heap snapshot).
+         */
+        get: {
+            parameters: {
+                query?: {
+                    typeName?: string;
+                    maxCount?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/Diagnostics/StaticHolders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Analyzes which static root fields hold the most retained memory.
+         *     Enumerates all static object references in the process, performs a
+         *     forward BFS with a shared visited set, and returns ranked holders.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    topN?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/Diagnostics/WatchDiverLog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Streams the Diver log file as NDJSON lines, tailing new content as it's written.
+         *     Sends the last N lines initially, then streams new lines as they appear.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    tail?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/Events/GetEventsList": {
         parameters: {
             query?: never;
@@ -745,6 +1162,56 @@ export interface paths {
                 };
                 /** @description Internal Server Error */
                 500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Service Unavailable */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/Events/WatchTournamentListUpdates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Watch tournament list updates that affect sidebar event state. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/x-ndjson": ITournament[];
+                    };
+                };
+                /** @description Service Unavailable */
+                503: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -923,6 +1390,64 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    [path: `/api/Events/GetPrizes/${number}`]: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get prize information for a tournament */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description Tournament ID */
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": {
+                            [key: string]: string;
+                        };
+                        "application/json": {
+                            [key: string]: string;
+                        };
+                        "text/json": {
+                            [key: string]: string;
+                        };
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": ProblemDetails;
+                        "application/json": ProblemDetails;
+                        "text/json": ProblemDetails;
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     [path: `/api/Events/GetStandings/${number}`]: {
         parameters: {
             query?: never;
@@ -952,9 +1477,9 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "text/plain": StandingRecord[];
-                        "application/json": StandingRecord[];
-                        "text/json": StandingRecord[];
+                        "text/plain": IStandingResult[];
+                        "application/json": IStandingResult[];
+                        "text/json": IStandingResult[];
                     };
                 };
             };
@@ -967,19 +1492,20 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/Events/WatchTournamentUpdates": {
+    [path: `/api/Events/WatchTournamentUpdates/${number}`]: {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Stream real-time tournament state updates */
         get: {
             parameters: {
                 query?: never;
                 header?: never;
-                path?: never;
+                path: {
+                    id: number;
+                };
                 cookie?: never;
             };
             requestBody?: never;
@@ -1034,6 +1560,65 @@ export interface paths {
                     };
                     content: {
                         "application/x-ndjson": ITournamentPlayerUpdate[];
+                    };
+                };
+                /** @description Service Unavailable */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    [path: `/api/Events/WatchStandings/${number}`]: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stream tournament standings. Emits all current standings first,
+         *     then streams deltas using a (Rank, Points) fingerprint per standing
+         *     to detect and emit only changed records.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description Tournament ID */
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/x-ndjson": IStandingResult[];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/x-ndjson": ProblemDetails;
                     };
                 };
                 /** @description Service Unavailable */
@@ -1220,6 +1805,213 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/Games/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    page?: number;
+                    pageSize?: number;
+                    minDate?: string;
+                    maxDate?: string;
+                    format?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": PaginatedMatchesDTO;
+                        "application/json": PaginatedMatchesDTO;
+                        "text/json": PaginatedMatchesDTO;
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    [path: `/api/Games/match/${number}`]: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    matchId: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": MatchDetailsDTO;
+                        "application/json": MatchDetailsDTO;
+                        "text/json": MatchDetailsDTO;
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    [path: `/api/Games/match/${number}/watch`]: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    matchId: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/x-ndjson": GameLogDTO[];
+                    };
+                };
+                /** @description Service Unavailable */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/Games/history/watch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/x-ndjson": MatchHistoryDTO[];
+                    };
+                };
+                /** @description Service Unavailable */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    [path: `/api/Games/game/${number}/replay`]: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    gameId: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": ReplayDataDTO;
+                        "application/json": ReplayDataDTO;
+                        "text/json": ReplayDataDTO;
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1282,7 +2074,7 @@ export interface components {
             readonly items?: CardQuantityPair[] | null;
             readonly itemIds?: number[] | null;
             readonly getFrozenCollection?: CardQuantityPair[] | null;
-            readonly regions?: components["schemas"]["MTGOSDK.API.Collection.DeckRegion"][] | null;
+            readonly regions?: DeckRegion[] | null;
             /** Format: int32 */
             readonly deckId?: number;
             readonly isLegal?: boolean;
@@ -1294,7 +2086,7 @@ export interface components {
             readonly name?: string | null;
             /** Format: date-time */
             readonly releaseDate?: string;
-            type?: components["schemas"]["MTGOSDK.API.Collection.SetType"];
+            type?: SetType;
             /** Format: int32 */
             readonly age?: number;
             readonly cards?: Card[] | null;
@@ -1324,10 +2116,6 @@ export interface components {
             readonly isParticipant?: boolean;
             readonly isEliminated?: boolean;
         };
-        /** @enum {string} */
-        "MTGOSDK.API.Play.Games.GameStatus": "Invalid" | "NotStarted" | "Started" | "Finished";
-        /** @enum {string} */
-        "MTGOSDK.API.Play.MatchState": "Invalid" | "JoinRequested" | "Joined" | "RemovalRequested" | "RecruitingFreezeRequested" | "WatchRequested" | "Watching" | "AwaitingMinimumPlayers" | "AwaitingMaximumPlayers" | "AwaitingTimer" | "AwaitingPlayerStart" | "AwaitingHostStart" | "HostStartSent" | "GameStarted" | "Resuming" | "Sideboarding" | "DeckBuilding" | "DeckSubmitted" | "DeckAccepted" | "GameReplayRequested" | "GameReplaying" | "MatchCompleted" | "ConcedeRequested" | "Queue" | "Tournament" | "PremierEvent" | "Drafting" | "ChallengeMade" | "ChallengeAcceptanceSent" | "ChallengeAccepted" | "ChallengeRejectionSent" | "ChallengeRetractionSent" | "ChallengeMadeByCurrentUser" | "ChallengeReceivedByCurrentUser" | "EventUnderway" | "CurrentUserEliminated" | "EventWaitingToStart" | "EventCompleted" | "Connecting" | "Connected" | "Terminal" | "GameCompleted" | "GameClosed";
         "MTGOSDK.API.Play.PlayFormat": {
             readonly name?: string | null;
             readonly code?: string | null;
@@ -1339,44 +2127,12 @@ export interface components {
             readonly maxCopiesPerCard?: number;
             /** Format: int32 */
             readonly maxSideboardSize?: number;
-            type?: components["schemas"]["MTGOSDK.API.Play.PlayFormatType"];
+            type?: PlayFormatType;
             readonly legalSets?: Set[] | null;
             readonly basicLands?: Card[] | null;
         };
         /** @enum {string} */
         "MTGOSDK.API.Play.PlayFormatType": "Null" | "Constructed" | "Sealed" | "Draft";
-        "MTGOSDK.API.Play.Tournaments.GameStandingRecord": {
-            /** Format: int32 */
-            readonly id?: number;
-            gameStatus?: components["schemas"]["MTGOSDK.API.Play.Games.GameStatus"];
-            /** Format: date-span */
-            readonly completedDuration?: string | null;
-            readonly winnerIds?: number[] | null;
-        };
-        "MTGOSDK.API.Play.Tournaments.MatchStandingRecord": {
-            /** Format: int32 */
-            readonly id?: number;
-            /** Format: int32 */
-            readonly round?: number;
-            state?: components["schemas"]["MTGOSDK.API.Play.MatchState"];
-            readonly hasBye?: boolean;
-            readonly players?: User[] | null;
-            readonly winningPlayerIds?: number[] | null;
-            readonly losingPlayerIds?: number[] | null;
-            readonly gameStandingRecords?: GameStandingRecord[] | null;
-        };
-        "MTGOSDK.API.Play.Tournaments.StandingRecord": {
-            /** Format: int32 */
-            readonly rank?: number;
-            player?: User;
-            /** Format: int32 */
-            readonly points?: number;
-            readonly record?: string | null;
-            readonly opponentMatchWinPercentage?: string | null;
-            readonly gameWinPercentage?: string | null;
-            readonly opponentGameWinPercentage?: string | null;
-            readonly previousMatches?: MatchStandingRecord[] | null;
-        };
         /** @enum {string} */
         "MTGOSDK.API.Play.Tournaments.TournamentState": "NotSet" | "Fired" | "WaitingToStart" | "Drafting" | "Deckbuilding" | "DeckbuildingDeckSubmitted" | "WaitingForFirstRoundToStart" | "RoundInProgress" | "BetweenRounds" | "Finished";
         "MTGOSDK.API.Users.Avatar": {
@@ -1507,6 +2263,16 @@ export interface components {
             readonly isSwiss?: boolean;
             readonly hasPlayoffs?: boolean;
         };
+        "Tracker.Controllers.EventsController.IStandingResult": {
+            /** Format: int32 */
+            readonly rank?: number;
+            /** Format: int32 */
+            readonly points?: number;
+            readonly record?: string | null;
+            readonly opponentMatchWinPercentage?: string | null;
+            readonly gameWinPercentage?: string | null;
+            readonly opponentGameWinPercentage?: string | null;
+        };
         "Tracker.Controllers.EventsController.ITournament": {
             /** Format: int32 */
             readonly id?: number;
@@ -1523,9 +2289,9 @@ export interface components {
             readonly startTime?: string;
             /** Format: date-time */
             readonly endTime?: string;
-            state?: components["schemas"]["MTGOSDK.API.Play.Tournaments.TournamentState"];
+            state?: TournamentState;
             /** Format: int32 */
-            readonly currentRound?: number;
+            readonly roundNumber?: number;
             /** Format: date-time */
             readonly roundEndTime?: string;
             readonly inPlayoffs?: boolean;
@@ -1543,12 +2309,80 @@ export interface components {
         "Tracker.Controllers.EventsController.ITournamentStateUpdate": {
             /** Format: int32 */
             readonly id?: number;
-            state?: components["schemas"]["MTGOSDK.API.Play.Tournaments.TournamentState"];
+            state?: TournamentState;
             /** Format: int32 */
-            readonly currentRound?: number;
+            readonly roundNumber?: number;
             /** Format: date-time */
             readonly roundEndTime?: string;
             readonly inPlayoffs?: boolean;
+            readonly activePlayerNames?: string[] | null;
+            readonly playerNamesWithMatchesInProgress?: string[] | null;
+        };
+        "Tracker.Controllers.GameDetailsDTO": {
+            /** Format: int32 */
+            id?: number;
+            /** Format: int32 */
+            gameNumber?: number;
+            result: string | null;
+            duration: string | null;
+            playDraw: string | null;
+            logs?: GameLogDTO[] | null;
+        };
+        "Tracker.Controllers.GameLogDTO": {
+            /** Format: int32 */
+            id?: number;
+            /** Format: int32 */
+            gameId?: number;
+            /** Format: date-time */
+            timestamp?: string;
+            gameLogType: GameLogType;
+            data: string | null;
+            /** Format: int32 */
+            nonce?: number;
+        };
+        "Tracker.Controllers.MatchDetailsDTO": {
+            /** Format: int32 */
+            id?: number;
+            /** Format: int32 */
+            eventId?: number;
+            eventName: string | null;
+            format: string | null;
+            /** Format: date-time */
+            startTime?: string;
+            result: string | null;
+            record: string | null;
+            duration: string | null;
+            deckName?: string | null;
+            isActive?: boolean;
+            games?: GameDetailsDTO[] | null;
+        };
+        "Tracker.Controllers.MatchHistoryDTO": {
+            /** Format: int32 */
+            id?: number;
+            /** Format: int32 */
+            eventId?: number;
+            eventName: string | null;
+            format: string | null;
+            /** Format: date-time */
+            startTime?: string;
+            result: string | null;
+            record: string | null;
+            duration: string | null;
+            deckName?: string | null;
+            isActive?: boolean;
+            isEvent?: boolean;
+            matches?: MatchHistoryDTO[] | null;
+        };
+        "Tracker.Controllers.PaginatedMatchesDTO": {
+            items?: MatchHistoryDTO[] | null;
+            /** Format: int32 */
+            totalCount?: number;
+            /** Format: int32 */
+            page?: number;
+            /** Format: int32 */
+            pageSize?: number;
+            /** Format: int32 */
+            totalPages?: number;
         };
         "Tracker.Controllers.PerformanceTrendDTO": {
             date: string | null;
@@ -1563,6 +2397,100 @@ export interface components {
             ci95?: number[] | null;
             ci80?: number[] | null;
             ci50?: number[] | null;
+        };
+        "Tracker.Controllers.ReplayActionDTO": {
+            actionType: string | null;
+            actionName?: string | null;
+            /** Format: int32 */
+            cardId?: number | null;
+            cardName?: string | null;
+            targets?: string | null;
+            data: string | null;
+            /** Format: date-time */
+            clientTimestamp?: string;
+            /** Format: int32 */
+            nonce?: number;
+        };
+        "Tracker.Controllers.ReplayCardDTO": {
+            /** Format: int32 */
+            cardId?: number;
+            name: string | null;
+            rulesText?: string | null;
+            manaCost?: string | null;
+            /** Format: int32 */
+            catalogId?: number | null;
+            initialZone: string | null;
+            initialPower?: string | null;
+            initialToughness?: string | null;
+            /** Format: int32 */
+            ownerId?: number;
+            /** Format: int32 */
+            sourceId?: number | null;
+            isTapped?: boolean;
+            isToken?: boolean;
+            isLand?: boolean;
+            isActivatedAbility?: boolean;
+            isTriggeredAbility?: boolean;
+            /** Format: int32 */
+            firstSeenSnapshotIndex?: number;
+        };
+        "Tracker.Controllers.ReplayDataDTO": {
+            /** Format: int32 */
+            gameId?: number;
+            players?: ReplayPlayerDTO[] | null;
+            cards?: ReplayCardDTO[] | null;
+            snapshots?: ReplaySnapshotDTO[] | null;
+        };
+        "Tracker.Controllers.ReplayLogDTO": {
+            /** Format: date-time */
+            timestamp?: string;
+            data: string | null;
+        };
+        "Tracker.Controllers.ReplayPlayerDTO": {
+            /** Format: int32 */
+            playerIndex?: number;
+            name: string | null;
+            playDraw?: string | null;
+            /** Format: int32 */
+            initialLife?: number;
+            /** Format: int32 */
+            initialHandCount?: number;
+            /** Format: int32 */
+            initialLibraryCount?: number;
+            /** Format: int32 */
+            initialGraveyardCount?: number;
+            initialManaPool?: string | null;
+            isActivePlayer?: boolean;
+            /** Format: double */
+            clockRemaining?: number;
+            /** Format: int32 */
+            userId?: number;
+            /** Format: int32 */
+            avatarId?: number;
+        };
+        "Tracker.Controllers.ReplaySnapshotDTO": {
+            /** Format: int32 */
+            index?: number;
+            /** Format: int32 */
+            nonce?: number;
+            /** Format: date-time */
+            timestamp?: string;
+            /** Format: int32 */
+            turnNumber?: number;
+            currentPhase: string | null;
+            /** Format: int32 */
+            promptedPlayer?: number;
+            promptText: string | null;
+            /**
+             * @description JSON array of available prompt actions, e.g. [{"type":"ChooseOption","name":"OK"}].
+             *     Null for snapshots captured before this feature was added.
+             */
+            promptOptions?: string | null;
+            zoneTransfers?: ZoneTransferData[] | null;
+            cardChanges?: CardChangeData[] | null;
+            playerChanges?: PlayerChangeData[] | null;
+            actions?: ReplayActionDTO[] | null;
+            logs?: ReplayLogDTO[] | null;
         };
         /** @description Card entry with sortable metadata (CMC, Colors, Types) */
         "Tracker.Controllers.SortableCardEntry": {
@@ -1589,6 +2517,58 @@ export interface components {
             /** Format: int32 */
             quantity?: number;
         };
+        /**
+         * @description Data payload item for Tracker.Services.MTGO.Events.GameLogType.CardChange events.
+         *     Each event contains an array of these representing property diffs.
+         */
+        "Tracker.Services.MTGO.Events.CardChangeData": {
+            /** Format: int32 */
+            cardId?: number;
+            cardName: string | null;
+            property: string | null;
+            oldValue?: string | null;
+            newValue?: string | null;
+        };
+        /** @enum {string} */
+        "Tracker.Services.MTGO.Events.GameLogType": "GameState" | "GameAction" | "ZoneChange" | "CardChange" | "PlayerChange" | "LogMessage" | "DamageAssignment" | "Reveal";
+        /**
+         * @description Data payload for Tracker.Services.MTGO.Events.GameLogType.GameState events.
+         *     Emitted when the turn number or phase changes between snapshots.
+         */
+        "Tracker.Services.MTGO.Events.GameStateData": {
+            /** Format: int32 */
+            turn?: number;
+            phase: string | null;
+            /** Format: int32 */
+            previousTurn?: number;
+            previousPhase?: string | null;
+        };
+        /**
+         * @description Data payload item for Tracker.Services.MTGO.Events.GameLogType.PlayerChange events.
+         *     Each event contains an array of these representing property diffs.
+         */
+        "Tracker.Services.MTGO.Events.PlayerChangeData": {
+            /** Format: int32 */
+            playerIndex?: number;
+            playerName: string | null;
+            property: string | null;
+            oldValue?: string | null;
+            newValue?: string | null;
+        };
+        /**
+         * @description Data payload item for Tracker.Services.MTGO.Events.GameLogType.ZoneChange events.
+         *     Each event contains an array of these representing correlated zone transfers.
+         */
+        "Tracker.Services.MTGO.Events.ZoneTransferData": {
+            /** Format: int32 */
+            cardId?: number;
+            cardName: string | null;
+            fromZone?: string | null;
+            toZone?: string | null;
+            /** Format: int32 */
+            sourceId?: number | null;
+            type: string | null;
+        };
     };
     responses: never;
     parameters: never;
@@ -1599,18 +2579,13 @@ export interface components {
 export type MtgosdkApiCollectionCard = Card;
 export type MtgosdkApiCollectionCardQuantityPair = CardQuantityPair;
 export type MtgosdkApiCollectionDeck = Deck;
-export type MtgosdkApiCollectionDeckRegion = components['schemas']['MTGOSDK.API.Collection.DeckRegion'];
+export type MtgosdkApiCollectionDeckRegion = DeckRegion;
 export type MtgosdkApiCollectionSet = Set;
-export type MtgosdkApiCollectionSetType = components['schemas']['MTGOSDK.API.Collection.SetType'];
+export type MtgosdkApiCollectionSetType = SetType;
 export type MtgosdkApiPlayEvent = Event;
-export type MtgosdkApiPlayGamesGameStatus = components['schemas']['MTGOSDK.API.Play.Games.GameStatus'];
-export type MtgosdkApiPlayMatchState = components['schemas']['MTGOSDK.API.Play.MatchState'];
 export type MtgosdkApiPlayPlayFormat = PlayFormat;
-export type MtgosdkApiPlayPlayFormatType = components['schemas']['MTGOSDK.API.Play.PlayFormatType'];
-export type MtgosdkApiPlayTournamentsGameStandingRecord = GameStandingRecord;
-export type MtgosdkApiPlayTournamentsMatchStandingRecord = MatchStandingRecord;
-export type MtgosdkApiPlayTournamentsStandingRecord = StandingRecord;
-export type MtgosdkApiPlayTournamentsTournamentState = components['schemas']['MTGOSDK.API.Play.Tournaments.TournamentState'];
+export type MtgosdkApiPlayPlayFormatType = PlayFormatType;
+export type MtgosdkApiPlayTournamentsTournamentState = TournamentState;
 export type MtgosdkApiUsersAvatar = Avatar;
 export type MtgosdkApiUsersUser = User;
 export type MicrosoftAspNetCoreMvcProblemDetails = ProblemDetails;
@@ -1622,12 +2597,29 @@ export type TrackerControllersDeckDto = DeckDTO;
 export type TrackerControllersDeckDetailDto = DeckDetailDTO;
 export type TrackerControllersDeckIdentifierDto = DeckIdentifierDTO;
 export type TrackerControllersEventsControllerIEventStructure = IEventStructure;
+export type TrackerControllersEventsControllerIStandingResult = IStandingResult;
 export type TrackerControllersEventsControllerITournament = ITournament;
 export type TrackerControllersEventsControllerITournamentPlayerUpdate = ITournamentPlayerUpdate;
 export type TrackerControllersEventsControllerITournamentStateUpdate = ITournamentStateUpdate;
+export type TrackerControllersGameDetailsDto = GameDetailsDTO;
+export type TrackerControllersGameLogDto = GameLogDTO;
+export type TrackerControllersMatchDetailsDto = MatchDetailsDTO;
+export type TrackerControllersMatchHistoryDto = MatchHistoryDTO;
+export type TrackerControllersPaginatedMatchesDto = PaginatedMatchesDTO;
 export type TrackerControllersPerformanceTrendDto = PerformanceTrendDTO;
+export type TrackerControllersReplayActionDto = ReplayActionDTO;
+export type TrackerControllersReplayCardDto = ReplayCardDTO;
+export type TrackerControllersReplayDataDto = ReplayDataDTO;
+export type TrackerControllersReplayLogDto = ReplayLogDTO;
+export type TrackerControllersReplayPlayerDto = ReplayPlayerDTO;
+export type TrackerControllersReplaySnapshotDto = ReplaySnapshotDTO;
 export type TrackerControllersSortableCardEntry = SortableCardEntry;
 export type TrackerDatabaseModelsCardEntry = CardEntry;
+export type TrackerServicesMtgoEventsCardChangeData = CardChangeData;
+export type TrackerServicesMtgoEventsGameLogType = GameLogType;
+export type TrackerServicesMtgoEventsGameStateData = GameStateData;
+export type TrackerServicesMtgoEventsPlayerChangeData = PlayerChangeData;
+export type TrackerServicesMtgoEventsZoneTransferData = ZoneTransferData;
 export type $defs = Record<string, never>;
 export type operations = Record<string, never>;
 
@@ -1635,12 +2627,13 @@ export type operations = Record<string, never>;
 export type Card = components['schemas']['MTGOSDK.API.Collection.Card'];
 export type CardQuantityPair = components['schemas']['MTGOSDK.API.Collection.CardQuantityPair'];
 export type Deck = components['schemas']['MTGOSDK.API.Collection.Deck'];
+export type DeckRegion = components['schemas']['MTGOSDK.API.Collection.DeckRegion'];
 export type Set = components['schemas']['MTGOSDK.API.Collection.Set'];
+export type SetType = components['schemas']['MTGOSDK.API.Collection.SetType'];
 export type Event = components['schemas']['MTGOSDK.API.Play.Event'];
 export type PlayFormat = components['schemas']['MTGOSDK.API.Play.PlayFormat'];
-export type GameStandingRecord = components['schemas']['MTGOSDK.API.Play.Tournaments.GameStandingRecord'];
-export type MatchStandingRecord = components['schemas']['MTGOSDK.API.Play.Tournaments.MatchStandingRecord'];
-export type StandingRecord = components['schemas']['MTGOSDK.API.Play.Tournaments.StandingRecord'];
+export type PlayFormatType = components['schemas']['MTGOSDK.API.Play.PlayFormatType'];
+export type TournamentState = components['schemas']['MTGOSDK.API.Play.Tournaments.TournamentState'];
 export type Avatar = components['schemas']['MTGOSDK.API.Users.Avatar'];
 export type User = components['schemas']['MTGOSDK.API.Users.User'];
 export type ProblemDetails = components['schemas']['Microsoft.AspNetCore.Mvc.ProblemDetails'];
@@ -1652,9 +2645,26 @@ export type DeckDTO = components['schemas']['Tracker.Controllers.DeckDTO'];
 export type DeckDetailDTO = components['schemas']['Tracker.Controllers.DeckDetailDTO'];
 export type DeckIdentifierDTO = components['schemas']['Tracker.Controllers.DeckIdentifierDTO'];
 export type IEventStructure = components['schemas']['Tracker.Controllers.EventsController.IEventStructure'];
+export type IStandingResult = components['schemas']['Tracker.Controllers.EventsController.IStandingResult'];
 export type ITournament = components['schemas']['Tracker.Controllers.EventsController.ITournament'];
 export type ITournamentPlayerUpdate = components['schemas']['Tracker.Controllers.EventsController.ITournamentPlayerUpdate'];
 export type ITournamentStateUpdate = components['schemas']['Tracker.Controllers.EventsController.ITournamentStateUpdate'];
+export type GameDetailsDTO = components['schemas']['Tracker.Controllers.GameDetailsDTO'];
+export type GameLogDTO = components['schemas']['Tracker.Controllers.GameLogDTO'];
+export type MatchDetailsDTO = components['schemas']['Tracker.Controllers.MatchDetailsDTO'];
+export type MatchHistoryDTO = components['schemas']['Tracker.Controllers.MatchHistoryDTO'];
+export type PaginatedMatchesDTO = components['schemas']['Tracker.Controllers.PaginatedMatchesDTO'];
 export type PerformanceTrendDTO = components['schemas']['Tracker.Controllers.PerformanceTrendDTO'];
+export type ReplayActionDTO = components['schemas']['Tracker.Controllers.ReplayActionDTO'];
+export type ReplayCardDTO = components['schemas']['Tracker.Controllers.ReplayCardDTO'];
+export type ReplayDataDTO = components['schemas']['Tracker.Controllers.ReplayDataDTO'];
+export type ReplayLogDTO = components['schemas']['Tracker.Controllers.ReplayLogDTO'];
+export type ReplayPlayerDTO = components['schemas']['Tracker.Controllers.ReplayPlayerDTO'];
+export type ReplaySnapshotDTO = components['schemas']['Tracker.Controllers.ReplaySnapshotDTO'];
 export type SortableCardEntry = components['schemas']['Tracker.Controllers.SortableCardEntry'];
 export type CardEntry = components['schemas']['Tracker.Database.Models.CardEntry'];
+export type CardChangeData = components['schemas']['Tracker.Services.MTGO.Events.CardChangeData'];
+export type GameLogType = components['schemas']['Tracker.Services.MTGO.Events.GameLogType'];
+export type GameStateData = components['schemas']['Tracker.Services.MTGO.Events.GameStateData'];
+export type PlayerChangeData = components['schemas']['Tracker.Services.MTGO.Events.PlayerChangeData'];
+export type ZoneTransferData = components['schemas']['Tracker.Services.MTGO.Events.ZoneTransferData'];

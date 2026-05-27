@@ -47,11 +47,11 @@ const config: Config = {
         input: 'hsl(var(--input))',
         ring: 'hsl(var(--ring))',
         chart: {
-          1: 'hsl(var(--chart-1))',
-          2: 'hsl(var(--chart-2))',
-          3: 'hsl(var(--chart-3))',
-          4: 'hsl(var(--chart-4))',
-          5: 'hsl(var(--chart-5))'
+          '1': 'hsl(var(--chart-1))',
+          '2': 'hsl(var(--chart-2))',
+          '3': 'hsl(var(--chart-3))',
+          '4': 'hsl(var(--chart-4))',
+          '5': 'hsl(var(--chart-5))'
         },
         sidebar: {
           DEFAULT: 'hsl(var(--sidebar-background))',
@@ -62,91 +62,99 @@ const config: Config = {
           'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
           border: 'hsl(var(--sidebar-border))',
           ring: 'hsl(var(--sidebar-ring))'
-        },
+        }
       },
       keyframes: {
         accordionOpen: {
-          from: { height: "0px" },
-          to: { height: "var(--radix-accordion-content-height)" },
+          from: { height: '0px' },
+          to: { height: 'var(--radix-accordion-content-height)' }
         },
         accordionClose: {
-          from: {
-            height: "var(--radix-accordion-content-height)",
-          },
-          to: { height: "0px" },
+          from: { height: 'var(--radix-accordion-content-height)' },
+          to: { height: '0px' }
         },
         hide: {
-          from: { opacity: "1" },
-          to: { opacity: "0" },
+          from: { opacity: '1' },
+          to: { opacity: '0' }
         },
         slideDownAndFade: {
-          from: { opacity: "0", transform: "translateY(-6px)" },
-          to: { opacity: "1", transform: "translateY(0)" },
+          from: { opacity: '0', transform: 'translateY(-6px)' },
+          to: { opacity: '1', transform: 'translateY(0)' }
         },
         slideLeftAndFade: {
-          from: { opacity: "0", transform: "translateX(6px)" },
-          to: { opacity: "1", transform: "translateX(0)" },
+          from: { opacity: '0', transform: 'translateX(6px)' },
+          to: { opacity: '1', transform: 'translateX(0)' }
         },
         slideUpAndFade: {
-          from: { opacity: "0", transform: "translateY(6px)" },
-          to: { opacity: "1", transform: "translateY(0)" },
+          from: { opacity: '0', transform: 'translateY(6px)' },
+          to: { opacity: '1', transform: 'translateY(0)' }
         },
         slideRightAndFade: {
-          from: { opacity: "0", transform: "translateX(-6px)" },
-          to: { opacity: "1", transform: "translateX(0)" },
+          from: { opacity: '0', transform: 'translateX(-6px)' },
+          to: { opacity: '1', transform: 'translateX(0)' }
         },
         dialogOverlayShow: {
-          from: { opacity: "0" },
-          to: { opacity: "1" },
+          from: { opacity: '0' },
+          to: { opacity: '1' }
         },
         dialogContentShow: {
-          from: {
-            opacity: "0",
-            transform: "translate(-50%, -45%) scale(0.95)",
-          },
-          to: { opacity: "1", transform: "translate(-50%, -50%) scale(1)" },
+          from: { opacity: '0', transform: 'translate(-50%, -45%) scale(0.95)' },
+          to: { opacity: '1', transform: 'translate(-50%, -50%) scale(1)' }
         },
         drawerSlideLeftAndFade: {
-          from: { opacity: "0", transform: "translateX(100%)" },
-          to: { opacity: "1", transform: "translateX(0)" },
+          from: { opacity: '0', transform: 'translateX(100%)' },
+          to: { opacity: '1', transform: 'translateX(0)' }
         },
         drawerSlideRightAndFade: {
-          from: { opacity: "1", transform: "translateX(0)" },
-          to: { opacity: "0", transform: "translateX(100%)" },
+          from: { opacity: '1', transform: 'translateX(0)' },
+          to: { opacity: '0', transform: 'translateX(100%)' }
         },
         revealBottom: {
-          from: {
-            opacity: "0",
-            transform: "translateY(12px)",
-          },
-          to: {
-            opacity: "1",
-            transform: "translateY(0px)",
-          },
+          from: { opacity: '0', transform: 'translateY(12px)' },
+          to: { opacity: '1', transform: 'translateY(0px)' }
         },
+        'accordion-down': {
+          from: { height: '0' },
+          to: { height: 'var(--radix-accordion-content-height)' }
+        },
+        'accordion-up': {
+          from: { height: 'var(--radix-accordion-content-height)' },
+          to: { height: '0' }
+        },
+        'card-enter': {
+          '0%': { opacity: '0', transform: 'scale(0.85)' },
+          '100%': { opacity: '1', transform: 'scale(1)' }
+        },
+        'card-move': {
+          '0%': { boxShadow: '0 0 0 2px hsl(var(--primary))', transform: 'scale(1.05)' },
+          '100%': { boxShadow: '0 0 0 0px transparent', transform: 'scale(1)' }
+        },
+        'card-tap': {
+          '0%': { filter: 'brightness(1.4)' },
+          '100%': { filter: 'brightness(1)' }
+        }
       },
       animation: {
-        accordionOpen: "accordionOpen 150ms cubic-bezier(0.87, 0, 0.13, 1)",
-        accordionClose: "accordionClose 150ms cubic-bezier(0.87, 0, 0.13, 1)",
-        hide: "hide 150ms cubic-bezier(0.16, 1, 0.3, 1)",
-        slideDownAndFade:
-          "slideDownAndFade 150ms cubic-bezier(0.16, 1, 0.3, 1)",
-        slideLeftAndFade:
-          "slideLeftAndFade 150ms cubic-bezier(0.16, 1, 0.3, 1)",
-        slideUpAndFade: "slideUpAndFade 150ms cubic-bezier(0.16, 1, 0.3, 1)",
-        slideRightAndFade:
-          "slideRightAndFade 150ms cubic-bezier(0.16, 1, 0.3, 1)",
-        drawerSlideLeftAndFade:
-          "drawerSlideLeftAndFade 150ms cubic-bezier(0.16, 1, 0.3, 1)",
-        drawerSlideRightAndFade: "drawerSlideRightAndFade 150ms ease-in",
-        dialogOverlayShow:
-          "dialogOverlayShow 150ms cubic-bezier(0.16, 1, 0.3, 1)",
-        dialogContentShow:
-          "dialogContentShow 150ms cubic-bezier(0.16, 1, 0.3, 1)",
-        revealBottom: "revealBottom ease-in-out",
-      },
-    },
+        accordionOpen: 'accordionOpen 150ms cubic-bezier(0.87, 0, 0.13, 1)',
+        accordionClose: 'accordionClose 150ms cubic-bezier(0.87, 0, 0.13, 1)',
+        hide: 'hide 150ms cubic-bezier(0.16, 1, 0.3, 1)',
+        slideDownAndFade: 'slideDownAndFade 150ms cubic-bezier(0.16, 1, 0.3, 1)',
+        slideLeftAndFade: 'slideLeftAndFade 150ms cubic-bezier(0.16, 1, 0.3, 1)',
+        slideUpAndFade: 'slideUpAndFade 150ms cubic-bezier(0.16, 1, 0.3, 1)',
+        slideRightAndFade: 'slideRightAndFade 150ms cubic-bezier(0.16, 1, 0.3, 1)',
+        drawerSlideLeftAndFade: 'drawerSlideLeftAndFade 150ms cubic-bezier(0.16, 1, 0.3, 1)',
+        drawerSlideRightAndFade: 'drawerSlideRightAndFade 150ms ease-in',
+        dialogOverlayShow: 'dialogOverlayShow 150ms cubic-bezier(0.16, 1, 0.3, 1)',
+        dialogContentShow: 'dialogContentShow 150ms cubic-bezier(0.16, 1, 0.3, 1)',
+        revealBottom: 'revealBottom ease-in-out',
+        'accordion-down': 'accordion-down 0.2s ease-out',
+        'accordion-up': 'accordion-up 0.2s ease-out',
+        'card-enter': 'card-enter 350ms ease-out',
+        'card-move': 'card-move 500ms ease-out',
+        'card-tap': 'card-tap 400ms ease-out'
+      }
+    }
   },
-  plugins: [animate, forms],
+  plugins: [animate, forms, require("tailwindcss-animate")],
 }
 export default config
