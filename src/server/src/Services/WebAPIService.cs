@@ -20,8 +20,11 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.OpenApi;
 
 using Scalar.AspNetCore;
+using Swashbuckle.AspNetCore.SwaggerGen;
 
 using MTGOSDK.Core.Reflection.Serialization;
+
+using Tracker.Services.MTGO.Events;
 
 
 namespace Tracker.Services;
@@ -127,6 +130,11 @@ public static class WebAPIService
         Type = JsonSchemaType.Array,
         Items = new OpenApiSchema { Type = JsonSchemaType.Object }
       });
+
+      // Include event data DTOs in the schema (not directly referenced by
+      // endpoints, but needed for frontend type generation from the Data
+      // field of GameLogDTO).
+      options.DocumentFilter<GameEventDataSchemaFilter>();
     });
 
     return builder;
@@ -167,6 +175,7 @@ public static class WebAPIService
     api.UseRouting();
     api.UseCors();
     api.UseAuthorization();
+    api.UseMiddleware<RequestMetricsMiddleware>();
 
     api.MapControllers();
     if (!options.DisableUI)
@@ -187,5 +196,20 @@ public static class WebAPIService
   {
     api.Lifetime.ApplicationStopping.Register(callback);
     return api;
+  }
+}
+
+/// <summary>
+/// Includes game event data DTOs in the OpenAPI schema so they are available
+/// for frontend type generation, even though no endpoint returns them directly.
+/// </summary>
+internal class GameEventDataSchemaFilter : IDocumentFilter
+{
+  public void Apply(OpenApiDocument document, DocumentFilterContext context)
+  {
+    context.SchemaGenerator.GenerateSchema(typeof(GameStateData), context.SchemaRepository);
+    context.SchemaGenerator.GenerateSchema(typeof(ZoneTransferData), context.SchemaRepository);
+    context.SchemaGenerator.GenerateSchema(typeof(CardChangeData), context.SchemaRepository);
+    context.SchemaGenerator.GenerateSchema(typeof(PlayerChangeData), context.SchemaRepository);
   }
 }

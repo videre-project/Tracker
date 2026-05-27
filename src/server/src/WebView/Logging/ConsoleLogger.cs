@@ -9,6 +9,10 @@ using System.Threading;
 
 using Microsoft.Extensions.Logging;
 
+using MTGOSDK.Core.Logging;
+
+using Tracker.Services;
+
 
 namespace Tracker.WebView.Logging;
 
@@ -82,9 +86,18 @@ public class ConsoleLogger(string name, HostForm hostForm)
     string timestamp = DateTime.Now.ToString("HH:mm:ss.fff");
     string header = $"[{Thread.CurrentThread.Name ?? "Unknown"}]";
     string label = $"{name}[{eventId.Id}]";
-    string message = formatter(state, exception!)
-      // Escape any slashes in the message
+    string rawMessage = formatter(state, exception!);
+    if (exception != null)
+      rawMessage += "\n" + exception;
+
+    // Capture to diagnostics log stream (include IPC correlation ID if present)
+    LogStreamService.Record(DateTime.Now, "Tracker", logLevel.ToString(), name, rawMessage,
+      LogContext.MessageId.Value);
+
+    string message = rawMessage
       .Replace("\\", "\\\\");
+    if (exception != null)
+      message = rawMessage.Replace("\\", "\\\\").Replace("\n", "\\n");
 
     string args = FormatArgs(
       $"%c{timestamp} %c{header} %c{label} \\n{message}",
