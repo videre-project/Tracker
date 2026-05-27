@@ -3,20 +3,28 @@ import { type RouteObject, createBrowserRouter } from "react-router-dom";
 
 import {
   type LucideProps,
+  Bug,
   CalendarClock,
   Settings,
   LibraryBig,
   BookCopy,
   ChartArea,
-  History,
+  History as HistoryIcon,
+  Package,
 } from "lucide-react";
 
 import Layout from "@/layout/LayoutContent";
 import Events from "@/pages/events";
+import EventDetails from "@/pages/event-details";
 import Home from "@/pages/home";
 import SettingsPage from "@/pages/settings";
+import Diagnostics from "@/pages/diagnostics";
 import Decks from "@/pages/decks";
 import Collection from "@/pages/collection";
+import History from "@/pages/history";
+import MatchDetails from "@/pages/match-details";
+import GameWatch from "@/pages/game-watch";
+import GameReplay from "@/pages/game-replay";
 
 export enum NavType {
   Primary,
@@ -69,6 +77,13 @@ export const routes: RouteEntry[] = [
         element: <Collection />
       },
       {
+        path: '/trades',
+        name: 'Trades',
+        icon: Package,
+        type: NavType.Primary,
+        element: <DummyComponent />
+      },
+      {
         path: "/decks",
         name: "Decks",
         icon: BookCopy,
@@ -83,11 +98,42 @@ export const routes: RouteEntry[] = [
         element: <Events />
       },
       {
+        path: "/events/:eventId",
+        name: "Tournament",
+        type: NavType.Secondary,
+        element: <EventDetails />
+      },
+      {
         path: "/history",
         name: "History",
-        icon: History,
+        icon: HistoryIcon,
         type: NavType.Primary,
-        element: <DummyComponent />
+        element: <History />
+      },
+      {
+        path: "/history/:matchId",
+        name: "Match",
+        type: NavType.Secondary,
+        element: <MatchDetails />
+      },
+      {
+        path: "/history/:matchId/watch",
+        name: "Game Watch",
+        type: NavType.Secondary,
+        element: <GameWatch />
+      },
+      {
+        path: "/history/:matchId/game/:gameId/replay",
+        name: "Game Replay",
+        type: NavType.Secondary,
+        element: <GameReplay />
+      },
+{
+        path: "/settings/diagnostics",
+        name: "Diagnostics",
+        icon: Bug,
+        type: NavType.Secondary,
+        element: <Diagnostics />
       },
       {
         path: "/settings",

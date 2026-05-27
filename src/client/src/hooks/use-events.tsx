@@ -3,14 +3,16 @@ declare global {
   interface Window {
     __activeEvents?: ActiveGame[];
     __upcomingEvents?: ActiveGame[];
+    __completedEvents?: ActiveGame[];
   }
 }
 
 import { useEffect, useState, useRef, useCallback } from "react"
-import type { ITournament, IEventStructure, ITournamentStateUpdate } from "@/types/api"
 import { useClientState } from "./use-client-state"
 import { useNDJSONStream } from "./use-ndjson-stream"
 import { getApiUrl } from "../utils/api-config"
+import type { ITournament, IEventStructure, ITournamentPlayerUpdate } from "@/types/api"
+
 
 // Tournament state type (will be replaced when OpenAPI types are regenerated)
 type TournamentState =
@@ -24,6 +26,17 @@ type TournamentState =
   | "RoundInProgress"
   | "BetweenRounds"
   | "Finished"
+
+const ACTIVE_TOURNAMENT_STATES: TournamentState[] = [
+  "Fired",
+  "Drafting",
+  "Deckbuilding",
+  "DeckbuildingDeckSubmitted",
+  "WaitingForFirstRoundToStart",
+  "RoundInProgress",
+  "BetweenRounds",
+]
+const PRE_ROUND_COUNTDOWN_MS = 2 * 60 * 1000
 
 export type EventType = "league" | "swiss" | "elimination" | "draft" | "unknown"
 export type GameStatus = "active" | "paused" | "scheduled" | "completed"
@@ -39,7 +52,7 @@ export interface ActiveGame {
   wins?: number;
   losses?: number;
   totalRounds?: number;
-  currentRound?: number;
+  roundNumber?: number;
   totalSwissRounds?: number;
   pod?: string;
   startTime?: string;
@@ -47,6 +60,10 @@ export interface ActiveGame {
   timeRemaining?: string; // e.g. '12:34' or '5:00'
   totalPlayers?: number;
   minimumPlayers?: number;
+  roundEndTime?: string;
+  inPlayoffs?: boolean;
+  activePlayerNames?: string[];
+  playerNamesWithMatchesInProgress?: string[];
   // Tournament state
   state?: TournamentState;
   _rawStartTime?: string;
@@ -86,33 +103,27 @@ function inferGameStatus(t: ITournament): GameStatus {
   const now = Date.now()
   const start = t.startTime ? new Date(t.startTime).getTime() : 0
   const end = t.endTime ? new Date(t.endTime).getTime() : 0
-
-  // First check time boundaries
-  if (now < start) return "scheduled"
-  if (now > end) return "completed"
-
-  // If we're between start and end time, check tournament state
   const state = (t as any).state as TournamentState | undefined
+
   if (state) {
-    // Only certain states indicate the event is truly active
-    const activeStates: TournamentState[] = [
-      "Fired",
-      "Drafting",
-      "Deckbuilding",
-      "DeckbuildingDeckSubmitted",
-      "WaitingForFirstRoundToStart",
-      "RoundInProgress",
-      "BetweenRounds"
-    ]
-    if (activeStates.includes(state)) return "active"
     if (state === "Finished") return "completed"
+    if (ACTIVE_TOURNAMENT_STATES.includes(state)) return "active"
 
     // WaitingToStart and other states before the event fires
     if (state === "WaitingToStart" || state === "NotSet") return "scheduled"
   }
 
-  // Default to active if we're between start/end with no clear state
+  if (now < start) return "scheduled"
+  if (now > end) return "completed"
+
   return "active"
+}
+
+function inferStatusFromState(current: GameStatus, state?: TournamentState): GameStatus {
+  if (state === "Finished") return "completed"
+  if (state && ACTIVE_TOURNAMENT_STATES.includes(state)) return "active"
+  if (state === "WaitingToStart" || state === "NotSet") return "scheduled"
+  return current
 }
 
 export function formatTimeShort(dateStr?: string): string | undefined {
@@ -120,6 +131,13 @@ export function formatTimeShort(dateStr?: string): string | undefined {
   const d = new Date(dateStr)
   // Format as '11:00 AM' (no seconds)
   return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+}
+
+export function normalizeFormatName(format?: string | null): string {
+  if (!format) return ""
+  const trimmed = String(format).replace(/\0+$/g, "").trim()
+  const withoutFalseMultiplierSuffix = trimmed.replace(/(x[36])\s*[0o]$/i, "$1")
+  return withoutFalseMultiplierSuffix.replace(/^([^\d]*[A-Za-z])0$/, "$1")
 }
 
 // Patch: Add _rawStartTime and _rawEndTime for accurate duration calculation
@@ -131,17 +149,60 @@ export interface ActiveGameWithRawTimes extends ActiveGame {
   inPlayoffs?: boolean;
 }
 
+function hasRoundCountdown(state?: TournamentState): boolean {
+  return state === "RoundInProgress" ||
+    state === "BetweenRounds" ||
+    state === "WaitingForFirstRoundToStart" ||
+    state === "Deckbuilding" ||
+    state === "DeckbuildingDeckSubmitted"
+}
+
+function hasPreRoundCountdown(state?: TournamentState): boolean {
+  return state === "BetweenRounds" ||
+    state === "WaitingForFirstRoundToStart"
+}
+
+function getRoundEndTimeForState(state?: TournamentState, roundEndTime?: string): string | undefined {
+  if (!hasRoundCountdown(state) ||
+      !roundEndTime ||
+      roundEndTime.startsWith('0001-01-01')) {
+    return undefined
+  }
+
+  const timestamp = new Date(roundEndTime).getTime()
+  return Number.isFinite(timestamp) && timestamp > Date.now()
+    ? roundEndTime
+    : undefined
+}
+
+function mergeRoundNumber(incoming?: number, existing?: number): number | undefined {
+  if (incoming == null) return existing
+  if (existing == null) return incoming
+  return Math.max(incoming, existing)
+}
+
+function mergeRoundScopedMatchPlayers(
+  incoming: string[] | undefined,
+  existing: string[] | undefined,
+  state: TournamentState | undefined,
+  roundChanged: boolean
+) {
+  if (state !== "RoundInProgress" || roundChanged) return []
+  return incoming ?? existing
+}
+
 function mapTournamentToActiveGame(t: ITournament): ActiveGameWithRawTimes {
   // Filter out invalid DateTime values (C# DateTime.MinValue serializes to 0001-01-01)
+  const state = (t as any).state as TournamentState | undefined
   const roundEndTime = (t as any).roundEndTime
-  const isValidRoundEndTime = roundEndTime && !roundEndTime.startsWith('0001-01-01')
+  const format = normalizeFormatName(t.format)
 
   return {
     id: String(t.id),
     name: t.description,
-    type: inferEventTypeFromStructure((t as any).eventStructure ?? t.format),
+    type: inferEventTypeFromStructure((t as any).eventStructure ?? format),
     status: inferGameStatus(t),
-    format: t.format,
+    format,
     url: `/events/${t.id}`,
     startTime: t.startTime ? formatTimeShort(t.startTime) : undefined,
     endTime: t.endTime ? formatTimeShort(t.endTime) : undefined,
@@ -152,11 +213,18 @@ function mapTournamentToActiveGame(t: ITournament): ActiveGameWithRawTimes {
     _rawEndTime: t.endTime,
     // Pass through eventStructure for playoff/top 8 display
     eventStructure: (t as any).eventStructure,
-    currentRound: (t as any).currentRound,
-    roundEndTime: isValidRoundEndTime ? roundEndTime : undefined,
+    roundNumber: (t as any).roundNumber,
+    roundEndTime: getRoundEndTimeForState(state, roundEndTime),
     inPlayoffs: (t as any).inPlayoffs,
-    state: (t as any).state,
+    activePlayerNames: (t as any).activePlayerNames,
+    playerNamesWithMatchesInProgress:
+      (t as any).playerNamesWithMatchesInProgress,
+    state,
   }
+}
+
+function shouldIncludeEvent(game: ActiveGameWithRawTimes) {
+  return game.totalRounds == null || game.totalRounds >= 3
 }
 
 import React, { createContext, useContext } from "react"
@@ -164,8 +232,13 @@ import React, { createContext, useContext } from "react"
 interface EventsContextType {
   activeGames: ActiveGame[];
   upcomingGames: ActiveGame[];
+  completedGames: ActiveGame[];
   loading: boolean;
   error: string | null;
+  hoveredEventId: string | null;
+  setHoveredEventId: (id: string | null) => void;
+  selectedEventId: string | null;
+  setSelectedEventId: (id: string | null) => void;
 }
 
 const EventsContext = createContext<EventsContextType | null>(null);
@@ -173,22 +246,49 @@ const EventsContext = createContext<EventsContextType | null>(null);
 export function EventsProvider({ children }: { children: React.ReactNode }) {
   const [activeGames, setActiveGames] = useState<ActiveGame[]>([])
   const [upcomingGames, setUpcomingGames] = useState<ActiveGame[]>([])
+  const [completedGames, setCompletedGames] = useState<ActiveGame[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [hoveredEventId, setHoveredEventId] = useState<string | null>(null)
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
 
   // Wait for MTGO client to be ready before fetching events
   const { isReady: clientReady, loading: clientLoading } = useClientState()
 
   // Shared games map that both streams can access
   const gamesMapRef = useRef(new Map<string, ActiveGameWithRawTimes>())
-  const retryAttempts = useRef(new Map<string, number>())
-  const retryTimeouts = useRef(new Map<string, NodeJS.Timeout>())
   
   // Dirty flag to track if we need to update React state
   const isDirtyRef = useRef(false)
 
   const updateGamesState = useCallback(() => {
     const allGames = Array.from(gamesMapRef.current.values())
+
+    // Reconcile state/status inconsistencies before filtering
+    const now = Date.now()
+    for (const game of allGames) {
+      game.format = normalizeFormatName(game.format)
+      if (game.state === "Finished" && game.status !== "completed") {
+        game.status = "completed"
+      }
+      if (game.state && ACTIVE_TOURNAMENT_STATES.includes(game.state)) {
+        game.status = "active"
+      }
+      // Promote scheduled events whose start time has passed
+      if (game.status === "scheduled" && game._rawStartTime) {
+        const start = new Date(game._rawStartTime).getTime()
+        if (now >= start) {
+          game.status = "active"
+        }
+      }
+      // Demote active events whose end time has passed
+      if (game.status === "active" && !game.state && game._rawEndTime) {
+        const end = new Date(game._rawEndTime).getTime()
+        if (now > end) {
+          game.status = "completed"
+        }
+      }
+    }
 
     // Sort by start time ascending (chronological)
     allGames.sort((a, b) => {
@@ -199,11 +299,14 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
 
     const active = allGames.filter(g => g.status === "active")
     const upcoming = allGames.filter(g => g.status === "scheduled")
+    const completed = allGames.filter(g => g.status === "completed")
     setActiveGames(active)
     setUpcomingGames(upcoming)
+    setCompletedGames(completed)
     if (typeof window !== "undefined") {
       window.__activeEvents = active
       window.__upcomingEvents = upcoming
+      window.__completedEvents = completed
     }
     
     // Reset dirty flag
@@ -218,125 +321,82 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
       }
     }, 200) // Update UI at most 5 times per second
 
-    return () => clearInterval(interval)
+    // Periodic time-based reconciliation (every 30s) to catch
+    // scheduled→active and active→completed transitions
+    const reconcileInterval = setInterval(() => {
+      updateGamesState()
+    }, 30_000)
+
+    return () => { clearInterval(interval); clearInterval(reconcileInterval) }
   }, [updateGamesState])
 
-  // Helper function to fetch tournament state when roundEndTime is missing
-  const fetchTournamentState = useCallback(async (tournamentId: string) => {
-    try {
-      const response = await fetch(getApiUrl(`/api/Events/GetTournamentState/${tournamentId}`))
-
-      if (!response.ok) {
-        if (response.status === 404) {
-          console.log(`Tournament ${tournamentId} not found, stopping retries`)
-          return null
-        }
-        throw new Error(`Failed to fetch tournament state: ${response.status}`)
-      }
-
-      const stateUpdate: ITournamentStateUpdate = await response.json()
-      return stateUpdate
-    } catch (error) {
-      console.error(`Error fetching tournament state for ${tournamentId}:`, error)
-      return null
-    }
-  }, [])
-
-  // Retry mechanism to fetch missing roundEndTime
-  const retryFetchRoundEndTime = useCallback(async (game: ActiveGameWithRawTimes) => {
-    const tournamentId = game.id
-    const currentAttempts = retryAttempts.current.get(tournamentId) || 0
-    const maxAttempts = 3
-    const retryDelays = [2000, 5000, 10000] // 2s, 5s, 10s
-
-    if (currentAttempts >= maxAttempts) {
-      console.log(`Max retry attempts reached for tournament ${tournamentId}`)
+  const applyTournamentUpdate = useCallback((t: ITournament) => {
+    const game = mapTournamentToActiveGame(t)
+    if (!shouldIncludeEvent(game)) {
+      gamesMapRef.current.delete(game.id)
+      isDirtyRef.current = true
       return
     }
 
-    // Clear any existing timeout for this tournament
-    const existingTimeout = retryTimeouts.current.get(tournamentId)
-    if (existingTimeout) {
-      clearTimeout(existingTimeout)
+    const existing = gamesMapRef.current.get(game.id)
+    if (existing) {
+      const state = game.state ?? existing.state
+      const roundNumber = mergeRoundNumber(game.roundNumber, existing.roundNumber)
+      const incomingIsOlderRound =
+        game.roundNumber != null &&
+        existing.roundNumber != null &&
+        game.roundNumber < existing.roundNumber
+      const shouldKeepExistingRoundEndTime =
+        hasRoundCountdown(state) &&
+        state === existing.state &&
+        roundNumber != null &&
+        roundNumber === existing.roundNumber
+      const incomingRoundEndTime =
+        incomingIsOlderRound ? undefined : game.roundEndTime
+      const roundChanged =
+        roundNumber != null &&
+        existing.roundNumber != null &&
+        roundNumber !== existing.roundNumber
+
+      game.state = state
+      game.roundNumber = roundNumber
+      game.roundEndTime = hasRoundCountdown(state)
+        ? (incomingRoundEndTime ??
+            (shouldKeepExistingRoundEndTime ? existing.roundEndTime : undefined) ??
+            (hasPreRoundCountdown(state)
+              ? new Date(Date.now() + PRE_ROUND_COUNTDOWN_MS).toISOString()
+              : undefined))
+        : undefined
+      game.inPlayoffs = game.inPlayoffs ?? existing.inPlayoffs
+      game.activePlayerNames = game.activePlayerNames ?? existing.activePlayerNames
+      game.playerNamesWithMatchesInProgress =
+        mergeRoundScopedMatchPlayers(
+          incomingIsOlderRound ? undefined : game.playerNamesWithMatchesInProgress,
+          existing.playerNamesWithMatchesInProgress,
+          state,
+          roundChanged)
+      game.status = inferStatusFromState(game.status, state)
+    } else if (hasPreRoundCountdown(game.state) && !game.roundEndTime) {
+      game.roundEndTime =
+        new Date(Date.now() + PRE_ROUND_COUNTDOWN_MS).toISOString()
     }
 
-    const delay = retryDelays[currentAttempts]
-    console.log(`Scheduling retry ${currentAttempts + 1}/${maxAttempts} for tournament ${tournamentId} in ${delay}ms`)
+    gamesMapRef.current.set(game.id, game)
+    isDirtyRef.current = true
+    setLoading(false)
+  }, [])
 
-    const timeout = setTimeout(async () => {
-      const stateUpdate = await fetchTournamentState(tournamentId)
-
-      if (stateUpdate) {
-        const updatedGame = gamesMapRef.current.get(tournamentId)
-        if (updatedGame) {
-          // Filter out invalid DateTime values
-          const roundEndTime = stateUpdate.roundEndTime && !stateUpdate.roundEndTime.startsWith('0001-01-01')
-            ? stateUpdate.roundEndTime
-            : undefined
-
-          if (roundEndTime) {
-            console.log(`Successfully fetched roundEndTime for tournament ${tournamentId}:`, roundEndTime)
-            updatedGame.roundEndTime = roundEndTime
-            updatedGame.currentRound = stateUpdate.currentRound
-            updatedGame.state = stateUpdate.state as TournamentState
-            updatedGame.inPlayoffs = stateUpdate.inPlayoffs
-            
-            // Mark as dirty instead of immediate update
-            isDirtyRef.current = true
-
-            // Clear retry tracking
-            retryAttempts.current.delete(tournamentId)
-            retryTimeouts.current.delete(tournamentId)
-          } else {
-            // Still no valid roundEndTime, schedule another retry
-            retryAttempts.current.set(tournamentId, currentAttempts + 1)
-            retryFetchRoundEndTime(updatedGame)
-          }
-        }
-      } else {
-        // Failed to fetch, schedule another retry
-        retryAttempts.current.set(tournamentId, currentAttempts + 1)
-        const updatedGame = gamesMapRef.current.get(tournamentId)
-        if (updatedGame) {
-          retryFetchRoundEndTime(updatedGame)
-        }
-      }
-    }, delay)
-
-    retryTimeouts.current.set(tournamentId, timeout)
-    retryAttempts.current.set(tournamentId, currentAttempts + 1)
-  }, [fetchTournamentState])
+  const applyTournamentMessage = useCallback((message: ITournament | ITournament[]) => {
+    const tournaments = Array.isArray(message) ? message : [message]
+    for (const tournament of tournaments) applyTournamentUpdate(tournament)
+  }, [applyTournamentUpdate])
 
   // Initial events stream
-  useNDJSONStream<ITournament>({
+  useNDJSONStream<ITournament | ITournament[]>({
     url: getApiUrl("/api/Events/GetEventsList?stream=true"),
     enabled: !clientLoading && clientReady,
-    onMessage: (t) => {
-      const game = mapTournamentToActiveGame(t)
-
-      // Merge with existing game if present, but prefer new data over undefined
-      const existing = gamesMapRef.current.get(game.id)
-      if (existing) {
-        // Keep existing values only if new values are undefined
-        game.state = game.state || existing.state
-        game.currentRound = game.currentRound || existing.currentRound
-        game.roundEndTime = game.roundEndTime || existing.roundEndTime
-        game.inPlayoffs = game.inPlayoffs ?? existing.inPlayoffs
-        // Don't override status from incoming data - let inferGameStatus decide
-      }
-
-      gamesMapRef.current.set(game.id, game)
-      // Mark as dirty instead of immiediate update
-      isDirtyRef.current = true
-
-      // Trigger retry mechanism if roundEndTime is missing for active tournaments
-      if (game.status === "active" && !game.roundEndTime) {
-        console.log(`Tournament ${game.id} is active but missing roundEndTime, scheduling retry`)
-        retryFetchRoundEndTime(game)
-      }
-    },
+    onMessage: applyTournamentMessage,
     onEnd: () => {
-      console.log("Events list fully loaded")
       setLoading(false)
       // Force immediate update on completion
       updateGamesState()
@@ -349,101 +409,61 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
     autoReconnect: false // One-time load only, no reconnection
   })
 
-  // Stream tournament state updates for active events
-  useNDJSONStream<ITournamentStateUpdate>({
-    url: getApiUrl("/api/Events/WatchTournamentUpdates"),
+  // Stream event-driven tournament state updates for the sidebar.
+  useNDJSONStream<ITournament | ITournament[]>({
+    url: getApiUrl("/api/Events/WatchTournamentListUpdates"),
+    enabled: !clientLoading && clientReady,
+    onMessage: applyTournamentMessage,
+    onError: (e) => {
+      console.error("Tournament list updates stream error:", e)
+    },
+    autoReconnect: true,
+    reconnectDelay: 2000,
+    maxReconnectAttempts: 0,
+    useConstantRetry: true,
+  })
+
+  // Stream player count updates for all events
+  useNDJSONStream<ITournamentPlayerUpdate>({
+    url: getApiUrl("/api/Events/WatchPlayerCount"),
     enabled: !clientLoading && clientReady,
     onMessage: (update) => {
-      const eventId = String(update.id)
-      const game = gamesMapRef.current.get(eventId)
+      // The update could be a single object or an array (due to controller's NdjsonStream handling)
+      const updates = Array.isArray(update) ? update : [update]
+      
+      for (const item of updates) {
+        const eventId = String(item.id)
+        const game = gamesMapRef.current.get(eventId)
+        if (!game) continue
 
-      if (!game) {
-        // Ignore updates for tournaments we don't have in our list
-        return
-      }
+        if (item.totalRounds < 3) {
+          gamesMapRef.current.delete(eventId)
+          isDirtyRef.current = true
+          continue
+        }
 
-      // Check if this update actually changes anything
-      const hasChanges =
-        game.state !== (update.state as TournamentState) ||
-        game.currentRound !== update.currentRound ||
-        game.inPlayoffs !== update.inPlayoffs ||
-        game.roundEndTime !== update.roundEndTime
+        const hasChanges = 
+          game.totalPlayers !== item.totalPlayers ||
+          game.totalRounds !== item.totalRounds ||
+          game._rawEndTime !== item.endTime
 
-      if (!hasChanges) {
-        return
-      }
-
-      console.log(`Updating event ${eventId}:`, update)
-
-      // Filter out invalid DateTime values (C# DateTime.MinValue)
-      const roundEndTime = update.roundEndTime && !update.roundEndTime.startsWith('0001-01-01')
-        ? update.roundEndTime
-        : undefined
-
-      // Update tournament state fields
-      game.currentRound = update.currentRound
-      game.state = update.state as TournamentState
-      game.inPlayoffs = update.inPlayoffs
-      game.roundEndTime = roundEndTime
-
-      // Determine status based on time and state
-      const now = Date.now()
-      const start = game._rawStartTime ? new Date(game._rawStartTime).getTime() : 0
-      const end = game._rawEndTime ? new Date(game._rawEndTime).getTime() : 0
-
-      // Check time boundaries first
-      if (now < start) {
-        game.status = "scheduled"
-      } else if (now > end) {
-        game.status = "completed"
-      } else {
-        // Between start and end - check state
-        const activeStates: TournamentState[] = [
-          "Fired",
-          "Drafting",
-          "Deckbuilding",
-          "DeckbuildingDeckSubmitted",
-          "WaitingForFirstRoundToStart",
-          "RoundInProgress",
-          "BetweenRounds"
-        ]
-
-        if (update.state && activeStates.includes(update.state as TournamentState)) {
-          game.status = "active"
-        } else if (update.state === "Finished") {
-          game.status = "completed"
-        } else if (update.state === "WaitingToStart" || update.state === "NotSet") {
-          game.status = "scheduled"
-        } else {
-          // Default to active if between start/end with unclear state
-          game.status = "active"
+        if (hasChanges) {
+          game.totalPlayers = item.totalPlayers
+          game.totalRounds = item.totalRounds
+          game._rawEndTime = item.endTime
+          game.endTime = formatTimeShort(item.endTime)
+          
+          isDirtyRef.current = true
         }
       }
-
-      // Calculate time remaining for display
-      if (update.roundEndTime) {
-        const now = Date.now()
-        const end = new Date(update.roundEndTime).getTime()
-        const ms = Math.max(0, end - now)
-        const min = Math.floor(ms / 60000)
-        const sec = Math.floor((ms % 60000) / 1000)
-        game.timeRemaining = `${min}:${sec.toString().padStart(2, '0')}`
-      } else {
-        game.timeRemaining = undefined
-      }
-
-      // Update the shared map
-      gamesMapRef.current.set(eventId, game)
-
-      // Mark as dirty
-      isDirtyRef.current = true
     },
     onError: (e) => {
-      console.error("Tournament state updates stream error:", e)
+      console.error("Player count updates stream error:", e)
     },
     autoReconnect: true,
     reconnectDelay: 2000
   })
+
 
   // Set loading state based on client readiness
   useEffect(() => {
@@ -452,11 +472,13 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
     } else if (!clientReady) {
       setLoading(false)
       setError("MTGO client is not ready")
+    } else {
+      setError(null)
     }
   }, [clientLoading, clientReady])
 
   return (
-    <EventsContext.Provider value={{ activeGames, upcomingGames, loading, error }}>
+    <EventsContext.Provider value={{ activeGames, upcomingGames, completedGames, loading, error, hoveredEventId, setHoveredEventId, selectedEventId, setSelectedEventId }}>
       {children}
     </EventsContext.Provider>
   )

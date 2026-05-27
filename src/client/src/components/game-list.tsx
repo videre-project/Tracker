@@ -1,6 +1,8 @@
 import * as React from "react"
+import { useNavigate, useLocation } from "react-router-dom"
 import { Play, Pause, Clock, Square, Trophy, Target, Calendar } from "lucide-react"
 import { getApiUrl } from "@/utils/api-config"
+import { normalizeFormatName, useEvents } from "@/hooks/use-events"
 
 import {
   SidebarContent,
@@ -39,7 +41,7 @@ export interface ActiveGame {
   losses?: number
   totalRounds?: number
   // Prelim-specific
-  currentRound?: number
+  roundNumber?: number
   totalSwissRounds?: number
   // Draft-specific
   pod?: string
@@ -47,6 +49,8 @@ export interface ActiveGame {
   startTime?: string
   endTime?: string
   timeRemaining?: string
+  totalPlayers?: number
+  minimumPlayers?: number
   // Live round info (from ITournamentStateUpdate)
   inPlayoffs?: boolean
   roundEndTime?: string
@@ -121,6 +125,14 @@ function getStateLabel(state?: TournamentState): string | null {
   }
 }
 
+function hasRoundCountdown(state?: TournamentState): boolean {
+  return state === "RoundInProgress" ||
+    state === "BetweenRounds" ||
+    state === "WaitingForFirstRoundToStart" ||
+    state === "Deckbuilding" ||
+    state === "DeckbuildingDeckSubmitted"
+}
+
 const getStatusConfig = (status: GameStatus) => {
   switch (status) {
     case "active":
@@ -185,20 +197,20 @@ const getProgressDisplay = (game: ActiveGame & { eventStructure?: any }, isUpcom
       }
     } else if (game.status === "active") {
       // For active events, show round info and playoffs badge
-      const roundInfo = game.currentRound ? `Round ${game.currentRound}/${rounds}` : null;
+      const roundInfo = game.roundNumber ? `Round ${game.roundNumber}/${rounds}` : null;
       const playoffs = game.inPlayoffs ? <span className="ml-1 px-2 py-0.5 rounded-full bg-purple-900/40 text-purple-300 text-xs font-semibold">Top 8</span> : null;
 
       return <>
         {roundInfo && <span>{roundInfo}</span>}
         {playoffs}
       </>;
-    } else if (game.currentRound) {
+    } else if (game.roundNumber) {
       if (hasPlayoffs) {
         return <>
-          Round {game.currentRound}/{rounds} <span style={{ fontSize: 'var(--caption-font-size)' }} className="text-sidebar-foreground/50 align-baseline">(with top 8)</span>
+          Round {game.roundNumber}/{rounds} <span style={{ fontSize: 'var(--caption-font-size)' }} className="text-sidebar-foreground/50 align-baseline">(with top 8)</span>
         </>;
       } else {
-        return `Round ${game.currentRound}/${rounds}`;
+        return `Round ${game.roundNumber}/${rounds}`;
       }
     }
   }
@@ -227,18 +239,27 @@ const getProgressDisplay = (game: ActiveGame & { eventStructure?: any }, isUpcom
 
 // Component to display active game timing with live countdown
 function ActiveGameTiming({ game }: { game: ActiveGame }) {
-  const countdown = useCountdown(game.roundEndTime)
+  const countdown = useCountdown(hasRoundCountdown(game.state) ? game.roundEndTime : undefined)
   const stateLabel = getStateLabel(game.state)
+  const hasRegistrationShortfall =
+    game.state === "WaitingToStart" &&
+    (game.minimumPlayers ?? 0) > 0 &&
+    (game.totalPlayers ?? 0) < (game.minimumPlayers ?? 0)
+  const registrationText = hasRegistrationShortfall
+    ? `${game.totalPlayers ?? 0} of ${game.minimumPlayers} players`
+    : null
 
-  if (!stateLabel && !countdown) {
+  if (!stateLabel && !countdown && !registrationText) {
     return null
   }
 
   return (
     <>
       {stateLabel && <span>{stateLabel}</span>}
-      {stateLabel && countdown && <span className="text-sidebar-foreground/50 mx-1">•</span>}
+      {stateLabel && (countdown || registrationText) && <span className="text-sidebar-foreground/50 mx-1">•</span>}
       {countdown && <span className="text-sidebar-foreground/60">{countdown} left</span>}
+      {countdown && registrationText && <span className="text-sidebar-foreground/50 mx-1">•</span>}
+      {registrationText && <span className="text-sidebar-foreground/60">{registrationText}</span>}
     </>
   )
 }
@@ -251,6 +272,9 @@ interface GameListProps {
 
 export function GameList({ label, games, className, placeholder, isUpcoming }: GameListProps & { placeholder?: React.ReactNode, isUpcoming?: boolean }) {
   const { state } = useSidebar()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const { hoveredEventId, setHoveredEventId, setSelectedEventId } = useEvents()
   const isCollapsed = state === "collapsed"
   const [showGradient, setShowGradient] = React.useState(true)
   const scrollContainerRef = React.useRef<HTMLDivElement>(null)
@@ -406,13 +430,19 @@ export function GameList({ label, games, className, placeholder, isUpcoming }: G
                 const EventTypeIcon = getEventTypeIcon(game.type)
                 const record = getRecordDisplay(game)
                 const progress = getProgressDisplay(game, isUpcoming)
+                const format = normalizeFormatName(game.format)
+                const hasRoundDisplay =
+                  (game.roundNumber ?? 0) > 0 &&
+                  (game.totalRounds ?? 0) > 0
 
                 return (
                   <div
                     key={game.id}
                     data-gamelist-card
-                    className="bg-sidebar-accent/20 pl-3 pr-3 py-3 rounded-md border border-sidebar-border/60 hover:bg-sidebar-accent/40 transition-colors flex-shrink-0"
+                    className={`bg-sidebar-accent/20 pl-3 pr-3 py-3 rounded-md border border-sidebar-border/60 hover:bg-sidebar-accent/40 transition-colors flex-shrink-0 ${hoveredEventId === game.id ? 'bg-sidebar-accent/40' : ''}`}
                     style={{ width: 'calc(var(--sidebar-width, 236px) - 20px + 1px)' }}
+                    onMouseEnter={() => setHoveredEventId(game.id)}
+                    onMouseLeave={() => setHoveredEventId(null)}
                   >
                     <div className="flex justify-between items-start mb-1">
                       <div className="flex-1 min-w-0">
@@ -434,11 +464,11 @@ export function GameList({ label, games, className, placeholder, isUpcoming }: G
                           {/* For active events, show 'Format • Round X/Y' */}
                           {game.status === "active" ? (
                             <>
-                              {game.format}
-                              {game.currentRound && game.totalRounds && (
+                              {format}
+                              {hasRoundDisplay && (
                                 <>
                                   <span className="text-sidebar-foreground/50 mx-1">•</span>
-                                  <span>{`Round ${game.currentRound}/${game.totalRounds}`}</span>
+                                  <span>{`Round ${game.roundNumber}/${game.totalRounds}`}</span>
                                 </>
                               )}
                               {game.inPlayoffs && (
@@ -447,7 +477,7 @@ export function GameList({ label, games, className, placeholder, isUpcoming }: G
                             </>
                           ) : (
                             <>
-                              {game.format}
+                              {format}
                               {isUpcoming && progress && (
                                 <>
                                   <span className="text-sidebar-foreground/50 mx-1">•</span>
@@ -526,8 +556,10 @@ export function GameList({ label, games, className, placeholder, isUpcoming }: G
 
                       <button
                         onClick={() => {
-                          fetch(getApiUrl(`/api/events/openevent/${game.id}`), { method: 'POST' })
-                            .catch(err => console.error('Failed to open event:', err));
+                          setSelectedEventId(game.id)
+                          if (location.pathname !== "/events") {
+                            navigate("/events")
+                          }
                         }}
                         className="text-blue-400 hover:underline shrink-0 cursor-pointer"
                       >

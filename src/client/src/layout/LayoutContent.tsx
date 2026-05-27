@@ -1,6 +1,7 @@
 import React, { Suspense } from "react"
-import { Outlet, useLocation } from "react-router-dom";
+import { Link, Outlet, useLocation, matchPath } from "react-router-dom";
 
+import { cn } from "@/lib/utils"
 import { AppSidebar } from "@/components/app-sidebar"
 import { ThemeProvider } from "@/components/theme-provider"
 import {
@@ -35,7 +36,7 @@ function RouteBreadcrumb({ items }: { items: RouteFragment[] }) {
             ? (<React.Fragment key={`React.Fragment-${index}`}>
               <BreadcrumbItem className="hidden md:block"
                 key={`BreadcrumbItem-${index}`}>
-                <BreadcrumbLink href={url}>{title}</BreadcrumbLink>
+                <BreadcrumbLink asChild><Link to={url}>{title}</Link></BreadcrumbLink>
               </BreadcrumbItem>
               <BreadcrumbSeparator className="hidden md:block"
                 key={`BreadcrumbSeparator-${index}`} />
@@ -57,17 +58,22 @@ export default function Layout() {
   // Routes are now nested as children under main routes
   const allRoutes = routes.flatMap(r => r.children || []);
 
-  // Extract the breadcrumbs for each segment of the path
+  // Extract the breadcrumbs for each segment of the path, building
+  // cumulative paths so that /settings/diagnostics resolves correctly.
   const breadcrumbs = fragments.reduce((acc, fragment) => {
-    const route = allRoutes.find(({ path }) => path === fragment);
+    const cumulativePath = (acc.at(-1)?.url ?? "") + fragment;
+    const route = allRoutes.find(({ path }) => {
+      if (!path) return false;
+      return matchPath(path, cumulativePath) !== null;
+    });
     if (route) {
-      acc.push({ title: route.name ?? "", url: route.path! });
-      if (route.children) {
-        const child = route.children.find(({ index }) => index) as RouteEntry;
-        if (child && child.path) {
-          acc.push({ title: child.name ?? "", url: child.path! });
-        }
+      let title = route.name ?? "";
+      const match = route.path ? matchPath(route.path, cumulativePath) : null;
+      if (match?.params) {
+        const paramValue = Object.values(match.params)[0];
+        if (paramValue) title = `${title} #${paramValue}`;
       }
+      acc.push({ title, url: cumulativePath });
     }
     return acc;
   }, [] as RouteFragment[]);
@@ -77,15 +83,25 @@ export default function Layout() {
       <EventsProvider>
         <SidebarProvider>
           <AppSidebar />
-          <SidebarInset>
-            <header className="flex h-14 shrink-0 items-center gap-2 transition-[width,height] ease-linear">
-              <div className="flex items-center gap-2 px-4">
+          <SidebarInset className="min-w-0 relative">
+            <header className={cn("absolute top-0 left-0 right-0 z-30 h-14 pointer-events-none", location.pathname === "/events" ? "" : "bg-background")}>
+              {location.pathname === "/events" && (
+                <div
+                  className="absolute top-3 left-0 h-8"
+                  style={{
+                    width: 200,
+                    background: 'linear-gradient(to right, hsl(var(--background)) 120px, transparent)',
+                  }}
+                />
+              )}
+              <div className="relative h-full flex items-center gap-2 px-4 pointer-events-auto w-fit">
                 <SidebarTrigger className="-ml-1" />
                 <Separator orientation="vertical" className="mr-2 h-4" />
                 <RouteBreadcrumb items={breadcrumbs} />
               </div>
             </header>
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 min-h-0 overflow-y-auto">
+              <div className="h-14" />
               <Suspense>
                 <Outlet />
               </Suspense>
