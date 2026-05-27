@@ -1,2 +1,33 @@
 <Project>
+
+  <Target Name="RemoveUnusedDesktopRuntimeFiles"
+          BeforeTargets="_ComputeFilesToBundle"
+          Condition="'$(RemoveUnusedDesktopRuntimeFiles)' == 'true' and
+                     '$(Configuration)' == 'Release'">
+    <ItemGroup>
+      <_UnusedDesktopRuntimeFileToPublish Include="@(ResolvedFileToPublish)"
+        Condition="
+          $([System.String]::Copy('%(ResolvedFileToPublish.Filename)').StartsWith('PresentationCore')) or
+          $([System.String]::Copy('%(ResolvedFileToPublish.Filename)').StartsWith('PresentationFramework')) or
+          $([System.String]::Copy('%(ResolvedFileToPublish.Filename)').StartsWith('PresentationUI')) or
+          $([System.String]::Copy('%(ResolvedFileToPublish.Filename)').StartsWith('ReachFramework')) or
+          $([System.String]::Copy('%(ResolvedFileToPublish.Filename)').StartsWith('WindowsBase')) or
+          $([System.String]::Copy('%(ResolvedFileToPublish.Filename)').StartsWith('System.Xaml')) or
+          '%(ResolvedFileToPublish.Filename)' == 'System.Windows.Controls.Ribbon' or
+          '%(ResolvedFileToPublish.Filename)' == 'System.Windows.Forms.Design' or
+          '%(ResolvedFileToPublish.Filename)' == 'System.Windows.Forms.Design.Editors' or
+          '%(ResolvedFileToPublish.Filename)' == 'System.Windows.Presentation' or
+          '%(ResolvedFileToPublish.Filename)' == 'Microsoft.Web.WebView2.Wpf' or
+          '%(ResolvedFileToPublish.Filename)' == 'wpfgfx_cor3' or
+          '%(ResolvedFileToPublish.Filename)' == 'PresentationNative_cor3' or
+          '%(ResolvedFileToPublish.Filename)' == 'D3DCompiler_47_cor3'
+        " />
+
+      <ResolvedFileToPublish Remove="@(_UnusedDesktopRuntimeFileToPublish)" />
+    </ItemGroup>
+
+    <Message Importance="high"
+            Text="Removed desktop runtime files from single-file bundle: @(_UnusedDesktopRuntimeFileToPublish->'%(RelativePath)', ', ')" />
+  </Target>
+
 </Project>

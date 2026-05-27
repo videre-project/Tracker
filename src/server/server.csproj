@@ -118,6 +118,8 @@
   <!-- Publishing Configuration -->
   <PropertyGroup>
     <PublishSingleFile>true</PublishSingleFile>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <RemoveUnusedDesktopRuntimeFiles>true</RemoveUnusedDesktopRuntimeFiles>
     <DebugType>embedded</DebugType>
     <StaticWebAssetsEnabled Condition="'$(Configuration)' == 'Debug'">true</StaticWebAssetsEnabled>
     <StaticWebAssetsEnabled Condition="'$(Configuration)' != 'Debug'">false</StaticWebAssetsEnabled>
@@ -133,7 +135,8 @@
   <ItemGroup>
     <!-- ASP.NET Web API -->
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
-    <PackageReference Include="Microsoft.AspNetCore.SpaProxy" />
+    <PackageReference Include="Microsoft.AspNetCore.SpaProxy"
+                      PrivateAssets="All" />
     <PackageReference Include="Scalar.AspNetCore" />
     <!-- Swagger -->
     <PackageReference Include="Swashbuckle.AspNetCore" />
