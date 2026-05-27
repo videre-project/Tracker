@@ -142,7 +142,6 @@ export function useGames(timeRange: string | DateRange | undefined, format?: str
       .then(([statsData, trendData]) => {
         setStats(statsData)
         setTrend(trendData)
-        setLoading(false)
         GAMES_CACHE[cacheKey] = {
           stats: statsData,
           trend: trendData,
@@ -159,3 +158,78 @@ export function useGames(timeRange: string | DateRange | undefined, format?: str
   return { formats, stats, trend, loading }
 }
 
+export interface PaginatedMatches {
+  items: any[]
+  totalCount: number
+  page: number
+  pageSize: number
+  totalPages: number
+}
+
+export function useGamesHistory(page: number, pageSize: number, timeRange: string | DateRange | undefined, format?: string) {
+  const [data, setData] = useState<PaginatedMatches | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<any>(null)
+
+  const { isReady: clientReady, loading: clientLoading } = useClientState()
+
+  useEffect(() => {
+    if (clientLoading) return
+    if (!clientReady) {
+      setLoading(false)
+      return
+    }
+
+    setLoading(true)
+    setError(null)
+
+    const params = new URLSearchParams()
+    params.append("page", page.toString())
+    params.append("pageSize", pageSize.toString())
+    if (format) params.append("format", format)
+
+    const now = new Date()
+    now.setHours(23, 59, 59, 999)
+    let minDate: Date | null = null
+    let maxDate: Date = now
+
+    if (typeof timeRange === 'string' && timeRange !== "ALL") {
+      const days = parseInt(timeRange.replace("D", ""))
+      if (!isNaN(days)) {
+        minDate = new Date()
+        minDate.setDate(now.getDate() - days)
+        minDate.setHours(0, 0, 0, 0)
+      }
+    } else if (typeof timeRange === 'object' && timeRange?.from) {
+      minDate = timeRange.from
+      minDate.setHours(0, 0, 0, 0)
+      if (timeRange.to) {
+        maxDate = timeRange.to
+        maxDate.setHours(23, 59, 59, 999)
+      } else {
+        maxDate = timeRange.from
+        maxDate.setHours(23, 59, 59, 999)
+      }
+    }
+
+    if (minDate) params.append("minDate", minDate.toISOString())
+    params.append("maxDate", maxDate.toISOString())
+
+    fetch(getApiUrl(`/api/games/history?${params.toString()}`))
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`)
+        return res.json()
+      })
+      .then(json => {
+        setData(json)
+        setLoading(false)
+      })
+      .catch(err => {
+        console.error("Failed to fetch game history:", err)
+        setError(err)
+        setLoading(false)
+      })
+  }, [page, pageSize, timeRange, format, clientReady, clientLoading])
+
+  return { data, loading, error }
+}

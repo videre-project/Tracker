@@ -16,6 +16,7 @@ using Microsoft.AspNetCore.Mvc;
 
 using MTGOSDK.API.Collection;
 using MTGOSDK.API.Graphics;
+using MTGOSDK.Core.Logging;
 
 using Tracker.Controllers.Base;
 using Tracker.Services.MTGO;
@@ -220,6 +221,107 @@ public class CollectionController(IClientAPIProvider clientProvider) : APIContro
     catch (KeyNotFoundException)
     {
       return NotFound(new { error = $"Card '{name}' not found in collection" });
+    }
+  }
+
+  /// <summary>
+  /// Get a single rendered card image as PNG by catalog ID
+  /// </summary>
+  [HttpGet("cards/{id:int}/image")] // GET /api/collection/cards/116306/image
+  [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
+  [ProducesResponseType(StatusCodes.Status404NotFound)]
+  [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+  public ActionResult GetCardImageById(int id)
+  {
+    if (!clientProvider.IsReady)
+    {
+      return StatusCode(StatusCodes.Status503ServiceUnavailable, new
+      {
+        error = "MTGO client not ready",
+        hint = "Please wait for the client to fully initialize and log in"
+      });
+    }
+
+    var cacheKey = $"id:{id}";
+    if (s_imageCache.TryGetValue(cacheKey, out var cachedBase64))
+      return File(Convert.FromBase64String(cachedBase64), "image/png", $"{id}.png");
+
+    try
+    {
+      var card = CollectionManager.GetCard(id);
+      if (card == null)
+      {
+        Log.Debug("GetCardImageById: catalog ID {Id} not found in collection", id);
+        return NotFound(new { error = $"Card with ID {id} not found" });
+      }
+
+      var base64 = CardRenderer.RenderCard(id);
+      if (string.IsNullOrEmpty(base64))
+      {
+        Log.Warning("GetCardImageById: render returned empty result for catalog ID {Id}", id);
+        return NotFound(new { error = $"Failed to render card ID {id}" });
+      }
+
+      s_imageCache[cacheKey] = base64;
+      Log.Debug("GetCardImageById: rendered catalog ID {Id} ({Name})", id, card.Name);
+      return File(Convert.FromBase64String(base64), "image/png", $"{id}.png");
+    }
+    catch (KeyNotFoundException)
+    {
+      Log.Debug("GetCardImageById: catalog ID {Id} not found (KeyNotFoundException)", id);
+      return NotFound(new { error = $"Card with ID {id} not found in collection" });
+    }
+    catch (Exception ex)
+    {
+      Log.Error(ex, "GetCardImageById: unexpected error for catalog ID {Id}", id);
+      return StatusCode(StatusCodes.Status500InternalServerError, new { error = ex.Message });
+    }
+  }
+
+  /// <summary>
+  /// Get a card's art image by catalog ID (from MTGO client)
+  /// </summary>
+  /// <param name="id">Card catalog ID</param>
+  /// <returns>Art image data</returns>
+  [HttpGet("cards/{id:int}/art")] // GET /api/collection/cards/123/art
+  [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
+  [ProducesResponseType(StatusCodes.Status404NotFound)]
+  [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+  public async Task<ActionResult> GetCardArtById(int id)
+  {
+    if (!clientProvider.IsReady)
+    {
+      return StatusCode(StatusCodes.Status503ServiceUnavailable, new
+      {
+        error = "MTGO client not ready",
+        hint = "Please wait for the client to fully initialize and log in"
+      });
+    }
+
+    try
+    {
+      var card = CollectionManager.GetCard(id);
+      if (card == null)
+      {
+        return NotFound(new { error = $"Card with ID {id} not found" });
+      }
+
+      var artPath = await CardRenderer.GetCardArtPath(card);
+      if (artPath == null || !System.IO.File.Exists(artPath))
+      {
+        return NotFound(new { error = $"Art not available for card ID {id}" });
+      }
+
+      var artBytes = await System.IO.File.ReadAllBytesAsync(artPath);
+      var contentType = artPath.EndsWith(".png", StringComparison.OrdinalIgnoreCase)
+        ? "image/png"
+        : "image/jpeg";
+
+      return File(artBytes, contentType, $"{id}_art{Path.GetExtension(artPath)}");
+    }
+    catch (KeyNotFoundException)
+    {
+      return NotFound(new { error = $"Card with ID {id} not found in collection" });
     }
   }
 

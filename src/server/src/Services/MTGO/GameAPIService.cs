@@ -14,13 +14,18 @@ using Microsoft.Extensions.Hosting;
 
 using MTGOSDK.API.Play;
 using MTGOSDK.API.Play.Games;
+using MTGOSDK.API.Play.Games.Processors;
 using MTGOSDK.Core;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Remoting;
+using MTGOSDK.Core.Reflection;
 using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 using Tracker.Services.Base;
 using Tracker.Services.MTGO.Events;
+
+using MTGOSDK.API.Play.Tournaments;
+using static MTGOSDK.API.Events;
 
 
 namespace Tracker.Services.MTGO;
@@ -47,62 +52,353 @@ public static class GameAPIService
   public static EventHandler<IEnumerable<Event>>? PlayerCountUpdated;
 
   /// <summary>
-  /// Watches changes to the total player count of the given events and invokes
-  /// the callback with the updated events whenever a change is detected.
+  /// An event that is raised when any tournament standings change.
   /// </summary>
-  /// <param name="events">The events to watch.</param>
-  /// <param name="callback">The callback to invoke with the updated events.</param>
-  /// <param name="pollingInterval">The interval at which to poll for changes.</param>
-  private static void WatchPlayerCountAsync(
-    IEnumerable<Event> events,
-    Action<IEnumerable<Event>> callback,
-    TimeSpan pollingInterval = default)
+  public static EventHandler<(Tournament Tournament, IList<StandingRecord> Standings)>? StandingsUpdated;
+
+  /// <summary>
+  /// An event that is raised when any tournament round changes.
+  /// </summary>
+  public static EventHandler<(Tournament Tournament, TournamentRound Round)>? RoundUpdated;
+
+  /// <summary>
+  /// An event that is raised when any tournament state changes.
+  /// </summary>
+  public static EventHandler<(Tournament Tournament, TournamentState State)>? StateUpdated;
+
+
+  /// <summary>
+  /// An event that is raised when any game log is received.
+  /// </summary>
+  public static event EventHandler<GameLogEntry>? GameLogReceived;
+
+  /// <summary>
+  /// An event that is raised when a non-match event (e.g. tournament) is joined.
+  /// The event argument is the event ID.
+  /// </summary>
+  public static EventHandler<int>? EventCreated;
+
+  /// <summary>
+  /// An event that is raised when a match is first tracked.
+  /// The event argument is the match ID.
+  /// </summary>
+  public static EventHandler<int>? MatchCreated;
+
+  /// <summary>
+  /// An event that is raised when match results are persisted to the database.
+  /// The event argument is the match ID.
+  /// </summary>
+  public static EventHandler<int>? MatchResultUpdated;
+
+  private static volatile GameService? s_currentInstance;
+
+  /// <summary>
+  /// The IDs of all currently active (in-progress) events.
+  /// </summary>
+  public static IReadOnlyCollection<int> ActiveEventIds =>
+    s_currentInstance?._activeEvents.Keys as IReadOnlyCollection<int>
+      ?? (IReadOnlyCollection<int>)Array.Empty<int>();
+
+  /// <summary>
+  /// The IDs of all currently active (in-progress) matches.
+  /// </summary>
+  public static IReadOnlyCollection<int> ActiveMatchIds =>
+    s_currentInstance?._activeMatches.Keys as IReadOnlyCollection<int>
+      ?? (IReadOnlyCollection<int>)Array.Empty<int>();
+
+  internal static void RemoveActiveEvent(int eventId) =>
+    s_currentInstance?._activeEvents.TryRemove(eventId, out _);
+
+  internal static void RemoveActiveMatch(int matchId) =>
+    s_currentInstance?._activeMatches.TryRemove(matchId, out _);
+
+  /// <summary>
+  /// Forces any pending (unflushed) game data to be written to the database
+  /// for the specified game. Called before DB queries to ensure data freshness.
+  /// </summary>
+  internal static void FlushPendingGameData(int gameId)
   {
-    IList<(Event, Func<int>, int)> eventCollection = [];
-    foreach (var eventObj in events)
+    if (s_currentInstance?._gameTrackers.TryGetValue(gameId, out var tracker) == true)
     {
-      int getTotalPlayers() => Try<int>(() => eventObj.TotalPlayers);
-      eventCollection.Add((eventObj, getTotalPlayers, getTotalPlayers()));
+      tracker.ForceFlush();
+    }
+  }
+
+  /// <summary>
+  /// Cache of all discovered tournaments to preserve access after they finish and are removed by MTGO.
+  /// </summary>
+  public static readonly ConcurrentDictionary<int, Tournament> DiscoveredTournaments = new();
+
+  public static EventHandler<Tournament>? LoadedTournamentDiscovered;
+
+  private static long s_lastLoadedTournamentRefreshTicks;
+  private static long s_clientScopeVersion;
+  private static readonly object s_loadedTournamentRefreshLock = new();
+  private static Task? s_loadedTournamentRefreshTask;
+
+  private static readonly ConcurrentDictionary<int, Delegate> s_playerCountSubscriptions = new();
+  private static Action<PlayerEventsCreatedEventArgs>? s_playerEventsCreatedHandler;
+  private static Action<PlayerEventsRemovedEventArgs>? s_playerEventsRemovedHandler;
+  private static Action<Tournament, IList<StandingRecord>>? s_standingsChangedHandler;
+
+  private static Action<Tournament, TournamentRound>? s_roundChangedHandler;
+  private static Action<Tournament, TournamentState>? s_stateChangedHandler;
+
+  private static bool CacheDiscoveredTournament(Tournament tournament)
+  {
+    int tournamentId = tournament.Id;
+    bool added = DiscoveredTournaments.TryAdd(tournamentId, tournament);
+    if (!added)
+    {
+      DiscoveredTournaments[tournamentId] = tournament;
+      return false;
     }
 
-    // Every 5 seconds, check each event's total players to see if it changed.
-    var timer = new System.Timers.Timer(
-      pollingInterval == default
-        ? TimeSpan.FromSeconds(5).TotalMilliseconds
-        : pollingInterval.TotalMilliseconds);
+    LoadedTournamentDiscovered?.Invoke(null, tournament);
+    return true;
+  }
 
-    bool _isDisposed = false;
-    timer.Elapsed += (sender, e) =>
+  private static void ResetClientScopedTournamentCache(string reason)
+  {
+    int cachedCount = DiscoveredTournaments.Count;
+    DiscoveredTournaments.Clear();
+    s_playerCountSubscriptions.Clear();
+    Interlocked.Increment(ref s_clientScopeVersion);
+    Interlocked.Exchange(ref s_lastLoadedTournamentRefreshTicks, 0);
+
+    lock (s_loadedTournamentRefreshLock)
     {
-      if (_isDisposed || PlayerCountUpdated == null) return;
+      s_loadedTournamentRefreshTask = null;
+    }
 
-      // Enumerate with the index of the event in the collection.
-      IList<Event> updatedEvents = [];
-      for (int i = 0; i < eventCollection.Count; i++)
+    if (cachedCount > 0)
+    {
+      Log.Information(
+        "Cleared discovered tournament cache: reason={Reason} cached={CachedCount}",
+        reason,
+        cachedCount);
+    }
+  }
+
+  public static Task StartLoadedTournamentRefresh(TimeSpan? minInterval = null)
+  {
+    var interval = minInterval ?? TimeSpan.FromSeconds(30);
+    long nowTicks = DateTime.UtcNow.Ticks;
+    long lastTicks = Interlocked.Read(ref s_lastLoadedTournamentRefreshTicks);
+    if (lastTicks != 0 && new TimeSpan(nowTicks - lastTicks) < interval)
+    {
+      return Task.CompletedTask;
+    }
+
+    lock (s_loadedTournamentRefreshLock)
+    {
+      if (s_loadedTournamentRefreshTask is { IsCompleted: false })
       {
-        var (eventObj, getTotalPlayers, previousTotal) = eventCollection[i];
-        int currentTotal = getTotalPlayers();
-        if (currentTotal != previousTotal)
+        return s_loadedTournamentRefreshTask;
+      }
+
+      long clientScopeVersion = Interlocked.Read(ref s_clientScopeVersion);
+      s_loadedTournamentRefreshTask = Task.Factory.StartNew(
+        () => RefreshLoadedTournaments(clientScopeVersion),
+        CancellationToken.None,
+        TaskCreationOptions.DenyChildAttach | TaskCreationOptions.LongRunning,
+        TaskScheduler.Default);
+      return s_loadedTournamentRefreshTask;
+    }
+  }
+
+  private static void RefreshLoadedTournaments(long clientScopeVersion)
+  {
+    long nowTicks = DateTime.UtcNow.Ticks;
+    try
+    {
+      if (!RemoteClient.IsInitialized || RemoteClient.IsDisposed)
+      {
+        Log.Debug("Skipped loaded tournament refresh because MTGO client is not ready.");
+        return;
+      }
+
+      int discoveredCount = 0;
+      int newCount = 0;
+      int errorCount = 0;
+      foreach (var eventObj in EventManager.Events)
+      {
+        if (clientScopeVersion != Interlocked.Read(ref s_clientScopeVersion))
         {
-          // Update the collection with the new total.
-          eventCollection[i] = (eventObj, getTotalPlayers, currentTotal);
-          updatedEvents.Add(eventObj);
+          Log.Debug("Stopped loaded tournament refresh because MTGO client scope changed.");
+          return;
+        }
+
+        try
+        {
+          if (eventObj is not Tournament tournament) continue;
+
+          if (CacheDiscoveredTournament(tournament))
+          {
+            newCount++;
+          }
+          discoveredCount++;
+        }
+        catch (Exception ex)
+        {
+          errorCount++;
+          Log.Debug(
+            ex,
+            "Skipped loaded MTGO event while refreshing tournament cache.");
         }
       }
-      if (updatedEvents.Count == 0) return;
 
-      // Call the callback with the updated events.
-      callback(updatedEvents);
-    };
-    timer.Start();
-
-    RemoteClient.Disposed += delegate
+      Interlocked.Exchange(ref s_lastLoadedTournamentRefreshTicks, nowTicks);
+      Log.Information(
+        "Refreshed loaded tournaments from MTGO client: count={Count} new={NewCount} skipped={SkippedCount} cached={CachedCount}",
+        discoveredCount,
+        newCount,
+        errorCount,
+        DiscoveredTournaments.Count);
+    }
+    catch (Exception ex)
     {
-      if (_isDisposed) return;
-      _isDisposed = true;
-      timer.Dispose();
-    };
+      Log.Warning(
+        ex,
+        "Failed to refresh loaded tournaments from MTGO client.");
+    }
   }
+
+
+  /// <summary>
+  /// Sets up event discovery to watch for player count changes across all
+  /// discovered events without polling.
+  /// </summary>
+  private static void StartEventDiscovery(Action<IEnumerable<Event>> callback)
+  {
+    // Handler to subscribe to a tournament's player count changes
+    void subscribeToTournament(Tournament tournament)
+    {
+      int tournamentId = tournament.Id;
+      bool discovered = CacheDiscoveredTournament(tournament);
+
+      if (s_playerCountSubscriptions.ContainsKey(tournamentId))
+      {
+        Log.Debug(
+          "[StandingsTelemetry] skipped duplicate subscription tournament={TournamentId}",
+          tournamentId);
+        return;
+      }
+
+      Action<PropertyValueChangedEventArgs<int>> handler = args =>
+      {
+        Log.Debug(
+          "[StandingsTelemetry] player-count source=perTournament tournament={TournamentId} old={OldValue} new={NewValue}",
+          tournamentId,
+          args.OldValue,
+          args.NewValue);
+        callback(new[] { tournament });
+      };
+
+      // Use the += operator on the PropertyChangeWrapper
+      tournament.OnTotalPlayersChanged += handler;
+      s_playerCountSubscriptions.TryAdd(tournamentId, handler);
+
+      // Tournament state/round/standings updates are bridged by the static
+      // hooks below. Per-tournament standings hooks compute full tables before
+      // tracker streams can filter by target tournament, so discovery only
+      // attaches the cheap player-count watcher.
+    }
+
+
+    // 1. Subscribe to new events as they are created
+    s_playerEventsCreatedHandler = args =>
+    {
+      foreach (var eventObj in args.Events)
+      {
+        if (eventObj is Tournament t) subscribeToTournament(t);
+      }
+    };
+    EventManager.PlayerEventsCreated += s_playerEventsCreatedHandler;
+
+    // 2. Clean up subscriptions when events are removed
+    s_playerEventsRemovedHandler = args =>
+    {
+      foreach (var eventObj in args.Events)
+      {
+        if (eventObj is Event e)
+        {
+           int eventId = e.Id;
+           s_playerCountSubscriptions.TryRemove(eventId, out _);
+        }
+      }
+    };
+    EventManager.PlayerEventsRemoved += s_playerEventsRemovedHandler;
+
+    // 3. Initial crawl of featured events
+    foreach (var tournament in EventManager.FeaturedEvents)
+    {
+      subscribeToTournament(tournament);
+    }
+  }
+
+  private static int SafeEventId(Event eventObj)
+  {
+    try
+    {
+      return eventObj.Id;
+    }
+    catch (Exception ex)
+    {
+      Log.Warning(
+        "[StandingsTelemetry] failed to read event id type={EventType} error=\"{Error}\"",
+        eventObj.GetType().Name,
+        ex.Message);
+      return -1;
+    }
+  }
+
+  private static string SafeEventDescription(Event eventObj)
+  {
+    try
+    {
+      return eventObj.Description;
+    }
+    catch (Exception ex)
+    {
+      Log.Debug(
+        "[StandingsTelemetry] failed to read event description tournament={TournamentId} error=\"{Error}\"",
+        SafeEventId(eventObj),
+        ex.Message);
+      return "<unavailable>";
+    }
+  }
+
+  private static int SafeRoundNumber(TournamentRound round)
+  {
+    try
+    {
+      return round.Number;
+    }
+    catch (Exception ex)
+    {
+      Log.Debug(
+        "[StandingsTelemetry] failed to read round number error=\"{Error}\"",
+        ex.Message);
+      return -1;
+    }
+  }
+
+  private static bool SafeRoundIsComplete(TournamentRound round)
+  {
+    try
+    {
+      return round.IsComplete;
+    }
+    catch (Exception ex)
+    {
+      Log.Debug(
+        "[StandingsTelemetry] failed to read round completion error=\"{Error}\"",
+        ex.Message);
+      return false;
+    }
+  }
+
 
   /// <summary>
   /// Initializes the game service.
@@ -123,13 +419,13 @@ public static class GameAPIService
   public sealed class GameService(IServiceProvider serviceProvider)
       : PooledBackgroundService, IHostedService, IDisposable
   {
-    private readonly ConcurrentDictionary<int, Event> _activeEvents = new();
-    private readonly ConcurrentDictionary<int, Match> _activeMatches = new();
+    internal readonly ConcurrentDictionary<int, Event> _activeEvents = new();
+    internal readonly ConcurrentDictionary<int, Match> _activeMatches = new();
     private readonly ConcurrentDictionary<int, Game> _activeGames = new();
 
     private readonly ConcurrentDictionary<int, EventTracker> _eventTrackers = new();
     private readonly ConcurrentDictionary<int, MatchTracker> _matchTrackers = new();
-    private readonly ConcurrentDictionary<int, GameTracker> _gameTrackers = new();
+    internal readonly ConcurrentDictionary<int, GameTracker> _gameTrackers = new();
 
     private volatile bool _isDisposed;
 
@@ -158,6 +454,7 @@ public static class GameAPIService
     private void CreateMatchTracker(Match match, int eventId)
     {
       _dbWriter.TryAddMatch(match, eventId, out var _);
+      MatchCreated?.Invoke(null, match.Id);
       MatchTracker tracker = new(match, _dbWriter);
       _matchTrackers.TryAdd(match.Id, tracker);
     }
@@ -166,8 +463,8 @@ public static class GameAPIService
     {
       matchId ??= game.Match.Id;
 
-      bool isNewGame = _dbWriter.TryAddGame(game, matchId.Value, out var _);
-      GameTracker tracker = new(game, _eventLog, _dbWriter, !isNewGame);
+      _dbWriter.TryAddGame(game, matchId.Value, out var _);
+      GameTracker tracker = new(game, _eventLog, _dbWriter);
       _gameTrackers.TryAdd(game.Id, tracker);
     }
 
@@ -178,6 +475,8 @@ public static class GameAPIService
       {
         Log.Debug("Event Joined {Id}", e.Id);
         CreateEventTracker(e);
+        if (e is not Match)
+          EventCreated?.Invoke(null, e.Id);
       }
       if (e is Match match && _activeMatches.TryAdd(match.Id, match))
       {
@@ -238,7 +537,14 @@ public static class GameAPIService
     /// </summary>
     public void InitializeGameService()
     {
+      s_currentInstance = this;
       Log.Debug("Initializing Game API service...");
+      ResetClientScopedTournamentCache("MTGO client ready");
+
+      // Install all static hooks eagerly so that IPC type dumps and
+      // Harmony patching happen at startup rather than blocking the
+      // UI thread on first match/game join.
+      EnsureCoreHooksInitialized();
 
       // Hook up the GameAPIService's EventManager event handlers
       SyncThread.Enqueue(() =>
@@ -246,10 +552,40 @@ public static class GameAPIService
         EventManager.EventJoined += OnEventJoined;
         EventManager.GameJoined += OnGameJoined;
         
-        // // Poll active events every 5 seconds to check for player count changes.
-        // WatchPlayerCountAsync(
-        //   EventManager.FeaturedEvents,
-        //   events => PlayerCountUpdated?.Invoke(this, events));
+        // Monitor all featured events for player count changes using event discovery.
+        StartEventDiscovery(events => PlayerCountUpdated?.Invoke(null, events));
+
+        // Subscribe to global tournament standings and round changes.
+        s_standingsChangedHandler = (t, s) =>
+        {
+          CacheDiscoveredTournament(t);
+          StandingsUpdated?.Invoke(null, (t, s));
+        };
+        s_roundChangedHandler = (t, r) =>
+        {
+          Log.Information(
+            "[StandingsTelemetry] round source=static tournament={TournamentId} round={RoundNumber} isComplete={IsComplete} trackerSubscribers={SubscriberCount}",
+            SafeEventId(t),
+            SafeRoundNumber(r),
+            SafeRoundIsComplete(r),
+            RoundUpdated?.GetInvocationList().Length ?? 0);
+          CacheDiscoveredTournament(t);
+          RoundUpdated?.Invoke(null, (t, r));
+        };
+        s_stateChangedHandler = (t, state) =>
+        {
+          Log.Information(
+            "[StandingsTelemetry] state source=static tournament={TournamentId} state={State} trackerSubscribers={SubscriberCount}",
+            SafeEventId(t),
+            state,
+            StateUpdated?.GetInvocationList().Length ?? 0);
+          CacheDiscoveredTournament(t);
+          StateUpdated?.Invoke(null, (t, state));
+        };
+        Tournament.StandingsChanged += s_standingsChangedHandler;
+        Tournament.RoundChanged += s_roundChangedHandler;
+        Tournament.StateChanged += s_stateChangedHandler;
+
 
         Log.Information("Game API service listener has started.");
       });
@@ -296,26 +632,96 @@ public static class GameAPIService
       Log.Trace("Game API service finished initializing");
     }
 
+    private static void EnsureCoreHooksInitialized()
+    {
+      GameProcessor.EnsureHookInitialized();
+      ActionProcessor.EnsureHookInitialized();
+      PromptProcessor.EnsureHookInitialized();
+      LogMessageProcessor.EnsureHookInitialized();
+      MatchTracker.EnsureHooksInitialized();
+      GameTracker.EnsureHooksInitialized();
+      Tournament.StandingsChanged.EnsureInitialize();
+      Tournament.RoundChanged.EnsureInitialize();
+      Tournament.StateChanged.EnsureInitialize();
+    }
+
+    private static async Task MaintainHookRegistrationsAsync(CancellationToken stoppingToken)
+    {
+      using var timer = new PeriodicTimer(TimeSpan.FromSeconds(30));
+      try
+      {
+        while (await timer.WaitForNextTickAsync(stoppingToken))
+        {
+          Try(EnsureCoreHooksInitialized);
+        }
+      }
+      catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+      {
+        // Client disconnected or service stopped.
+      }
+    }
+
     private void ResetService()
     {
       Log.Information("Resetting Game API service state...");
 
-      // Unsubscribe from events
-      EventManager.EventJoined -= OnEventJoined;
-      EventManager.GameJoined -= OnGameJoined;
+      // Unsubscribe from events — safe even if the remote process is dead.
+      Try(() => EventManager.EventJoined -= OnEventJoined);
+      Try(() => EventManager.GameJoined -= OnGameJoined);
 
-      foreach (var tracker in _eventTrackers.Values) tracker.Dispose();
+      if (s_playerEventsCreatedHandler != null)
+      {
+        Try(() => EventManager.PlayerEventsCreated -= s_playerEventsCreatedHandler);
+        s_playerEventsCreatedHandler = null;
+      }
+
+      if (s_playerEventsRemovedHandler != null)
+      {
+        Try(() => EventManager.PlayerEventsRemoved -= s_playerEventsRemovedHandler);
+        s_playerEventsRemovedHandler = null;
+      }
+      
+      if (s_standingsChangedHandler != null)
+
+      {
+        Try(() => Tournament.StandingsChanged -= s_standingsChangedHandler);
+        s_standingsChangedHandler = null;
+      }
+
+      if (s_roundChangedHandler != null)
+      {
+        Try(() => Tournament.RoundChanged -= s_roundChangedHandler);
+        s_roundChangedHandler = null;
+      }
+
+      if (s_stateChangedHandler != null)
+      {
+        Try(() => Tournament.StateChanged -= s_stateChangedHandler);
+        s_stateChangedHandler = null;
+      }
+
+      // Clear discovery subscriptions
+      s_playerCountSubscriptions.Clear();
+
+
+
+      // Dispose trackers individually so one failure doesn't skip the rest.
+      // Remote objects may be stale if the MTGO process exited.
+      foreach (var tracker in _eventTrackers.Values) Try(tracker.Dispose);
       _eventTrackers.Clear();
 
-      foreach (var tracker in _matchTrackers.Values) tracker.Dispose();
+      foreach (var tracker in _matchTrackers.Values) Try(tracker.Dispose);
       _matchTrackers.Clear();
 
-      foreach (var tracker in _gameTrackers.Values) tracker.Dispose();
+      foreach (var tracker in _gameTrackers.Values) Try(tracker.Dispose);
       _gameTrackers.Clear();
 
       _activeEvents.Clear();
       _activeMatches.Clear();
       _activeGames.Clear();
+
+      ResetClientScopedTournamentCache("MTGO client disconnect");
+      s_currentInstance = null;
     }
 
     /// <inheritdoc />
@@ -340,7 +746,26 @@ public static class GameAPIService
             InitializeGameService();
 
             Log.Information("Game service initialized, waiting for disconnect...");
-            await _clientProvider.WaitForClientDisconnectAsync(stoppingToken);
+            using var hookWatchCts =
+              CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+            var hookWatchTask =
+              Task.Run(() => MaintainHookRegistrationsAsync(hookWatchCts.Token), hookWatchCts.Token);
+            try
+            {
+              await _clientProvider.WaitForClientDisconnectAsync(stoppingToken);
+            }
+            finally
+            {
+              hookWatchCts.Cancel();
+              try
+              {
+                await hookWatchTask;
+              }
+              catch (OperationCanceledException)
+              {
+                // Watch stopped with the client connection.
+              }
+            }
 
             Log.Information("Client disconnected, resetting game service...");
             ResetService();
@@ -353,6 +778,7 @@ public static class GameAPIService
           {
             Log.Error(ex, "Error in GameService loop");
             Log.Debug(ex.StackTrace);
+            ResetService();
             await Task.Delay(1000, stoppingToken);
           }
         }
@@ -372,9 +798,10 @@ public static class GameAPIService
       }
     }
 
-    private async Task ProcessLogsAsync(CancellationToken stoppingToken)
+    private Task ProcessLogsAsync(CancellationToken stoppingToken)
     {
-      // Process events in the eventlog blocking collection
+      // GameTracker writes structured data to the DB directly.
+      // This loop processes the notification stream for SSE clients.
       foreach (GameLogEntry entry in _eventLog.GetConsumingEnumerable(stoppingToken))
       {
         try
@@ -382,13 +809,7 @@ public static class GameAPIService
           Log.Trace("[Game {Id}] {Timestamp:O}: {Type} {Data}",
               entry.GameId, entry.Timestamp, entry.Type, entry.Data);
 
-          if (!await _dbWriter.WaitForGameModelAsync(entry.GameId))
-          {
-            throw new InvalidOperationException(
-              $"Cannot add log entry for game {entry.GameId} " +
-              $"as the game model was not created in time.");
-          }
-          await _dbWriter.TryAddGameLogAsync(entry, stoppingToken);
+          GameLogReceived?.Invoke(null, entry);
         }
         catch (OperationCanceledException)
         {
@@ -396,11 +817,12 @@ public static class GameAPIService
         }
         catch (Exception ex)
         {
-          Log.Error(ex, "Error adding log entry for game {GameId}: {Message}",
+          Log.Error(ex, "Error processing log entry for game {GameId}: {Message}",
             entry.GameId, ex.Message);
-          Log.Debug(ex.StackTrace);
         }
       }
+
+      return Task.CompletedTask;
     }
   }
 }
