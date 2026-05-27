@@ -17,21 +17,28 @@ public struct GameLogEntry : IComparable<GameLogEntry>
   public DateTime Timestamp;
   public GameLogType Type;
   public string Data;
+  public int Nonce;
 
-  public GameLogEntry(int gameId, DateTime timestamp, GameLogType type, string data)
+  public GameLogEntry(
+    int gameId, DateTime timestamp, GameLogType type, string data,
+    int nonce = 0)
   {
     GameId = gameId;
-    Timestamp = timestamp;
+    Timestamp = timestamp.ToLocalTime();
     Type = type;
     Data = data;
+    Nonce = nonce;
   }
 
-  public GameLogEntry(int gameId, DLRWrapper args, GameLogType type, string data)
+  public GameLogEntry(
+    int gameId, DLRWrapper args, GameLogType type, string data,
+    int nonce = 0)
   {
     GameId = gameId;
-    Timestamp = Unbind(args).__timestamp;
+    Timestamp = ((DateTime)Unbind(args).__timestamp).ToLocalTime();
     Type = type;
     Data = data;
+    Nonce = nonce;
   }
 
   public int CompareTo(GameLogEntry other)

@@ -16,6 +16,6 @@ public class GameLogModel
   public string GameLogType { get; set; }
   public string Data { get; set; }
 
-  public int GameId { get; set; }
-  public GameModel Game { get; set; }
+  public int GameStateId { get; set; }
+  public GameStateModel GameState { get; set; }
 }

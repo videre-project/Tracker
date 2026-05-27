@@ -19,5 +19,9 @@ public class GameModel
   public MatchModel Match { get; set; }
 
   public List<GamePlayerResult> GamePlayerResults { get; set; } = new();
-  public List<GameLogModel> GameLogs { get; set; } = new();
+
+  // Structured game state tables
+  public List<GameCardModel> Cards { get; set; } = new();
+  public List<GamePlayerModel> Players { get; set; } = new();
+  public List<GameStateModel> States { get; set; } = new();
 }

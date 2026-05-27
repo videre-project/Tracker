@@ -8,10 +8,12 @@ namespace Tracker.Services.MTGO.Events;
 
 public enum GameLogType
 {
-  PhaseChange,
-  TurnChange,
-  ZoneChange,
+  GameState,
   GameAction,
-  LifeChange,
-  LogMessage
+  ZoneChange,
+  CardChange,
+  PlayerChange,
+  LogMessage,
+  DamageAssignment,
+  Reveal
 }

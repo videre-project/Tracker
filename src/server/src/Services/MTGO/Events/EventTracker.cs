@@ -8,6 +8,7 @@ using System;
 using MTGOSDK.API.Play;
 using MTGOSDK.API.Play.Tournaments;
 using MTGOSDK.Core.Logging;
+using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 
 namespace Tracker.Services.MTGO.Events;
@@ -36,16 +37,14 @@ public class EventTracker : IDisposable
     if (_disposed) return;
     _disposed = true;
 
-    // When disposing, we assume the event tracking is done, so we check if it's completed
-    // or just mark it as ended if that's the logic we want.
-    // However, usually we want to mark EndTime when the event actually completes.
-    // If the tracker is disposed, it might be because the app is shutting down or the event is removed.
-    // Let's check IsCompleted one last time.
-    if (m_event.IsCompleted)
+    // Check completion one last time — but the remote object may be dead
+    // if the MTGO process exited, so guard against stale references.
+    if (Try(() => m_event.IsCompleted))
     {
       UpdateEndTime();
     }
 
+    GameAPIService.RemoveActiveEvent(m_event.Id);
     GC.SuppressFinalize(this);
   }
 

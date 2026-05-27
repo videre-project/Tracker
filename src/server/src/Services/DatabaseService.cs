@@ -42,8 +42,9 @@ public static class DatabaseService
     var connectionString = new SqliteConnectionStringBuilder
     {
       DataSource = path,
-      Cache = SqliteCacheMode.Shared,
       Pooling = true,
+      Mode = SqliteOpenMode.ReadWriteCreate,
+      DefaultTimeout = 5
     };
 
     builder.Services.AddSqlite<T>(connectionString.ToString());
@@ -81,6 +82,10 @@ public static class DatabaseService
           Log.Debug("No pending migrations found for {0}. Ensuring database is created.", typeof(T).Name);
           await db.EnsureCreatedAsync(cancellationToken);
         }
+
+        // Enable WAL mode and set busy timeout for concurrent access
+        await db.ExecuteSqlRawAsync("PRAGMA journal_mode=WAL;", cancellationToken);
+        await db.ExecuteSqlRawAsync("PRAGMA busy_timeout=5000;", cancellationToken);
       }
     }
 

@@ -8,6 +8,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -17,9 +18,12 @@ using Microsoft.Extensions.DependencyInjection;
 using MTGOSDK.API.Collection;
 using MTGOSDK.API.Play;
 using MTGOSDK.API.Play.Games;
+using MTGOSDK.API.Play.Games.Processors;
+using MTGOSDK.API.Play.Games.Processors.Partials;
 using MTGOSDK.API.Play.Tournaments;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection;
+using MTGOSDK.Core.Reflection.Serialization;
 
 using Tracker.Database;
 using Tracker.Database.Models;
@@ -52,11 +56,18 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
           return false;
         }
 
+        string description = eventObj.Description;
+        if (string.IsNullOrEmpty(description) && eventObj is Match m)
+        {
+          string bestOf = m.MaxGames == 3 ? "Bo3" : "Bo1";
+          description = $"{bestOf} Match #{m.Id}";
+        }
+
         eventModel = new EventModel
         {
           Id = eventObj.Id,
           Format = eventObj.Format,
-          Description = eventObj.Description,
+          Description = description,
           StartTime = Try(() => (eventObj as Tournament)?.StartTime) ?? startTime
         };
         if (eventObj.RegisteredDeck is Deck deck)
@@ -114,6 +125,62 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
       {
         Log.Error(ex, "Error adding event {EventId}", eventObj.Id);
         eventModel = null;
+        return false;
+      }
+    }
+  }
+
+  public bool TryBackfillEventDeck(Event eventObj)
+  {
+    if (eventObj.RegisteredDeck is not Deck deck) return false;
+
+    using (var scope = serviceProvider.CreateScope())
+    {
+      var context = scope.ServiceProvider.GetRequiredService<EventContext>();
+
+      try
+      {
+        using var transaction = context.Database.BeginTransaction();
+
+        var eventModel = context.Events.FirstOrDefault(e => e.Id == eventObj.Id);
+        if (eventModel == null || eventModel.DeckHash != null) return false;
+
+        eventModel.DeckHash = deck.Hash;
+
+        DeckModel? deckModel = context.Decks.FirstOrDefault(d => d.Hash == deck.Hash);
+        if (deckModel == null)
+        {
+          deckModel = DeckModel.ToModel(deck);
+
+          try
+          {
+            var httpClientFactory = scope.ServiceProvider.GetService<IHttpClientFactory>();
+            var appOptions = scope.ServiceProvider.GetService<ApplicationOptions>();
+            if (httpClientFactory != null && appOptions != null)
+            {
+              var httpClient = httpClientFactory.CreateClient();
+              deckModel.PopulateArchetypeAsync(httpClient, appOptions.NbacApiUrl)
+                .GetAwaiter().GetResult();
+            }
+          }
+          catch (Exception ex)
+          {
+            Log.Warning("Failed to fetch archetype for deck {DeckHash}: {Message}",
+              deck.Hash, ex.Message);
+          }
+
+          context.Decks.Add(deckModel);
+        }
+
+        eventModel.Deck = deckModel;
+        context.SaveChanges();
+        transaction.Commit();
+        Log.Debug("Backfilled deck {DeckHash} for event {EventId}", deck.Hash, eventObj.Id);
+        return true;
+      }
+      catch (Exception ex)
+      {
+        Log.Error(ex, "Error backfilling deck for event {EventId}", eventObj.Id);
         return false;
       }
     }
@@ -350,31 +417,6 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
     return true;
   }
 
-  public async Task<bool> WaitForGameModelAsync(
-    int gameId,
-    CancellationToken cancellationToken = default)
-  {
-    // Check if the game ID is already in the map
-    if (s_gameIdMap.ContainsKey(gameId)) return true;
-
-    using (var scope = serviceProvider.CreateScope())
-    {
-      var context = scope.ServiceProvider.GetRequiredService<EventContext>();
-
-      // Wait until the GameModel is created before adding the log entry.
-      if (!await WaitUntilAsync(async () =>
-        await context.Games.AnyAsync(g => g.Id == gameId, cancellationToken),
-        retries: int.MaxValue,
-        ct: cancellationToken
-      ))
-      {
-        return false;
-      }
-    }
-
-    return true;
-  }
-
   /// <summary>
   /// Waits for the game to contain a non-empty GamePlayerResults entry.
   /// </summary>
@@ -418,57 +460,225 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
     }
   }
 
-  public async Task<bool> TryAddGameLogAsync(
-    GameLogEntry entry,
-    CancellationToken cancellationToken = default)
+  //
+  // Structured game state methods
+  //
+
+  private static readonly JsonSerializerOptions s_jsonOptions = new()
   {
-    using (var scope = serviceProvider.CreateScope())
+    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+    WriteIndented = false,
+  };
+
+  /// <summary>
+  /// Builds a GameCardModel from a GameCard without touching the database.
+  /// FirstSeenStateId is set during flush.
+  /// </summary>
+  internal static GameCardModel BuildGameCardModel(
+    int gameId, GameCard card,
+    int ownerIndex, int controllerIndex,
+    string? initialZoneOverride = null)
+  {
+    string? countersJson = null;
+    try
     {
-      var context = scope.ServiceProvider.GetRequiredService<EventContext>();
+      var counters = card.Counters?
+        .GroupBy(c => c)
+        .ToDictionary(g => g.Key.ToString(), g => g.Count());
+      if (counters?.Count > 0)
+        countersJson = JsonSerializer.Serialize(counters, s_jsonOptions);
+    }
+    catch { }
 
-      try
-      {
-        using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+    string? abilitiesJson = null;
+    try
+    {
+      var abilities = card.Abilities?.ToList();
+      if (abilities?.Count > 0)
+        abilitiesJson = JsonSerializer.Serialize(
+          abilities.Select(a => a.ToString()), s_jsonOptions);
+    }
+    catch { }
 
-        // Hash the event to create a unique ID for it
-        int hashId = entry.GameId * 1000000 +
-          Math.Abs(
-            HashCode.Combine(entry.Timestamp, entry.Type, entry.Data.GetHashCode())
-          ) % 1000000;
+    string? manaCost = null;
+    try
+    {
+      manaCost = card.Definition.ManaCost;
+    }
+    catch { }
 
-        // Check if this log entry already exists
-        if (await context.GameLogs.AnyAsync(g => g.Id == hashId, cancellationToken))
-        {
-          await transaction.CommitAsync(cancellationToken);
-          return false;
-        }
-
-        var gameLogEntry = new GameLogModel
-        {
-          Id = hashId,
-          GameId = entry.GameId,
-          Timestamp = entry.Timestamp,
-          GameLogType = entry.Type.ToString(),
-          Data = entry.Data
-        };
-
-        await context.GameLogs.AddAsync(gameLogEntry, cancellationToken);
-        await context.SaveChangesAsync(cancellationToken);
-
-        await transaction.CommitAsync(cancellationToken);
-        return true;
-      }
-      catch (DbUpdateConcurrencyException ex)
-      {
-        Log.Warning("Concurrency conflict occurred while adding game log for game {GameId}: {Message}",
-                  entry.GameId, ex.Message);
-        return false;
-      }
+    int? catalogId = null;
+    int ctn = card.CTN;
+    if (ctn > 0)
+    {
+      try { catalogId = CollectionManager.GetCardByTextureId(ctn).Id; }
       catch (Exception ex)
       {
-        Log.Error(ex, "Error adding game log for game {GameId}", entry.GameId);
-        return false;
+        Log.Warning("CatalogId resolution failed for CTN {Ctn} ({Name}): {Error}",
+          ctn, card.Name, ex.Message);
       }
+    }
+
+    return new GameCardModel
+    {
+      GameId = gameId,
+      SourceId = card.SourceId > 0 ? card.SourceId : null,
+      CardId = card.Id,
+      Name = card.Name,
+      RulesText = !string.IsNullOrEmpty(card.RulesText) ? card.RulesText : null,
+      ManaCost = !string.IsNullOrEmpty(manaCost) ? manaCost : null,
+      TextureId = ctn > 0 ? ctn : null,
+      CatalogId = catalogId,
+      InitialZone = initialZoneOverride ?? card.Zone?.Name ?? "Unknown",
+      InitialPower = card.Toughness != 0 ? card.Power.ToString() : null,
+      InitialToughness = card.Toughness != 0 ? card.Toughness.ToString() : null,
+      InitialCounters = countersJson,
+      InitialAbilities = abilitiesJson,
+      OwnerId = ownerIndex,
+      ControllerId = controllerIndex,
+      IsTapped = card.IsTapped,
+      IsToken = card.IsToken,
+      IsLand = card.IsLand,
+      IsActivatedAbility = card.IsActivatedAbility,
+      IsTriggeredAbility = card.IsTriggeredAbility
+    };
+  }
+
+  /// <summary>
+  /// Builds a GamePlayerModel without touching the database.
+  /// FirstSeenStateId is set during flush.
+  /// </summary>
+  internal static GamePlayerModel BuildGamePlayerModel(
+    int gameId, GamePlayer player, int playerIndex)
+  {
+    string? manaPoolJson = null;
+    try
+    {
+      List<Mana>? mana = null;
+      if (Unbind(player) is GamePlayerPartial partial)
+        mana = partial.ManaPool.ToList();
+      else
+        mana = player.ManaPool?.ToList();
+
+      if (mana?.Count > 0)
+        manaPoolJson = JsonSerializer.Serialize(
+          mana.Select(m => new
+          {
+            Symbol = Mana.ToSymbol(m.Color),
+            Amount = m.Amount
+          }), s_jsonOptions);
+    }
+    catch { }
+
+    return new GamePlayerModel
+    {
+      GameId = gameId,
+      PlayerIndex = playerIndex,
+      Name = player.Name,
+      InitialLife = player.Life,
+      InitialHandCount = player.HandCount,
+      InitialLibraryCount = player.LibraryCount,
+      InitialGraveyardCount = player.GraveyardCount,
+      InitialManaPool = manaPoolJson,
+      IsActivePlayer = player.IsActivePlayer,
+      ClockRemaining = player.ChessClock.TotalSeconds,
+      UserId = player.UserId,
+      AvatarId = player.AvatarId
+    };
+  }
+
+  /// <summary>
+  /// Flushes all buffered models for a single snapshot tick in one
+  /// scope + transaction. Creates the GameStateModel and sets all child FKs.
+  /// Returns the GameStateModel's database ID, or -1 on failure.
+  /// </summary>
+  public int FlushStateData(
+    int gameId,
+    GameStateSnapshot snapshot,
+    List<GameCardModel> cards,
+    List<GamePlayerModel> players,
+    List<ZoneTransferModel> zoneTransfers,
+    List<CardStateChangeModel> cardChanges,
+    List<PlayerStateChangeModel> playerChanges,
+    List<GameActionModel> actions,
+    List<GameLogModel> logs,
+    string? promptOptions = null)
+  {
+    using var scope = serviceProvider.CreateScope();
+    var context = scope.ServiceProvider.GetRequiredService<EventContext>();
+
+    try
+    {
+      using var transaction = context.Database.BeginTransaction();
+
+      // Get or create the GameStateModel
+      var state = context.GameStates
+        .FirstOrDefault(s => s.GameId == gameId && s.Nonce == snapshot.Nonce);
+
+      if (state == null)
+      {
+        state = new GameStateModel
+        {
+          GameId = gameId,
+          Nonce = snapshot.Nonce,
+          Timestamp = snapshot.Timestamp,
+          ActionTimestamp = snapshot.ActionTimestamp,
+          ClientTimestamp = snapshot.ClientTimestamp,
+          TurnNumber = snapshot.TurnNumber,
+          CurrentPhase = snapshot.CurrentPhase.ToString(),
+          PromptedPlayer = snapshot.PromptedPlayer,
+          PromptText = snapshot.PromptText,
+          PromptOptions = promptOptions
+        };
+        context.GameStates.Add(state);
+        // SaveChanges to get the auto-generated state.Id for child FKs
+        context.SaveChanges();
+      }
+      else if (promptOptions != null && state.PromptOptions == null)
+      {
+        // Re-flush from ForceFlush recovery — merge prompt options that
+        // were missing from the initial flush into the existing record.
+        state.PromptOptions = promptOptions;
+        context.SaveChanges();
+      }
+
+      int stateId = state.Id;
+
+      // Set FKs on all child models
+      foreach (var card in cards)
+        card.FirstSeenStateId = stateId;
+      foreach (var player in players)
+        player.FirstSeenStateId = stateId;
+      foreach (var transfer in zoneTransfers)
+        transfer.GameStateId = stateId;
+      foreach (var change in cardChanges)
+        change.GameStateId = stateId;
+      foreach (var playerChange in playerChanges)
+        playerChange.GameStateId = stateId;
+      foreach (var action in actions)
+        action.GameStateId = stateId;
+      foreach (var log in logs)
+        log.GameStateId = stateId;
+
+      // Batch insert everything
+      if (cards.Count > 0) context.GameCards.AddRange(cards);
+      if (players.Count > 0) context.GamePlayers.AddRange(players);
+      if (zoneTransfers.Count > 0) context.ZoneTransfers.AddRange(zoneTransfers);
+      if (cardChanges.Count > 0) context.CardStateChanges.AddRange(cardChanges);
+      if (playerChanges.Count > 0) context.PlayerStateChanges.AddRange(playerChanges);
+      if (actions.Count > 0) context.GameActions.AddRange(actions);
+      if (logs.Count > 0) context.GameLogs.AddRange(logs);
+
+      context.SaveChanges();
+      transaction.Commit();
+
+      return stateId;
+    }
+    catch (Exception ex)
+    {
+      Log.Error(ex, "Error flushing game state data for game {GameId}: {Message}",
+        gameId, ex.ToString());
+      return -1;
     }
   }
 

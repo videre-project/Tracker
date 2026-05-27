@@ -25,6 +25,13 @@ public class EventContext(DbContextOptions<EventContext> options)
   public DbSet<DeckModel> Decks { get; set; }
   public DbSet<MatchModel> Matches { get; set; }
   public DbSet<GameModel> Games { get; set; }
+  public DbSet<GameCardModel> GameCards { get; set; }
+  public DbSet<GamePlayerModel> GamePlayers { get; set; }
+  public DbSet<GameStateModel> GameStates { get; set; }
+  public DbSet<GameActionModel> GameActions { get; set; }
+  public DbSet<CardStateChangeModel> CardStateChanges { get; set; }
+  public DbSet<ZoneTransferModel> ZoneTransfers { get; set; }
+  public DbSet<PlayerStateChangeModel> PlayerStateChanges { get; set; }
   public DbSet<GameLogModel> GameLogs { get; set; }
 
   private static readonly JsonSerializerOptions s_jsonOptions = new()
@@ -90,11 +97,75 @@ public class EventContext(DbContextOptions<EventContext> options)
       .HasForeignKey(g => g.MatchId)
       .OnDelete(DeleteBehavior.Cascade);
 
+    // Game → Cards, Players, States
     modelBuilder.Entity<GameModel>()
-      .HasMany(g => g.GameLogs)
-      .WithOne(e => e.Game)
-      .HasForeignKey(e => e.GameId)
+      .HasMany(g => g.Cards)
+      .WithOne(c => c.Game)
+      .HasForeignKey(c => c.GameId)
       .OnDelete(DeleteBehavior.Cascade);
+
+    modelBuilder.Entity<GameModel>()
+      .HasMany(g => g.Players)
+      .WithOne(p => p.Game)
+      .HasForeignKey(p => p.GameId)
+      .OnDelete(DeleteBehavior.Cascade);
+
+    modelBuilder.Entity<GameModel>()
+      .HasMany(g => g.States)
+      .WithOne(s => s.Game)
+      .HasForeignKey(s => s.GameId)
+      .OnDelete(DeleteBehavior.Cascade);
+
+    // GameState → child event tables
+    modelBuilder.Entity<GameStateModel>()
+      .HasMany(s => s.Actions)
+      .WithOne(a => a.GameState)
+      .HasForeignKey(a => a.GameStateId)
+      .OnDelete(DeleteBehavior.Cascade);
+
+    modelBuilder.Entity<GameStateModel>()
+      .HasMany(s => s.CardChanges)
+      .WithOne(c => c.GameState)
+      .HasForeignKey(c => c.GameStateId)
+      .OnDelete(DeleteBehavior.Cascade);
+
+    modelBuilder.Entity<GameStateModel>()
+      .HasMany(s => s.ZoneTransfers)
+      .WithOne(z => z.GameState)
+      .HasForeignKey(z => z.GameStateId)
+      .OnDelete(DeleteBehavior.Cascade);
+
+    modelBuilder.Entity<GameStateModel>()
+      .HasMany(s => s.PlayerChanges)
+      .WithOne(p => p.GameState)
+      .HasForeignKey(p => p.GameStateId)
+      .OnDelete(DeleteBehavior.Cascade);
+
+    modelBuilder.Entity<GameStateModel>()
+      .HasMany(s => s.Logs)
+      .WithOne(l => l.GameState)
+      .HasForeignKey(l => l.GameStateId)
+      .OnDelete(DeleteBehavior.Cascade);
+
+    // GameCard.FirstSeenState FK (no cascade — Game cascade handles cleanup)
+    modelBuilder.Entity<GameCardModel>()
+      .HasOne(c => c.FirstSeenState)
+      .WithMany()
+      .HasForeignKey(c => c.FirstSeenStateId)
+      .OnDelete(DeleteBehavior.NoAction);
+
+    // GamePlayer.FirstSeenState FK (no cascade)
+    modelBuilder.Entity<GamePlayerModel>()
+      .HasOne(p => p.FirstSeenState)
+      .WithMany()
+      .HasForeignKey(p => p.FirstSeenStateId)
+      .OnDelete(DeleteBehavior.NoAction);
+
+    // Unique index on GameStateModel (GameId, Nonce) for correlation queries
+    // and to prevent duplicate state rows for the same snapshot tick.
+    modelBuilder.Entity<GameStateModel>()
+      .HasIndex(s => new { s.GameId, s.Nonce })
+      .IsUnique();
 
     //
     // Match relationships
