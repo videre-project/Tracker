@@ -108,7 +108,7 @@ export interface NDJSONStreamOptions<T> {
  * })
  * ```
  */
-export function useNDJSONStream<T = any>(options: NDJSONStreamOptions<T>) {
+export function useNDJSONStream<T = unknown>(options: NDJSONStreamOptions<T>) {
   const {
     url,
     onMessage,
@@ -159,11 +159,6 @@ export function useNDJSONStream<T = any>(options: NDJSONStreamOptions<T>) {
           maxReconnectDelay
         )
 
-    const retryMode = useConstantRetry ? 'constant' : 'exponential backoff'
-    console.log(
-      `Scheduling reconnect (${retryMode}) attempt ${reconnectAttemptsRef.current}/${maxReconnectAttempts || '∞'} in ${delay}ms for ${url}`
-    )
-
     // Clear any existing reconnect timeout
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current)
@@ -179,7 +174,6 @@ export function useNDJSONStream<T = any>(options: NDJSONStreamOptions<T>) {
 
     // Prevent concurrent connection attempts
     if (isConnectingRef.current) {
-      console.log(`Already connecting to ${url}, skipping duplicate attempt`)
       return
     }
 
@@ -193,8 +187,6 @@ export function useNDJSONStream<T = any>(options: NDJSONStreamOptions<T>) {
     const controller = new AbortController()
     abortControllerRef.current = controller
 
-    console.log(`Connecting to NDJSON stream: ${url}`)
-
     fetch(url, {
       signal: controller.signal,
       headers: { Accept: "application/x-ndjson" }
@@ -202,9 +194,14 @@ export function useNDJSONStream<T = any>(options: NDJSONStreamOptions<T>) {
       .then(res => {
         // Handle 503 Service Unavailable (client not ready)
         if (res.status === 503) {
-          console.warn(`Stream not available (503), scheduling retry`)
           isConnectingRef.current = false
-          scheduleReconnect()
+          if (autoReconnect && !controller.signal.aborted) {
+            console.warn(`Stream not available (503), scheduling retry`)
+            scheduleReconnect()
+          } else {
+            console.warn(`Stream not available (503), reconnect disabled for ${url}`)
+            onEndRef.current?.()
+          }
           return
         }
 
@@ -212,8 +209,6 @@ export function useNDJSONStream<T = any>(options: NDJSONStreamOptions<T>) {
           isConnectingRef.current = false
           throw new Error(`Stream request failed: ${res.status} ${res.statusText}`)
         }
-
-        console.log(`Connected to NDJSON stream: ${url}`)
 
         // Reset reconnect attempts on successful connection
         reconnectAttemptsRef.current = 0
@@ -229,7 +224,6 @@ export function useNDJSONStream<T = any>(options: NDJSONStreamOptions<T>) {
         function readStream(): Promise<void> {
           return reader.read().then(({ done, value }) => {
             if (done) {
-              console.log(`Stream ended: ${url}`)
               onEndRef.current?.()
 
               // Reconnect if enabled and not manually aborted
@@ -240,7 +234,7 @@ export function useNDJSONStream<T = any>(options: NDJSONStreamOptions<T>) {
             }
 
             buffer += new TextDecoder().decode(value)
-            let lines = buffer.split("\n")
+            const lines = buffer.split("\n")
             buffer = lines.pop() || ""
 
             for (const line of lines) {
@@ -263,7 +257,6 @@ export function useNDJSONStream<T = any>(options: NDJSONStreamOptions<T>) {
         isConnectingRef.current = false
 
         if (e.name === 'AbortError') {
-          console.log(`Stream aborted: ${url}`)
           return
         }
 
@@ -322,8 +315,7 @@ export function useNDJSONStream<T = any>(options: NDJSONStreamOptions<T>) {
         reconnectTimeoutRef.current = null
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled]) // Only re-run when `enabled` state changes
+  }, [enabled, url]) // Reconnect when the target stream changes
 
   return {
     reconnect: connectToStream
