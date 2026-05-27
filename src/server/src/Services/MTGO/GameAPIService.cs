@@ -279,19 +279,11 @@ public static class GameAPIService
 
       if (s_playerCountSubscriptions.ContainsKey(tournamentId))
       {
-        Log.Debug(
-          "[StandingsTelemetry] skipped duplicate subscription tournament={TournamentId}",
-          tournamentId);
         return;
       }
 
       Action<PropertyValueChangedEventArgs<int>> handler = args =>
       {
-        Log.Debug(
-          "[StandingsTelemetry] player-count source=perTournament tournament={TournamentId} old={OldValue} new={NewValue}",
-          tournamentId,
-          args.OldValue,
-          args.NewValue);
         callback(new[] { tournament });
       };
 
@@ -336,69 +328,6 @@ public static class GameAPIService
       subscribeToTournament(tournament);
     }
   }
-
-  private static int SafeEventId(Event eventObj)
-  {
-    try
-    {
-      return eventObj.Id;
-    }
-    catch (Exception ex)
-    {
-      Log.Warning(
-        "[StandingsTelemetry] failed to read event id type={EventType} error=\"{Error}\"",
-        eventObj.GetType().Name,
-        ex.Message);
-      return -1;
-    }
-  }
-
-  private static string SafeEventDescription(Event eventObj)
-  {
-    try
-    {
-      return eventObj.Description;
-    }
-    catch (Exception ex)
-    {
-      Log.Debug(
-        "[StandingsTelemetry] failed to read event description tournament={TournamentId} error=\"{Error}\"",
-        SafeEventId(eventObj),
-        ex.Message);
-      return "<unavailable>";
-    }
-  }
-
-  private static int SafeRoundNumber(TournamentRound round)
-  {
-    try
-    {
-      return round.Number;
-    }
-    catch (Exception ex)
-    {
-      Log.Debug(
-        "[StandingsTelemetry] failed to read round number error=\"{Error}\"",
-        ex.Message);
-      return -1;
-    }
-  }
-
-  private static bool SafeRoundIsComplete(TournamentRound round)
-  {
-    try
-    {
-      return round.IsComplete;
-    }
-    catch (Exception ex)
-    {
-      Log.Debug(
-        "[StandingsTelemetry] failed to read round completion error=\"{Error}\"",
-        ex.Message);
-      return false;
-    }
-  }
-
 
   /// <summary>
   /// Initializes the game service.
@@ -563,22 +492,11 @@ public static class GameAPIService
         };
         s_roundChangedHandler = (t, r) =>
         {
-          Log.Information(
-            "[StandingsTelemetry] round source=static tournament={TournamentId} round={RoundNumber} isComplete={IsComplete} trackerSubscribers={SubscriberCount}",
-            SafeEventId(t),
-            SafeRoundNumber(r),
-            SafeRoundIsComplete(r),
-            RoundUpdated?.GetInvocationList().Length ?? 0);
           CacheDiscoveredTournament(t);
           RoundUpdated?.Invoke(null, (t, r));
         };
         s_stateChangedHandler = (t, state) =>
         {
-          Log.Information(
-            "[StandingsTelemetry] state source=static tournament={TournamentId} state={State} trackerSubscribers={SubscriberCount}",
-            SafeEventId(t),
-            state,
-            StateUpdated?.GetInvocationList().Length ?? 0);
           CacheDiscoveredTournament(t);
           StateUpdated?.Invoke(null, (t, state));
         };

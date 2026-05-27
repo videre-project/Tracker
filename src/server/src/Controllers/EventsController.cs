@@ -5,7 +5,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Net.Http;
 using System.Runtime.CompilerServices;
@@ -194,8 +193,6 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
   [Produces("application/x-ndjson")]
   public async Task<IActionResult> WatchTournamentListUpdates()
   {
-    string streamId = Guid.NewGuid().ToString("N")[..8];
-
     if (!clientMonitor.IsClientReady)
     {
       return StatusCode(StatusCodes.Status503ServiceUnavailable,
@@ -222,15 +219,6 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
       int tournamentId = SafeTournamentId(tournament);
       if (tournamentId <= 0) return;
 
-      if (source != "reconcile")
-      {
-        Log.Information(
-          "[StandingsTelemetry] tournament-list stream received {Source} stream={StreamId} tournament={TournamentId} detail={Detail}",
-          source,
-          streamId,
-          tournamentId,
-          detail);
-      }
       updateChannel.Writer.TryWrite((tournament, source, detail));
     }
 
@@ -247,27 +235,10 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
       if (fingerprints.TryGetValue(tournamentId, out var lastFingerprint) &&
           fingerprint == lastFingerprint)
       {
-        if (source != "reconcile")
-        {
-          Log.Debug(
-            "[StandingsTelemetry] tournament-list stream skipped-unchanged stream={StreamId} tournament={TournamentId} source={Source}",
-            streamId,
-            tournamentId,
-            source);
-        }
         return;
       }
 
       fingerprints[tournamentId] = fingerprint;
-      if (source != "reconcile")
-      {
-        Log.Debug(
-          "[StandingsTelemetry] tournament-list stream write stream={StreamId} tournament={TournamentId} source={Source} detail={Detail}",
-          streamId,
-          tournamentId,
-          source,
-          detail);
-      }
       await StreamResponse([serialized], streamToken);
     }
 
@@ -319,9 +290,6 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
       updateChannel.Writer.TryComplete();
     }
 
-    Log.Information(
-      "[StandingsTelemetry] tournament-list stream ended stream={StreamId}",
-      streamId);
     return new EmptyResult();
   }
 
@@ -515,14 +483,8 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
   [Produces("application/x-ndjson")]
   public async Task<IActionResult> WatchTournamentUpdates(int id)
   {
-    string streamId = Guid.NewGuid().ToString("N")[..8];
-
     if (!clientMonitor.IsClientReady)
     {
-      Log.Warning(
-        "[StandingsTelemetry] tournament-update stream rejected stream={StreamId} tournament={TournamentId} reason=client-not-ready",
-        streamId,
-        id);
       return StatusCode(StatusCodes.Status503ServiceUnavailable,
         new { error = "MTGO client is not ready" });
     }
@@ -530,10 +492,6 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
     try
     {
       Tournament tournament = GetTournamentOrDiscovered(id);
-      Log.Information(
-        "[StandingsTelemetry] tournament-update stream connected stream={StreamId} tournament={TournamentId}",
-        streamId,
-        id);
 
       DisableBuffering();
       SetNdjsonContentType();
@@ -554,24 +512,10 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
         string stateFingerprint = JsonSerializer.Serialize(stateUpdate);
         if (!force && stateFingerprint == lastStateFingerprint)
         {
-          if (source != "reconcile")
-          {
-            Log.Debug(
-              "[StandingsTelemetry] tournament-update stream skipped-unchanged stream={StreamId} tournament={TournamentId}",
-              streamId,
-              id);
-          }
           return;
         }
 
         lastStateFingerprint = stateFingerprint;
-        if (source != "reconcile")
-        {
-          Log.Debug(
-            "[StandingsTelemetry] tournament-update stream write stream={StreamId} tournament={TournamentId}",
-            streamId,
-            id);
-        }
         await StreamResponse([stateUpdate], streamToken);
       }
 
@@ -601,33 +545,9 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
         int tournamentId = SafeTournamentId(updatedTournament);
         if (tournamentId != id)
         {
-          Log.Trace(
-            "[StandingsTelemetry] tournament-update stream ignored {Source} stream={StreamId} targetTournament={TargetTournamentId} sourceTournament={SourceTournamentId}",
-            source,
-            streamId,
-            id,
-            tournamentId);
           return;
         }
 
-        if (source is "poll")
-        {
-          Log.Debug(
-            "[StandingsTelemetry] tournament-update stream received {Source} stream={StreamId} tournament={TournamentId} detail={Detail}",
-            source,
-            streamId,
-            id,
-            detail);
-        }
-        else if (source != "reconcile")
-        {
-          Log.Information(
-            "[StandingsTelemetry] tournament-update stream received {Source} stream={StreamId} tournament={TournamentId} detail={Detail}",
-            source,
-            streamId,
-            id,
-            detail);
-        }
         updateChannel.Writer.TryWrite((updatedTournament, source, detail));
       }
 
@@ -669,10 +589,6 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
         updateChannel.Writer.TryComplete();
       }
 
-      Log.Information(
-        "[StandingsTelemetry] tournament-update stream ended stream={StreamId} tournament={TournamentId}",
-        streamId,
-        id);
       return new EmptyResult();
     }
     catch (KeyNotFoundException)
@@ -997,14 +913,8 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
   [Produces("application/x-ndjson")]
   public async Task<IActionResult> WatchStandings(int id)
   {
-    string streamId = Guid.NewGuid().ToString("N")[..8];
-
     if (!clientMonitor.IsClientReady)
     {
-      Log.Warning(
-        "[StandingsTelemetry] standings stream rejected stream={StreamId} tournament={TournamentId} reason=client-not-ready",
-        streamId,
-        id);
       return StatusCode(StatusCodes.Status503ServiceUnavailable,
         new { error = "MTGO client is not ready" });
     }
@@ -1012,17 +922,8 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
     IList<StandingRecord> initial;
     try
     {
-      Log.Information(
-        "[StandingsTelemetry] standings stream connecting stream={StreamId} tournament={TournamentId}",
-        streamId,
-        id);
       Tournament tournament = GetTournamentOrDiscovered(id);
       initial = tournament.ComputeStandings();
-      Log.Information(
-        "[StandingsTelemetry] standings stream initial-computed stream={StreamId} tournament={TournamentId} count={Count}",
-        streamId,
-        id,
-        initial.Count);
 
       DisableBuffering();
       SetNdjsonContentType();
@@ -1032,11 +933,6 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
       var streamToken = linkedCts.Token;
 
       // Phase 1: Emit all current standings
-      Log.Debug(
-        "[StandingsTelemetry] standings stream write-initial stream={StreamId} tournament={TournamentId} count={Count}",
-        streamId,
-        id,
-        initial.Count);
       await StreamResponse(SerializeStandings(initial), streamToken);
       IList<StandingRecord>? lastWrittenFullStandings = initial;
       int? lastRoundHash = tournament.GetRoundHash(includeTournamentId: true);
@@ -1072,12 +968,6 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
           return;
         }
 
-        Log.Information(
-          "[StandingsTelemetry] standings stream received {Source} stream={StreamId} tournament={TournamentId} detail={Detail}",
-          source,
-          streamId,
-          id,
-          detail);
         updateChannel.Writer.TryWrite((updatedTournament, standings, source, detail));
       }
 
@@ -1113,30 +1003,12 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
             int? roundHash = update.Tournament.GetRoundHash(includeTournamentId: true);
             if (roundHash.HasValue && roundHash == lastRoundHash)
             {
-              Log.Debug(
-                "[StandingsTelemetry] standings stream skipped-roundhash stream={StreamId} tournament={TournamentId} roundHash={RoundHash}",
-                streamId,
-                id,
-                roundHash.Value);
               continue;
             }
 
             if (roundHash.HasValue)
             {
-              Log.Debug(
-                "[StandingsTelemetry] standings stream roundhash-changed stream={StreamId} tournament={TournamentId} previousRoundHash={PreviousRoundHash} roundHash={RoundHash}",
-                streamId,
-                id,
-                lastRoundHash,
-                roundHash.Value);
               lastRoundHash = roundHash;
-            }
-            else
-            {
-              Log.Debug(
-                "[StandingsTelemetry] standings stream roundhash-unavailable stream={StreamId} tournament={TournamentId}",
-                streamId,
-                id);
             }
           }
 
@@ -1155,33 +1027,17 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
 
           if (standings.Count == 0)
           {
-            Log.Information(
-              "[StandingsTelemetry] standings stream skipped-empty {Source} stream={StreamId} tournament={TournamentId}",
-              update.Source,
-              streamId,
-              id);
             continue;
           }
 
           if (isFullSnapshot &&
               ReferenceEquals(standings, lastWrittenFullStandings))
           {
-            Log.Debug(
-              "[StandingsTelemetry] standings stream skipped-unchanged {Source} stream={StreamId} tournament={TournamentId}",
-              update.Source,
-              streamId,
-              id);
             continue;
           }
 
           try
           {
-            Log.Debug(
-              "[StandingsTelemetry] standings stream write-update {Source} stream={StreamId} tournament={TournamentId} count={Count}",
-              update.Source,
-              streamId,
-              id,
-              standings.Count);
             await StreamResponse(SerializeStandings(standings), streamToken);
             if (isFullSnapshot)
             {
@@ -1190,26 +1046,12 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
           }
           catch (OperationCanceledException) when (streamToken.IsCancellationRequested)
           {
-            Log.Debug(
-              "[StandingsTelemetry] standings stream write-cancelled stream={StreamId} tournament={TournamentId}",
-              streamId,
-              id);
           }
           catch (ObjectDisposedException) when (streamToken.IsCancellationRequested)
           {
-            Log.Debug(
-              "[StandingsTelemetry] standings stream write-cancelled stream={StreamId} tournament={TournamentId}",
-              streamId,
-              id);
           }
-          catch (Exception ex)
+          catch (Exception)
           {
-            Log.Error(
-              ex,
-              "[StandingsTelemetry] standings stream write-failed stream={StreamId} tournament={TournamentId} error=\"{Error}\"",
-              streamId,
-              id,
-              ex.Message);
             throw;
           }
         }
@@ -1226,35 +1068,21 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
         updateChannel.Writer.TryComplete();
       }
 
-      Log.Information(
-        "[StandingsTelemetry] standings stream ended stream={StreamId} tournament={TournamentId}",
-        streamId,
-        id);
       return new EmptyResult();
     }
-    catch (KeyNotFoundException ex)
+    catch (KeyNotFoundException)
     {
-      Log.Warning(
-        "[StandingsTelemetry] standings stream not-found stream={StreamId} tournament={TournamentId} error=\"{Error}\"",
-        streamId,
-        id,
-        ex.Message);
       return NotFound(new { error = $"Tournament {id} not found. It may have ended or not yet loaded." });
     }
   }
 
   private static IEnumerable<object> SerializeStandings(IList<StandingRecord> standings)
   {
-    long totalStart = Stopwatch.GetTimestamp();
-
-    long phaseStart = Stopwatch.GetTimestamp();
     var serialized = standings
       .SerializeAs<IStandingResult>()
       .ToList();
-    double serializeAsMs = Stopwatch.GetElapsedTime(phaseStart).TotalMilliseconds;
 
-    phaseStart = Stopwatch.GetTimestamp();
-    var result = serialized
+    return serialized
       .Zip(standings, (dto, s) => (object)new
       {
         dto.Rank,
@@ -1266,18 +1094,6 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
         dto.OpponentGameWinPercentage,
       })
       .ToList();
-    double projectionMs = Stopwatch.GetElapsedTime(phaseStart).TotalMilliseconds;
-
-    Log.Information(
-      "[StandingsTelemetry] serialize-standings count={Count} " +
-      "serializeAsMs={SerializeAsMs:0.000} projectionMs={ProjectionMs:0.000} " +
-      "totalMs={TotalMs:0.000}",
-      standings.Count,
-      serializeAsMs,
-      projectionMs,
-      Stopwatch.GetElapsedTime(totalStart).TotalMilliseconds);
-
-    return result;
   }
 
   private static Tournament GetTournamentOrDiscovered(int id)
@@ -1310,12 +1126,8 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
     {
       return tournament.Id;
     }
-    catch (Exception ex)
+    catch (Exception)
     {
-      Log.Warning(
-        "[StandingsTelemetry] failed to read tournament id type={TournamentType} error=\"{Error}\"",
-        tournament.GetType().Name,
-        ex.Message);
       return -1;
     }
   }
@@ -1326,11 +1138,8 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
     {
       return round.Number;
     }
-    catch (Exception ex)
+    catch (Exception)
     {
-      Log.Debug(
-        "[StandingsTelemetry] failed to read round number error=\"{Error}\"",
-        ex.Message);
       return -1;
     }
   }
