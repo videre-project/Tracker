@@ -68,7 +68,7 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
           Id = eventObj.Id,
           Format = eventObj.Format,
           Description = description,
-          StartTime = Try(() => (eventObj as Tournament)?.StartTime) ?? startTime
+          StartTime = eventObj is Tournament tournament ? tournament.StartTime : startTime
         };
         if (eventObj.RegisteredDeck is Deck deck)
         {

@@ -276,7 +276,7 @@ public class DwmTitleBar
       case WM_NCCALCSIZE:
         if (m.WParam.ToInt32() == 1)
         {
-          var nccsp = (NCCALCSIZE_PARAMS)Marshal.PtrToStructure(m.LParam, typeof(NCCALCSIZE_PARAMS));
+          var nccsp = Marshal.PtrToStructure<NCCALCSIZE_PARAMS>(m.LParam);
 
           // When maximized, the window bounds are inherently expanded by the system to conceal the sizeable border behind the screen edges.
           // Because we don't draw a border, our client area (which is the whole window) gets pushed off-screen.
@@ -315,7 +315,7 @@ public class DwmTitleBar
 
           if (GetMonitorInfo(hMonitor, ref monitorInfo))
           {
-            var mmi = (MINMAXINFO)Marshal.PtrToStructure(m.LParam, typeof(MINMAXINFO));
+            var mmi = Marshal.PtrToStructure<MINMAXINFO>(m.LParam);
             
             // Set the maximized position relative to the monitor bounds (no inflation)
             mmi.ptMaxPosition.x = monitorInfo.rcWork.Left - monitorInfo.rcMonitor.Left;

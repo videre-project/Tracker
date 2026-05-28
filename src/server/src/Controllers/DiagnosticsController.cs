@@ -42,8 +42,8 @@ public class DiagnosticsController : APIController
     {
       while (!HttpContext.RequestAborted.IsCancellationRequested)
       {
-        object sdkMetrics = null;
-        object diverMetrics = null;
+        object? sdkMetrics = null;
+        object? diverMetrics = null;
 
         // Only query metrics when the RemoteClient is alive
         if (RemoteClient.IsInitialized && !RemoteClient.IsDisposed)
@@ -79,8 +79,8 @@ public class DiagnosticsController : APIController
   [ProducesResponseType(StatusCodes.Status200OK)]
   public IActionResult GetMetrics()
   {
-    object sdkMetrics = null;
-    object diverMetrics = null;
+    object? sdkMetrics = null;
+    object? diverMetrics = null;
 
     if (RemoteClient.IsInitialized && !RemoteClient.IsDisposed)
     {

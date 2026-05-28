@@ -203,7 +203,7 @@ public class MatchTracker: IDisposable
         // Reconstruct from the live Game object which still has data
         // populated via the FLS HandlePlayerRanking path.
         //
-        Game game = matchGames.FirstOrDefault(g => g.Id == gameId);
+        Game? game = matchGames.FirstOrDefault(g => g.Id == gameId);
         if (game == null)
         {
           Log.Error("Game {Id} not found in match games list", gameId);
