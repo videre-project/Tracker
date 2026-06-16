@@ -5,9 +5,10 @@
 
 import React from "react"
 import { getManaSymbolSvgPath } from "@/utils/mana-symbols"
+import { getMtgoChatSymbolImagePath } from "@/utils/mtgo-chat-symbols"
 
 interface ParsedPart {
-  type: "text" | "purple" | "card" | "mana" | "italic"
+  type: "text" | "purple" | "card" | "mana" | "chatSymbol" | "italic"
   value: string
   cardId?: number
   textureId?: number
@@ -192,6 +193,19 @@ export function parseGameLogMarkup(text: string): ParsedPart[] {
       }
     }
 
+    if (text[i] === "[") {
+      const closeIdx = text.indexOf("]", i)
+      if (closeIdx > i) {
+        const symbol = text.slice(i + 1, closeIdx)
+        if (getMtgoChatSymbolImagePath(symbol)) {
+          flush()
+          parts.push({ type: "chatSymbol", value: symbol })
+          i = closeIdx + 1
+          continue
+        }
+      }
+    }
+
     buf += text[i++]
   }
   flush()
@@ -241,6 +255,21 @@ export function GameLogText({
             }
             // No SVG available — render as plain text
             return <React.Fragment key={i}>{`{${part.value}}`}</React.Fragment>
+          }
+          case "chatSymbol": {
+            const symbolPath = getMtgoChatSymbolImagePath(part.value)
+            if (symbolPath) {
+              return (
+                <img
+                  key={i}
+                  src={symbolPath}
+                  alt={part.value}
+                  title={part.value}
+                  className={symbolClassName}
+                />
+              )
+            }
+            return <React.Fragment key={i}>{`[${part.value}]`}</React.Fragment>
           }
           default:
             return <React.Fragment key={i}>{part.value}</React.Fragment>
