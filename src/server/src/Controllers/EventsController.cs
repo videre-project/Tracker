@@ -12,7 +12,6 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using System.Threading;
-using System.Threading.Channels;
 using System.Threading.Tasks;
 
 using Microsoft.AspNetCore.Http;
@@ -162,7 +161,8 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
     var events = SerializeCachedEventsList().ToList();
 
     Response.Headers["X-Events"] = events.Count.ToString();
-    Response.Headers["X-Discovered-Tournaments"] = GameAPIService.DiscoveredTournaments.Count.ToString();
+    Response.Headers["X-Discovered-Tournaments"] =
+      GameAPIService.DiscoveredTournaments.Count.ToString();
 
     // Optionally include count metadata (requires full enumeration)
     if (includeCount && !stream)
@@ -206,12 +206,11 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
       clientMonitor.Token);
     var streamToken = linkedCts.Token;
 
-    var updateChannel = Channel.CreateUnbounded<(Tournament Tournament, string Source, object Detail)>(
-      new UnboundedChannelOptions
-      {
-        SingleReader = true,
-        SingleWriter = false,
-      });
+    var updateQueue =
+      new CoalescingUpdateQueue<int, (
+        Tournament Tournament,
+        string Source,
+        object Detail)>();
     var fingerprints = new Dictionary<int, string>();
 
     void queueTournamentUpdate(Tournament tournament, string source, object detail)
@@ -219,16 +218,16 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
       int tournamentId = SafeTournamentId(tournament);
       if (tournamentId <= 0) return;
 
-      updateChannel.Writer.TryWrite((tournament, source, detail));
+      updateQueue.Enqueue(tournamentId, (tournament, source, detail));
     }
 
-      async Task writeTournamentUpdate(Tournament tournament, string source, object detail)
-      {
-        int tournamentId = SafeTournamentId(tournament);
-        var serialized = SerializeTournamentForEventsList(
-          tournament,
-          tournamentId,
-          TryGetRoundNumberOverride(source, detail));
+    async Task writeTournamentUpdate(Tournament tournament, string source, object detail)
+    {
+      int tournamentId = SafeTournamentId(tournament);
+      var serialized = SerializeTournamentForEventsList(
+        tournament,
+        tournamentId,
+        TryGetRoundNumberOverride(source, detail));
       if (serialized == null) return;
 
       string fingerprint = JsonSerializer.Serialize(serialized);
@@ -261,8 +260,7 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
     GameAPIService.RoundUpdated += onRoundUpdated;
     GameAPIService.StateUpdated += onStateUpdated;
 
-    using var cancellationRegistration = streamToken.Register(() =>
-      updateChannel.Writer.TryComplete());
+    using var cancellationRegistration = streamToken.Register(updateQueue.Complete);
 
     try
     {
@@ -273,7 +271,7 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
 
       _ = GameAPIService.StartLoadedTournamentRefresh();
 
-      await foreach (var update in updateChannel.Reader.ReadAllAsync(streamToken))
+      await foreach (var update in updateQueue.ReadAllAsync(streamToken))
       {
         await writeTournamentUpdate(update.Tournament, update.Source, update.Detail);
       }
@@ -287,7 +285,7 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
       GameAPIService.LoadedTournamentDiscovered -= onLoadedTournamentDiscovered;
       GameAPIService.RoundUpdated -= onRoundUpdated;
       GameAPIService.StateUpdated -= onStateUpdated;
-      updateChannel.Writer.TryComplete();
+      updateQueue.Complete();
     }
 
     return new EmptyResult();
@@ -531,14 +529,8 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
       // Phase 2: Stream round/state updates via GameAPIService. Standings deltas
       // are streamed by WatchStandings; standings callbacks can carry stale round
       // metadata and should not overwrite the tournament header state.
-      var updateChannel = Channel.CreateUnbounded<(
-        Tournament Tournament,
-        string Source,
-        object Detail)>(new UnboundedChannelOptions
-      {
-        SingleReader = true,
-        SingleWriter = false,
-      });
+      var updateQueue =
+        new CoalescingUpdateQueue<int, object>();
 
       void queueUpdate(Tournament updatedTournament, string source, object detail)
       {
@@ -548,7 +540,23 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
           return;
         }
 
-        updateChannel.Writer.TryWrite((updatedTournament, source, detail));
+        object stateUpdate;
+        try
+        {
+          stateUpdate = SerializeTournamentState(
+            updatedTournament,
+            TryGetRoundNumberOverride(source, detail));
+        }
+        catch (Exception ex)
+        {
+          Log.Debug(
+            ex,
+            "Skipped tournament state stream update tournament={TournamentId}",
+            tournamentId);
+          return;
+        }
+
+        updateQueue.Enqueue(tournamentId, stateUpdate);
       }
 
       void onRoundUpdated(object? _, (Tournament Tournament, TournamentRound Round) args)
@@ -564,18 +572,21 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
       GameAPIService.RoundUpdated += onRoundUpdated;
       GameAPIService.StateUpdated += onStateUpdated;
 
-      using var cancellationRegistration = streamToken.Register(() =>
-        updateChannel.Writer.TryComplete());
+      using var cancellationRegistration = streamToken.Register(updateQueue.Complete);
 
       try
       {
         await foreach (var update in
-          updateChannel.Reader.ReadAllAsync(streamToken))
+          updateQueue.ReadAllAsync(streamToken))
         {
-          await handleTournamentUpdate(
-            update.Tournament,
-            roundNumberOverride: TryGetRoundNumberOverride(update.Source, update.Detail),
-            source: update.Source);
+          string stateFingerprint = JsonSerializer.Serialize(update);
+          if (stateFingerprint == lastStateFingerprint)
+          {
+            continue;
+          }
+
+          lastStateFingerprint = stateFingerprint;
+          await StreamResponse([update], streamToken);
         }
       }
       catch (OperationCanceledException) when (streamToken.IsCancellationRequested)
@@ -586,7 +597,7 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
       {
         GameAPIService.RoundUpdated -= onRoundUpdated;
         GameAPIService.StateUpdated -= onStateUpdated;
-        updateChannel.Writer.TryComplete();
+        updateQueue.Complete();
       }
 
       return new EmptyResult();
@@ -809,19 +820,19 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
     Tournament.StateChanged.EnsureInitialize();
   }
 
-  private static async IAsyncEnumerable<object> StreamEventsList(
+  private async IAsyncEnumerable<object> StreamEventsList(
     [EnumeratorCancellation] CancellationToken cancellationToken)
   {
-    var channel = Channel.CreateUnbounded<Tournament>(new UnboundedChannelOptions
-    {
-      SingleReader = true,
-      SingleWriter = false,
-    });
+    var queue =
+      new CoalescingUpdateQueue<int, Tournament>();
     var seen = new HashSet<int>();
 
     void onLoadedTournamentDiscovered(object? _, Tournament tournament)
     {
-      channel.Writer.TryWrite(tournament);
+      int tournamentId = SafeTournamentId(tournament);
+      if (tournamentId <= 0) return;
+
+      queue.Enqueue(tournamentId, tournament);
     }
 
     GameAPIService.LoadedTournamentDiscovered += onLoadedTournamentDiscovered;
@@ -846,13 +857,13 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
               task.Exception,
               "Loaded tournament refresh failed while streaming events list.");
           }
-          channel.Writer.TryComplete();
+          queue.Complete();
         },
         CancellationToken.None,
         TaskContinuationOptions.ExecuteSynchronously,
         TaskScheduler.Default);
 
-      await foreach (var tournament in channel.Reader.ReadAllAsync(cancellationToken))
+      await foreach (var tournament in queue.ReadAllAsync(cancellationToken))
       {
         int tournamentId = SafeTournamentId(tournament);
         if (tournamentId <= 0 || !seen.Add(tournamentId)) continue;
@@ -864,6 +875,7 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
     finally
     {
       GameAPIService.LoadedTournamentDiscovered -= onLoadedTournamentDiscovered;
+      queue.Complete();
     }
   }
 
@@ -878,24 +890,56 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
   [Produces("application/x-ndjson")]
   public async Task<IActionResult> WatchPlayerCount()
   {
-    // Check if client is ready before starting stream
     if (!clientMonitor.IsClientReady)
     {
       return StatusCode(StatusCodes.Status503ServiceUnavailable,
         new { error = "MTGO client is not ready" });
     }
 
-    async Task playerCountCallback(IEnumerable<Event> events)
+    DisableBuffering();
+    SetNdjsonContentType();
+    using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
+      HttpContext.RequestAborted,
+      clientMonitor.Token);
+    var streamToken = linkedCts.Token;
+
+    var updateQueue =
+      new CoalescingUpdateQueue<int, Event>();
+
+    void onPlayerCountUpdated(object? _, IEnumerable<Event> events)
     {
-      // Use batch serialization for efficient cross-event property fetching
-      await StreamResponse(events.SerializeAs<ITournamentPlayerUpdate>());
+      foreach (var eventObj in events)
+      {
+        int eventId = SafeEventId(eventObj);
+        if (eventId <= 0) continue;
+
+        updateQueue.Enqueue(eventId, eventObj);
+      }
     }
 
-    return await StreamNdjsonEventHandler<IEnumerable<Event>>(
-      e => GameAPIService.PlayerCountUpdated += e,
-      e => GameAPIService.PlayerCountUpdated -= e,
-      (_, events) => playerCountCallback(events),
-      clientMonitor.Token);
+    GameAPIService.PlayerCountUpdated += onPlayerCountUpdated;
+    using var cancellationRegistration = streamToken.Register(updateQueue.Complete);
+
+    try
+    {
+      await foreach (var eventObj in updateQueue.ReadAllAsync(streamToken))
+      {
+        await StreamResponse(
+          new[] { eventObj }.SerializeAs<ITournamentPlayerUpdate>(),
+          streamToken);
+      }
+    }
+    catch (OperationCanceledException) when (streamToken.IsCancellationRequested)
+    {
+      // Stream cancelled gracefully.
+    }
+    finally
+    {
+      GameAPIService.PlayerCountUpdated -= onPlayerCountUpdated;
+      updateQueue.Complete();
+    }
+
+    return new EmptyResult();
   }
 
   /// <summary>
@@ -946,15 +990,11 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
       // Phase 2: Subscribe to changes and stream deltas via GameAPIService.
       // Round/state transitions can change the coherent computed table without
       // emitting a standings delta, so those stream a fresh computed snapshot.
-      var updateChannel = Channel.CreateUnbounded<(
+      var updateQueue = new CoalescingUpdateQueue<int, (
         Tournament Tournament,
         IList<StandingRecord>? Standings,
         string Source,
-        object Detail)>(new UnboundedChannelOptions
-      {
-        SingleReader = true,
-        SingleWriter = false,
-      });
+        object Detail)>();
 
       void queueStandingsUpdate(
         Tournament updatedTournament,
@@ -968,7 +1008,9 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
           return;
         }
 
-        updateChannel.Writer.TryWrite((updatedTournament, standings, source, detail));
+        updateQueue.Enqueue(
+          tournamentId,
+          (updatedTournament, standings, source, detail));
       }
 
       void onStandingsUpdated(object? _, (Tournament Tournament, IList<StandingRecord> Standings) args)
@@ -990,12 +1032,11 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
       GameAPIService.RoundUpdated += onRoundUpdated;
       GameAPIService.StateUpdated += onStateUpdated;
 
-      using var cancellationRegistration = streamToken.Register(() =>
-        updateChannel.Writer.TryComplete());
+      using var cancellationRegistration = streamToken.Register(updateQueue.Complete);
 
       try
       {
-        await foreach (var update in updateChannel.Reader.ReadAllAsync(streamToken))
+        await foreach (var update in updateQueue.ReadAllAsync(streamToken))
         {
           if (update.Source == "standings" &&
               update.Standings is not { Count: > 0 })
@@ -1065,7 +1106,7 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
         GameAPIService.StandingsUpdated -= onStandingsUpdated;
         GameAPIService.RoundUpdated -= onRoundUpdated;
         GameAPIService.StateUpdated -= onStateUpdated;
-        updateChannel.Writer.TryComplete();
+        updateQueue.Complete();
       }
 
       return new EmptyResult();
@@ -1125,6 +1166,18 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
     try
     {
       return tournament.Id;
+    }
+    catch (Exception)
+    {
+      return -1;
+    }
+  }
+
+  private static int SafeEventId(Event eventObj)
+  {
+    try
+    {
+      return eventObj.Id;
     }
     catch (Exception)
     {

@@ -6,6 +6,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Threading.Channels;
 
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -84,7 +85,8 @@ public class ClientController : APIController
   public async Task<IActionResult> WatchState()
   {
     // Set up streaming headers
-    Response.Headers.Append("Content-Type", "application/x-ndjson");
+    DisableBuffering();
+    SetNdjsonContentType();
     Response.Headers.Append("Cache-Control", "no-cache");
     // NOTE: Do not set the "Connection" header.
     // It's illegal for HTTP/2 and can cause the response to fail.
@@ -95,7 +97,13 @@ public class ClientController : APIController
       await SendCurrentState();
 
       // Use a channel to signal state changes from the event handler
-      var channel = System.Threading.Channels.Channel.CreateUnbounded<bool>();
+      var channel = Channel.CreateBounded<bool>(
+        new BoundedChannelOptions(1)
+        {
+          SingleReader = true,
+          SingleWriter = false,
+          FullMode = BoundedChannelFullMode.DropOldest,
+        });
 
       void OnStateChanged(object? sender, EventArgs e)
       {

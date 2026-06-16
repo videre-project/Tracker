@@ -124,10 +124,12 @@ export function useNDJSONStream<T = unknown>(options: NDJSONStreamOptions<T>) {
 
   const reconnectAttemptsRef = useRef(0)
   const abortControllerRef = useRef<AbortController | null>(null)
+  const readerRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null)
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const initializedRef = useRef(false)
   const isConnectingRef = useRef(false) // Prevent concurrent connection attempts
   const connectFnRef = useRef<() => void>()
+  const connectionGenerationRef = useRef(0)
 
   // Store callbacks in refs to avoid recreating connect function
   const onMessageRef = useRef(onMessage)
@@ -141,7 +143,32 @@ export function useNDJSONStream<T = unknown>(options: NDJSONStreamOptions<T>) {
     onErrorRef.current = onError
   }, [onMessage, onEnd, onError])
 
-  const scheduleReconnect = useCallback(() => {
+  const cleanupConnection = useCallback(() => {
+    connectionGenerationRef.current++
+    isConnectingRef.current = false
+
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current)
+      reconnectTimeoutRef.current = null
+    }
+
+    const reader = readerRef.current
+    readerRef.current = null
+    if (reader) {
+      void reader.cancel().catch(() => {
+        // Ignore cleanup races while the underlying fetch is aborting.
+      })
+    }
+
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+      abortControllerRef.current = null
+    }
+  }, [])
+
+  const scheduleReconnect = useCallback((generation: number) => {
+    if (generation !== connectionGenerationRef.current) return
+
     // Check if we've exceeded max reconnect attempts
     if (maxReconnectAttempts > 0 && reconnectAttemptsRef.current >= maxReconnectAttempts) {
       console.error(`Max reconnect attempts (${maxReconnectAttempts}) reached for ${url}`)
@@ -165,7 +192,9 @@ export function useNDJSONStream<T = unknown>(options: NDJSONStreamOptions<T>) {
     }
 
     reconnectTimeoutRef.current = setTimeout(() => {
-      connectFnRef.current?.()
+      if (generation === connectionGenerationRef.current) {
+        connectFnRef.current?.()
+      }
     }, delay)
   }, [reconnectDelay, maxReconnectDelay, maxReconnectAttempts, url, useConstantRetry])
 
@@ -177,12 +206,10 @@ export function useNDJSONStream<T = unknown>(options: NDJSONStreamOptions<T>) {
       return
     }
 
-    isConnectingRef.current = true
+    cleanupConnection()
 
-    // Clean up any existing connection
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort()
-    }
+    isConnectingRef.current = true
+    const generation = connectionGenerationRef.current
 
     const controller = new AbortController()
     abortControllerRef.current = controller
@@ -192,12 +219,14 @@ export function useNDJSONStream<T = unknown>(options: NDJSONStreamOptions<T>) {
       headers: { Accept: "application/x-ndjson" }
     })
       .then(res => {
+        if (generation !== connectionGenerationRef.current) return
+
         // Handle 503 Service Unavailable (client not ready)
         if (res.status === 503) {
           isConnectingRef.current = false
           if (autoReconnect && !controller.signal.aborted) {
             console.warn(`Stream not available (503), scheduling retry`)
-            scheduleReconnect()
+            scheduleReconnect(generation)
           } else {
             console.warn(`Stream not available (503), reconnect disabled for ${url}`)
             onEndRef.current?.()
@@ -218,22 +247,40 @@ export function useNDJSONStream<T = unknown>(options: NDJSONStreamOptions<T>) {
         if (!reader) {
           throw new Error("No stream reader available")
         }
+        readerRef.current = reader
 
         let buffer = ""
+        const decoder = new TextDecoder()
 
         function readStream(): Promise<void> {
           return reader.read().then(({ done, value }) => {
+            if (generation !== connectionGenerationRef.current || controller.signal.aborted) {
+              return
+            }
+
             if (done) {
+              readerRef.current = null
+              const remaining = buffer + decoder.decode()
+              const line = remaining.trim()
+              if (line) {
+                try {
+                  const data = JSON.parse(line) as T
+                  onMessageRef.current(data)
+                } catch (e) {
+                  console.error("Failed to parse NDJSON line:", e, line)
+                }
+              }
+
               onEndRef.current?.()
 
               // Reconnect if enabled and not manually aborted
               if (autoReconnect && !controller.signal.aborted) {
-                scheduleReconnect()
+                scheduleReconnect(generation)
               }
               return
             }
 
-            buffer += new TextDecoder().decode(value)
+            buffer += decoder.decode(value, { stream: true })
             const lines = buffer.split("\n")
             buffer = lines.pop() || ""
 
@@ -254,21 +301,21 @@ export function useNDJSONStream<T = unknown>(options: NDJSONStreamOptions<T>) {
         return readStream()
       })
       .catch(e => {
-        isConnectingRef.current = false
-
-        if (e.name === 'AbortError') {
+        if (generation !== connectionGenerationRef.current || e.name === 'AbortError') {
           return
         }
+
+        isConnectingRef.current = false
 
         console.error(`Stream error: ${url}`, e)
         onErrorRef.current?.(e)
 
         // Reconnect if enabled
         if (autoReconnect && !controller.signal.aborted) {
-          scheduleReconnect()
+          scheduleReconnect(generation)
         }
       })
-  }, [url, autoReconnect, enabled, scheduleReconnect])
+  }, [url, autoReconnect, enabled, scheduleReconnect, cleanupConnection])
 
   // Update the connect function ref whenever connectToStream changes
   useEffect(() => {
@@ -278,44 +325,24 @@ export function useNDJSONStream<T = unknown>(options: NDJSONStreamOptions<T>) {
   useEffect(() => {
     if (!enabled) {
       // Clean up when disabled
-      isConnectingRef.current = false
-
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort()
-        abortControllerRef.current = null
-      }
-
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current)
-        reconnectTimeoutRef.current = null
-      }
-
+      initializedRef.current = false
+      cleanupConnection()
       return
     }
 
     // Only connect once per enable cycle
     if (initializedRef.current) return
     initializedRef.current = true
+    reconnectAttemptsRef.current = 0
 
     connectFnRef.current?.()
 
     return () => {
       initializedRef.current = false
-      isConnectingRef.current = false
-
-      // Clean up connection
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort()
-        abortControllerRef.current = null
-      }
-
-      // Clear reconnect timeout
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current)
-        reconnectTimeoutRef.current = null
-      }
+      reconnectAttemptsRef.current = 0
+      cleanupConnection()
     }
-  }, [enabled, url]) // Reconnect when the target stream changes
+  }, [enabled, url, cleanupConnection]) // Reconnect when the target stream changes
 
   return {
     reconnect: connectToStream

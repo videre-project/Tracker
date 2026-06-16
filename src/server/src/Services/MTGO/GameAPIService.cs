@@ -136,7 +136,10 @@ public static class GameAPIService
   private static readonly object s_loadedTournamentRefreshLock = new();
   private static Task? s_loadedTournamentRefreshTask;
 
-  private static readonly ConcurrentDictionary<int, Delegate> s_playerCountSubscriptions = new();
+  private static readonly ConcurrentDictionary<int, (
+    Tournament Tournament,
+    Action<PropertyValueChangedEventArgs<int>> Handler)> s_playerCountSubscriptions = new();
+  private static readonly object s_playerCountSubscriptionLock = new();
   private static Action<PlayerEventsCreatedEventArgs>? s_playerEventsCreatedHandler;
   private static Action<PlayerEventsRemovedEventArgs>? s_playerEventsRemovedHandler;
   private static Action<Tournament, IList<StandingRecord>>? s_standingsChangedHandler;
@@ -162,7 +165,7 @@ public static class GameAPIService
   {
     int cachedCount = DiscoveredTournaments.Count;
     DiscoveredTournaments.Clear();
-    s_playerCountSubscriptions.Clear();
+    ClearPlayerCountSubscriptions();
     Interlocked.Increment(ref s_clientScopeVersion);
     Interlocked.Exchange(ref s_lastLoadedTournamentRefreshTicks, 0);
 
@@ -177,6 +180,32 @@ public static class GameAPIService
         "Cleared discovered tournament cache: reason={Reason} cached={CachedCount}",
         reason,
         cachedCount);
+    }
+  }
+
+  private static void ClearPlayerCountSubscriptions()
+  {
+    lock (s_playerCountSubscriptionLock)
+    {
+      foreach (var subscription in s_playerCountSubscriptions.Values)
+      {
+        Try(() =>
+          subscription.Tournament.OnTotalPlayersChanged -= subscription.Handler);
+      }
+
+      s_playerCountSubscriptions.Clear();
+    }
+  }
+
+  private static void RemovePlayerCountSubscription(int tournamentId)
+  {
+    lock (s_playerCountSubscriptionLock)
+    {
+      if (s_playerCountSubscriptions.TryRemove(tournamentId, out var subscription))
+      {
+        Try(() =>
+          subscription.Tournament.OnTotalPlayersChanged -= subscription.Handler);
+      }
     }
   }
 
@@ -249,7 +278,7 @@ public static class GameAPIService
       }
 
       Interlocked.Exchange(ref s_lastLoadedTournamentRefreshTicks, nowTicks);
-      Log.Information(
+      Log.Debug(
         "Refreshed loaded tournaments from MTGO client: count={Count} new={NewCount} skipped={SkippedCount} cached={CachedCount}",
         discoveredCount,
         newCount,
@@ -271,25 +300,26 @@ public static class GameAPIService
   /// </summary>
   private static void StartEventDiscovery(Action<IEnumerable<Event>> callback)
   {
-    // Handler to subscribe to a tournament's player count changes
     void subscribeToTournament(Tournament tournament)
     {
       int tournamentId = tournament.Id;
-      bool discovered = CacheDiscoveredTournament(tournament);
+      CacheDiscoveredTournament(tournament);
 
-      if (s_playerCountSubscriptions.ContainsKey(tournamentId))
+      lock (s_playerCountSubscriptionLock)
       {
-        return;
+        if (s_playerCountSubscriptions.ContainsKey(tournamentId))
+        {
+          return;
+        }
+
+        Action<PropertyValueChangedEventArgs<int>> handler = args =>
+        {
+          callback(new[] { tournament });
+        };
+
+        tournament.OnTotalPlayersChanged += handler;
+        s_playerCountSubscriptions.TryAdd(tournamentId, (tournament, handler));
       }
-
-      Action<PropertyValueChangedEventArgs<int>> handler = args =>
-      {
-        callback(new[] { tournament });
-      };
-
-      // Use the += operator on the PropertyChangeWrapper
-      tournament.OnTotalPlayersChanged += handler;
-      s_playerCountSubscriptions.TryAdd(tournamentId, handler);
 
       // Tournament state/round/standings updates are bridged by the static
       // hooks below. Per-tournament standings hooks compute full tables before
@@ -316,7 +346,7 @@ public static class GameAPIService
         if (eventObj is Event e)
         {
            int eventId = e.Id;
-           s_playerCountSubscriptions.TryRemove(eventId, out _);
+           RemovePlayerCountSubscription(eventId);
         }
       }
     };
@@ -563,22 +593,6 @@ public static class GameAPIService
       Tournament.StateChanged.EnsureInitialize();
     }
 
-    private static async Task MaintainHookRegistrationsAsync(CancellationToken stoppingToken)
-    {
-      using var timer = new PeriodicTimer(TimeSpan.FromSeconds(30));
-      try
-      {
-        while (await timer.WaitForNextTickAsync(stoppingToken))
-        {
-          Try(EnsureCoreHooksInitialized);
-        }
-      }
-      catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-      {
-        // Client disconnected or service stopped.
-      }
-    }
-
     private void ResetService()
     {
       Log.Information("Resetting Game API service state...");
@@ -619,9 +633,7 @@ public static class GameAPIService
       }
 
       // Clear discovery subscriptions
-      s_playerCountSubscriptions.Clear();
-
-
+      ClearPlayerCountSubscriptions();
 
       // Dispose trackers individually so one failure doesn't skip the rest.
       // Remote objects may be stale if the MTGO process exited.
@@ -664,26 +676,7 @@ public static class GameAPIService
             InitializeGameService();
 
             Log.Information("Game service initialized, waiting for disconnect...");
-            using var hookWatchCts =
-              CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
-            var hookWatchTask =
-              Task.Run(() => MaintainHookRegistrationsAsync(hookWatchCts.Token), hookWatchCts.Token);
-            try
-            {
-              await _clientProvider.WaitForClientDisconnectAsync(stoppingToken);
-            }
-            finally
-            {
-              hookWatchCts.Cancel();
-              try
-              {
-                await hookWatchTask;
-              }
-              catch (OperationCanceledException)
-              {
-                // Watch stopped with the client connection.
-              }
-            }
+            await _clientProvider.WaitForClientDisconnectAsync(stoppingToken);
 
             Log.Information("Client disconnected, resetting game service...");
             ResetService();

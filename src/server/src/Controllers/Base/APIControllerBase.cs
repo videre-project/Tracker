@@ -10,6 +10,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Threading;
+using System.Threading.Channels;
 
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
@@ -21,6 +22,77 @@ namespace Tracker.Controllers.Base;
 
 public abstract class APIController : ControllerBase
 {
+  protected sealed class CoalescingUpdateQueue<TKey, TValue>
+    where TKey : notnull
+  {
+    private readonly object _gate = new();
+    private readonly Dictionary<TKey, TValue> _pending = new();
+    private readonly Channel<TKey> _readyKeys = Channel.CreateUnbounded<TKey>(
+      new UnboundedChannelOptions
+      {
+        SingleReader = true,
+        SingleWriter = false,
+      });
+    private bool _completed;
+
+    public bool Enqueue(TKey key, TValue value)
+    {
+      bool shouldSignal;
+      lock (_gate)
+      {
+        if (_completed) return false;
+
+        shouldSignal = !_pending.ContainsKey(key);
+        _pending[key] = value;
+      }
+
+      if (!shouldSignal)
+      {
+        return true;
+      }
+
+      return _readyKeys.Writer.TryWrite(key);
+    }
+
+    public async IAsyncEnumerable<TValue> ReadAllAsync(
+      [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+      while (await _readyKeys.Reader.WaitToReadAsync(cancellationToken))
+      {
+        while (_readyKeys.Reader.TryRead(out var key))
+        {
+          TValue value;
+          lock (_gate)
+          {
+            if (!_pending.Remove(key, out value!))
+            {
+              continue;
+            }
+          }
+
+          yield return value;
+        }
+      }
+    }
+
+    public void Complete()
+    {
+      lock (_gate)
+      {
+        _completed = true;
+        _pending.Clear();
+      }
+
+      _readyKeys.Writer.TryComplete();
+    }
+  }
+
+  private static BoundedChannelOptions StreamCallbackChannelOptions(int capacity = 256) => new(capacity)
+  {
+    SingleReader = true,
+    SingleWriter = false,
+    FullMode = BoundedChannelFullMode.DropOldest,
+  };
   public class NdjsonStreamActionResult<T>(
     APIController controller,
     IEnumerable<T> enumerable)
@@ -165,48 +237,46 @@ public abstract class APIController : ControllerBase
     SetNdjsonContentType();
 
     var requestAborted = HttpContext.RequestAborted;
-    var semaphore = new SemaphoreSlim(1, 1);
+    var channel = Channel.CreateBounded<TEvent>(StreamCallbackChannelOptions());
     var acceptingCallbacks = true;
-    async Task eventCallback(TEvent evt)
-    {
-      if (!Volatile.Read(ref acceptingCallbacks) || requestAborted.IsCancellationRequested) return;
 
-      var entered = false;
-      try
+    Task eventCallback(TEvent evt)
+    {
+      if (Volatile.Read(ref acceptingCallbacks) && !requestAborted.IsCancellationRequested)
       {
-        await semaphore.WaitAsync(requestAborted);
-        entered = true;
-        if (!Volatile.Read(ref acceptingCallbacks) || requestAborted.IsCancellationRequested) return;
-        await onEvent(evt);
+        channel.Writer.TryWrite(evt);
       }
-      catch (OperationCanceledException)
-      {
-        // Stream was cancelled, ignore
-      }
-      catch (ObjectDisposedException) when (!Volatile.Read(ref acceptingCallbacks) || requestAborted.IsCancellationRequested)
-      {
-        // ASP.NET can dispose HttpContext features before a late event callback unwinds.
-      }
-      finally
-      {
-        if (entered)
-        {
-          semaphore.Release();
-        }
-      }
+
+      return Task.CompletedTask;
     }
     subscribe(eventCallback);
 
-    var cts = new TaskCompletionSource<bool>();
     using var cancellationRegistration = requestAborted.Register(() =>
     {
       Volatile.Write(ref acceptingCallbacks, false);
       unsubscribe(eventCallback);
-      cts.TrySetResult(true);
+      channel.Writer.TryComplete();
     });
-    await cts.Task;
 
-    return Ok();
+    try
+    {
+      await foreach (var evt in channel.Reader.ReadAllAsync(requestAborted))
+      {
+        await onEvent(evt);
+      }
+    }
+    catch (OperationCanceledException) when (requestAborted.IsCancellationRequested)
+    {
+      // Stream cancelled gracefully.
+    }
+    finally
+    {
+      Volatile.Write(ref acceptingCallbacks, false);
+      unsubscribe(eventCallback);
+      channel.Writer.TryComplete();
+    }
+
+    return new EmptyResult();
   }
 
   /// <summary>
@@ -234,85 +304,43 @@ public abstract class APIController : ControllerBase
       externalCancellationToken);
     var streamToken = linkedCts.Token;
 
-    var semaphore = new SemaphoreSlim(1, 1);
-    var callbacks = new List<Task>();
-    var callbacksLock = new object();
+    var channel =
+      Channel.CreateBounded<(T1 Arg1, T2 Arg2)>(StreamCallbackChannelOptions());
     var acceptingCallbacks = true;
 
-    async void eventCallback(T1 arg1, T2 arg2)
+    void eventCallback(T1 arg1, T2 arg2)
     {
-      if (!Volatile.Read(ref acceptingCallbacks) || streamToken.IsCancellationRequested) return;
-
-      var callbackTask = handleEventCallback(arg1, arg2);
-      lock (callbacksLock)
+      if (Volatile.Read(ref acceptingCallbacks) && !streamToken.IsCancellationRequested)
       {
-        callbacks.Add(callbackTask);
-      }
-
-      try
-      {
-        await callbackTask;
-      }
-      finally
-      {
-        lock (callbacksLock)
-        {
-          callbacks.Remove(callbackTask);
-        }
-      }
-    }
-
-    async Task handleEventCallback(T1 arg1, T2 arg2)
-    {
-      var entered = false;
-      try
-      {
-        await semaphore.WaitAsync(streamToken);
-        entered = true;
-        if (!Volatile.Read(ref acceptingCallbacks) || streamToken.IsCancellationRequested) return;
-        await onEvent(arg1, arg2);
-      }
-      catch (OperationCanceledException)
-      {
-        // Stream was cancelled, ignore
-      }
-      catch (ObjectDisposedException) when (!Volatile.Read(ref acceptingCallbacks) || streamToken.IsCancellationRequested)
-      {
-        // ASP.NET can dispose HttpContext features before a late event callback unwinds.
-      }
-      finally
-      {
-        if (entered)
-        {
-          semaphore.Release();
-        }
+        channel.Writer.TryWrite((arg1, arg2));
       }
     }
     subscribe(eventCallback);
 
-    var tcs = new TaskCompletionSource<bool>();
     using var cancellationRegistration = streamToken.Register(() =>
     {
       Volatile.Write(ref acceptingCallbacks, false);
       unsubscribe(eventCallback);
-      tcs.TrySetResult(true);
+      channel.Writer.TryComplete();
     });
 
     try
     {
-      await tcs.Task;
+      await foreach (var evt in channel.Reader.ReadAllAsync(streamToken))
+      {
+        await onEvent(evt.Arg1, evt.Arg2);
+      }
     }
-    catch (OperationCanceledException)
+    catch (OperationCanceledException) when (streamToken.IsCancellationRequested)
     {
-      // Stream cancelled gracefully
+      // Stream cancelled gracefully.
     }
-
-    Task[] pendingCallbacks;
-    lock (callbacksLock)
+    finally
     {
-      pendingCallbacks = callbacks.ToArray();
+      Volatile.Write(ref acceptingCallbacks, false);
+      unsubscribe(eventCallback);
+      channel.Writer.TryComplete();
     }
-    await Task.WhenAll(pendingCallbacks);
 
     return new EmptyResult();
   }
@@ -341,85 +369,43 @@ public abstract class APIController : ControllerBase
       externalCancellationToken);
     var streamToken = linkedCts.Token;
 
-    var semaphore = new SemaphoreSlim(1, 1);
-    var callbacks = new List<Task>();
-    var callbacksLock = new object();
+    var channel = Channel.CreateBounded<(object? Sender, TEventArgs Args)>(
+      StreamCallbackChannelOptions());
     var acceptingCallbacks = true;
 
-    async void eventCallback(object? sender, TEventArgs args)
+    void eventCallback(object? sender, TEventArgs args)
     {
-      if (!Volatile.Read(ref acceptingCallbacks) || streamToken.IsCancellationRequested) return;
-
-      var callbackTask = handleEventCallback(sender, args);
-      lock (callbacksLock)
+      if (Volatile.Read(ref acceptingCallbacks) && !streamToken.IsCancellationRequested)
       {
-        callbacks.Add(callbackTask);
-      }
-
-      try
-      {
-        await callbackTask;
-      }
-      finally
-      {
-        lock (callbacksLock)
-        {
-          callbacks.Remove(callbackTask);
-        }
-      }
-    }
-
-    async Task handleEventCallback(object? sender, TEventArgs args)
-    {
-      var entered = false;
-      try
-      {
-        await semaphore.WaitAsync(streamToken);
-        entered = true;
-        if (!Volatile.Read(ref acceptingCallbacks) || streamToken.IsCancellationRequested) return;
-        await onEvent(sender, args);
-      }
-      catch (OperationCanceledException)
-      {
-        // Stream was cancelled, ignore
-      }
-      catch (ObjectDisposedException) when (!Volatile.Read(ref acceptingCallbacks) || streamToken.IsCancellationRequested)
-      {
-        // ASP.NET can dispose HttpContext features before a late event callback unwinds.
-      }
-      finally
-      {
-        if (entered)
-        {
-          semaphore.Release();
-        }
+        channel.Writer.TryWrite((sender, args));
       }
     }
     subscribe(eventCallback);
 
-    var tcs = new TaskCompletionSource<bool>();
     using var cancellationRegistration = streamToken.Register(() =>
     {
       Volatile.Write(ref acceptingCallbacks, false);
       unsubscribe(eventCallback);
-      tcs.TrySetResult(true);
+      channel.Writer.TryComplete();
     });
 
     try
     {
-      await tcs.Task;
+      await foreach (var evt in channel.Reader.ReadAllAsync(streamToken))
+      {
+        await onEvent(evt.Sender, evt.Args);
+      }
     }
-    catch (OperationCanceledException)
+    catch (OperationCanceledException) when (streamToken.IsCancellationRequested)
     {
-      // Stream cancelled gracefully
+      // Stream cancelled gracefully.
     }
-
-    Task[] pendingCallbacks;
-    lock (callbacksLock)
+    finally
     {
-      pendingCallbacks = callbacks.ToArray();
+      Volatile.Write(ref acceptingCallbacks, false);
+      unsubscribe(eventCallback);
+      channel.Writer.TryComplete();
     }
-    await Task.WhenAll(pendingCallbacks);
 
     return new EmptyResult();
   }
