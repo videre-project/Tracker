@@ -66,21 +66,6 @@ export interface TrackerMetrics {
     dropped: number
     coalesced: number
   }>
-  mtgo?: {
-    discoveredTournaments: number
-    retainedTournamentProxies: number
-    playerCountSubscriptions: number
-    removedPlayerCountSubscriptions: number
-    activeEvents: number
-    activeMatches: number
-    activeGames: number
-    eventTrackers: number
-    matchTrackers: number
-    gameTrackers: number
-    loadedTournamentRefreshInFlight: boolean
-    clientScopeVersion: number
-    coreHookInitializations: number
-  }
 }
 
 export interface DiagnosticsSnapshot {

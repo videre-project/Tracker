@@ -17,7 +17,6 @@ using MTGOSDK.Core.Remoting;
 
 using Tracker.Controllers.Base;
 using Tracker.Services;
-using Tracker.Services.MTGO;
 
 
 namespace Tracker.Controllers;
@@ -173,7 +172,6 @@ public class DiagnosticsController : APIController
     {
       Endpoints = endpoints,
       Streams = APIController.GetStreamMetricsSnapshot(),
-      Mtgo = GameAPIService.GetDiagnosticsSnapshot(),
     };
   }
 
