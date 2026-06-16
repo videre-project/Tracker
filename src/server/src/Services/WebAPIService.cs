@@ -121,8 +121,9 @@ public static class WebAPIService
       // Enable annotations for better documentation
       options.EnableAnnotations();
 
-      // Custom schema IDs to avoid conflicts
-      options.CustomSchemaIds(type => type.FullName?.Replace("+", "."));
+      // Custom schema IDs to avoid conflicts while keeping generated TypeScript
+      // names readable for closed generics.
+      options.CustomSchemaIds(GetOpenApiSchemaId);
 
       // Support for streaming responses
       options.MapType<IAsyncEnumerable<object>>(() => new OpenApiSchema
@@ -130,6 +131,10 @@ public static class WebAPIService
         Type = JsonSchemaType.Array,
         Items = new OpenApiSchema { Type = JsonSchemaType.Object }
       });
+
+      // Match MTGOSDK's runtime JSON converter behavior: properties marked
+      // [NonSerializable] are not emitted by default serialization.
+      options.SchemaFilter<MTGONonSerializableSchemaFilter>();
 
       // Include event data DTOs in the schema (not directly referenced by
       // endpoints, but needed for frontend type generation from the Data
@@ -197,6 +202,66 @@ public static class WebAPIService
     api.Lifetime.ApplicationStopping.Register(callback);
     return api;
   }
+
+  private static string GetOpenApiSchemaId(Type type)
+  {
+    if (!type.IsGenericType)
+    {
+      return NormalizeOpenApiSchemaId(type.FullName ?? type.Name);
+    }
+
+    var genericDefinitionName =
+      type.GetGenericTypeDefinition().FullName ??
+      type.GetGenericTypeDefinition().Name;
+    var arityIndex = genericDefinitionName.IndexOf('`');
+    if (arityIndex >= 0)
+    {
+      genericDefinitionName = genericDefinitionName[..arityIndex];
+    }
+
+    var genericArguments = type.GetGenericArguments();
+    var genericArgumentNames = new string[genericArguments.Length];
+    for (int i = 0; i < genericArguments.Length; i++)
+    {
+      genericArgumentNames[i] = GetOpenApiGenericArgumentName(genericArguments[i]);
+    }
+
+    return NormalizeOpenApiSchemaId(
+      $"{genericDefinitionName}{string.Join("", genericArgumentNames)}");
+  }
+
+  private static string GetOpenApiGenericArgumentName(Type type)
+  {
+    if (type.IsArray)
+    {
+      return $"{GetOpenApiGenericArgumentName(type.GetElementType()!)}Array";
+    }
+
+    if (!type.IsGenericType)
+    {
+      return NormalizeOpenApiSchemaId(type.Name);
+    }
+
+    var genericDefinitionName = type.GetGenericTypeDefinition().Name;
+    var arityIndex = genericDefinitionName.IndexOf('`');
+    if (arityIndex >= 0)
+    {
+      genericDefinitionName = genericDefinitionName[..arityIndex];
+    }
+
+    var genericArguments = type.GetGenericArguments();
+    var genericArgumentNames = new string[genericArguments.Length];
+    for (int i = 0; i < genericArguments.Length; i++)
+    {
+      genericArgumentNames[i] = GetOpenApiGenericArgumentName(genericArguments[i]);
+    }
+
+    return NormalizeOpenApiSchemaId(
+      $"{genericDefinitionName}{string.Join("", genericArgumentNames)}");
+  }
+
+  private static string NormalizeOpenApiSchemaId(string schemaId) =>
+    schemaId.Replace("+", ".");
 }
 
 /// <summary>
