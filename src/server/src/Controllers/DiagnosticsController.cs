@@ -17,6 +17,7 @@ using MTGOSDK.Core.Remoting;
 
 using Tracker.Controllers.Base;
 using Tracker.Services;
+using Tracker.Services.MTGO;
 
 
 namespace Tracker.Controllers;
@@ -35,7 +36,8 @@ public class DiagnosticsController : APIController
   [Produces("application/x-ndjson")]
   public async Task<IActionResult> WatchMetrics()
   {
-    Response.Headers.Append("Content-Type", "application/x-ndjson");
+    DisableBuffering();
+    SetNdjsonContentType();
     Response.Headers.Append("Cache-Control", "no-cache");
 
     try
@@ -105,7 +107,8 @@ public class DiagnosticsController : APIController
   [Produces("application/x-ndjson")]
   public async Task<IActionResult> WatchLogs()
   {
-    Response.Headers.Append("Content-Type", "application/x-ndjson");
+    DisableBuffering();
+    SetNdjsonContentType();
     Response.Headers.Append("Cache-Control", "no-cache");
 
     // Ensure Diver log tailing is running (idempotent)
@@ -150,128 +153,28 @@ public class DiagnosticsController : APIController
     e.MessageId,
   };
 
-  //
-  // Heap Analysis
-  //
-
-  /// <summary>
-  /// Takes a heap snapshot: aggregated type stats + builds cached reverse
-  /// reference map for subsequent retain path queries.
-  /// </summary>
-  [HttpGet] // GET /api/diagnostics/heapsnapshot?topN=50
-  [ProducesResponseType(StatusCodes.Status200OK)]
-  public IActionResult HeapSnapshot([FromQuery] int topN = 50)
-  {
-    if (!RemoteClient.IsInitialized || RemoteClient.IsDisposed)
-      return StatusCode(503, "MTGO client not connected");
-
-    try
-    {
-      Log.Information("HeapSnapshot: sending request to Diver...");
-      var result = RemoteClient.GetHeapSnapshot(topN);
-      Log.Information("HeapSnapshot: got response, types={Types}, totalSize={Size}",
-        result?.Types?.Count ?? -1, result?.TotalHeapSize ?? -1);
-      if (result == null)
-        return StatusCode(500, "Heap snapshot returned null");
-      return Ok(result);
-    }
-    catch (Exception ex)
-    {
-      Log.Error("HeapSnapshot failed: {Error}", ex);
-      return StatusCode(500, $"Heap snapshot failed: {ex.Message}");
-    }
-  }
-
-  /// <summary>
-  /// Computes the retain chain for the largest instance of the given type
-  /// using batched reverse BFS. Requires a prior heap snapshot.
-  /// </summary>
-  [HttpGet] // GET /api/diagnostics/retainchain?typeName=Foo.Bar&maxDepth=8
-  [ProducesResponseType(StatusCodes.Status200OK)]
-  public IActionResult RetainChain(
-    [FromQuery] string typeName,
-    [FromQuery] int maxDepth = 8)
-  {
-    if (!RemoteClient.IsInitialized || RemoteClient.IsDisposed)
-      return StatusCode(503, "MTGO client not connected");
-
-    try
-    {
-      Log.Information("RetainChain: computing chain for {Type}...", typeName);
-      var result = RemoteClient.GetRetainChain(typeName, maxDepth);
-      Log.Information("RetainChain: got {Depth} entries for {Type}",
-        result?.Chain?.Count ?? 0, typeName);
-      return Ok(result);
-    }
-    catch (Exception ex)
-    {
-      Log.Error("RetainChain failed: {Error}", ex);
-      return StatusCode(500, $"Retain chain failed: {ex.Message}");
-    }
-  }
-
-  /// <summary>
-  /// Returns the largest instances of the specified type
-  /// (uses cached data from last heap snapshot).
-  /// </summary>
-  [HttpGet] // GET /api/diagnostics/typeinstances?typeName=Foo.Bar&maxCount=20
-  [ProducesResponseType(StatusCodes.Status200OK)]
-  public IActionResult TypeInstances(
-    [FromQuery] string typeName,
-    [FromQuery] int maxCount = 20)
-  {
-    if (!RemoteClient.IsInitialized || RemoteClient.IsDisposed)
-      return StatusCode(503, "MTGO client not connected");
-
-    try
-    {
-      return Ok(RemoteClient.GetTypeInstances(typeName, maxCount));
-    }
-    catch (Exception ex)
-    {
-      return StatusCode(500, $"Type instances query failed: {ex.Message}");
-    }
-  }
-
-  /// <summary>
-  /// Analyzes which static root fields hold the most retained memory.
-  /// Enumerates all static object references in the process, performs a
-  /// forward BFS with a shared visited set, and returns ranked holders.
-  /// </summary>
-  [HttpGet] // GET /api/diagnostics/staticholders?topN=50
-  [ProducesResponseType(StatusCodes.Status200OK)]
-  public IActionResult StaticHolders([FromQuery] int topN = 50)
-  {
-    if (!RemoteClient.IsInitialized || RemoteClient.IsDisposed)
-      return StatusCode(503, "MTGO client not connected");
-
-    try
-    {
-      Log.Information("StaticHolders: analyzing static holders (topN={TopN})...", topN);
-      var result = RemoteClient.AnalyzeStaticHolders(topN);
-      Log.Information("StaticHolders: got {Count} holders ({Total} total), {Bytes} retained",
-        result?.Holders?.Count ?? 0, result?.TotalStaticRoots ?? 0, result?.TotalRetainedBytes ?? 0);
-      if (result == null)
-        return StatusCode(500, "Static holders analysis returned null");
-      return Ok(result);
-    }
-    catch (Exception ex)
-    {
-      Log.Error("StaticHolders failed: {Error}", ex);
-      return StatusCode(500, $"Static holders analysis failed: {ex.Message}");
-    }
-  }
-
   private static object BuildTrackerEndpoints()
   {
     var snapshot = RequestMetrics.GetSnapshot();
     var endpoints = new Dictionary<string, object>();
     foreach (var kvp in snapshot)
     {
-      var (count, avgMs, lastMs) = kvp.Value;
-      endpoints[kvp.Key] = new { Count = count, AvgMs = avgMs, LastMs = lastMs };
+      var (count, active, avgMs, lastMs) = kvp.Value;
+      endpoints[kvp.Key] = new
+      {
+        Count = count,
+        Active = active,
+        AvgMs = avgMs,
+        LastMs = lastMs
+      };
     }
-    return new { Endpoints = endpoints };
+
+    return new
+    {
+      Endpoints = endpoints,
+      Streams = APIController.GetStreamMetricsSnapshot(),
+      Mtgo = GameAPIService.GetDiagnosticsSnapshot(),
+    };
   }
 
   /// <summary>
@@ -304,7 +207,8 @@ public class DiagnosticsController : APIController
       return NotFound($"Diver log not found: {logPath}");
     }
 
-    Response.Headers.Append("Content-Type", "application/x-ndjson");
+    DisableBuffering();
+    SetNdjsonContentType();
     Response.Headers.Append("Cache-Control", "no-cache");
 
     try

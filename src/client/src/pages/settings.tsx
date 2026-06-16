@@ -16,7 +16,7 @@ export default function Settings() {
             Diagnostics
           </CardTitle>
           <CardDescription>
-            View IPC metrics, endpoint timings, log stream, and heap analysis.
+            View IPC metrics, endpoint timings, and log streams.
           </CardDescription>
         </CardHeader>
         <CardContent>

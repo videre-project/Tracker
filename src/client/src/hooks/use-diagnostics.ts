@@ -4,6 +4,7 @@ import { useClientState } from "./use-client-state"
 
 export interface EndpointMetric {
   count: number
+  active?: number
   avgMs: number
   lastMs: number
 }
@@ -58,6 +59,28 @@ export interface DiverMetrics {
 
 export interface TrackerMetrics {
   endpoints: Record<string, EndpointMetric>
+  streams?: Record<string, {
+    active: number
+    opened: number
+    closed: number
+    dropped: number
+    coalesced: number
+  }>
+  mtgo?: {
+    discoveredTournaments: number
+    retainedTournamentProxies: number
+    playerCountSubscriptions: number
+    removedPlayerCountSubscriptions: number
+    activeEvents: number
+    activeMatches: number
+    activeGames: number
+    eventTrackers: number
+    matchTrackers: number
+    gameTrackers: number
+    loadedTournamentRefreshInFlight: boolean
+    clientScopeVersion: number
+    coreHookInitializations: number
+  }
 }
 
 export interface DiagnosticsSnapshot {

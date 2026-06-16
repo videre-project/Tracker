@@ -210,7 +210,7 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
       new CoalescingUpdateQueue<int, (
         Tournament Tournament,
         string Source,
-        object Detail)>();
+        object Detail)>(() => RecordStreamCoalesce());
     var fingerprints = new Dictionary<int, string>();
 
     void queueTournamentUpdate(Tournament tournament, string source, object detail)
@@ -530,7 +530,7 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
       // are streamed by WatchStandings; standings callbacks can carry stale round
       // metadata and should not overwrite the tournament header state.
       var updateQueue =
-        new CoalescingUpdateQueue<int, object>();
+        new CoalescingUpdateQueue<int, object>(() => RecordStreamCoalesce());
 
       void queueUpdate(Tournament updatedTournament, string source, object detail)
       {
@@ -824,7 +824,7 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
     [EnumeratorCancellation] CancellationToken cancellationToken)
   {
     var queue =
-      new CoalescingUpdateQueue<int, Tournament>();
+      new CoalescingUpdateQueue<int, Tournament>(() => RecordStreamCoalesce());
     var seen = new HashSet<int>();
 
     void onLoadedTournamentDiscovered(object? _, Tournament tournament)
@@ -904,7 +904,7 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
     var streamToken = linkedCts.Token;
 
     var updateQueue =
-      new CoalescingUpdateQueue<int, Event>();
+      new CoalescingUpdateQueue<int, Event>(() => RecordStreamCoalesce());
 
     void onPlayerCountUpdated(object? _, IEnumerable<Event> events)
     {
@@ -994,7 +994,7 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
         Tournament Tournament,
         IList<StandingRecord>? Standings,
         string Source,
-        object Detail)>();
+        object Detail)>(() => RecordStreamCoalesce());
 
       void queueStandingsUpdate(
         Tournament updatedTournament,

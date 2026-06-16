@@ -4,6 +4,7 @@
 **/
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -12,6 +13,7 @@ using System.Threading.Tasks;
 using System.Threading;
 using System.Threading.Channels;
 
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
@@ -22,7 +24,19 @@ namespace Tracker.Controllers.Base;
 
 public abstract class APIController : ControllerBase
 {
-  protected sealed class CoalescingUpdateQueue<TKey, TValue>
+  private const string StreamMetricsRegisteredKey = "__TrackerNdjsonStreamMetricsRegistered";
+
+  private sealed class StreamMetrics
+  {
+    public long Active;
+    public long Opened;
+    public long Closed;
+    public long Dropped;
+    public long Coalesced;
+  }
+
+  protected sealed class CoalescingUpdateQueue<TKey, TValue>(
+    Action? onCoalesced = null)
     where TKey : notnull
   {
     private readonly object _gate = new();
@@ -48,6 +62,7 @@ public abstract class APIController : ControllerBase
 
       if (!shouldSignal)
       {
+        onCoalesced?.Invoke();
         return true;
       }
 
@@ -87,12 +102,88 @@ public abstract class APIController : ControllerBase
     }
   }
 
+  private static readonly ConcurrentDictionary<string, StreamMetrics> s_streamMetrics = new();
+
   private static BoundedChannelOptions StreamCallbackChannelOptions(int capacity = 256) => new(capacity)
   {
     SingleReader = true,
     SingleWriter = false,
     FullMode = BoundedChannelFullMode.DropOldest,
   };
+
+  [NonAction]
+  public static Dictionary<string, object> GetStreamMetricsSnapshot()
+  {
+    var result = new Dictionary<string, object>();
+    foreach (var kvp in s_streamMetrics)
+    {
+      var metrics = kvp.Value;
+      result[kvp.Key] = new
+      {
+        Active = Interlocked.Read(ref metrics.Active),
+        Opened = Interlocked.Read(ref metrics.Opened),
+        Closed = Interlocked.Read(ref metrics.Closed),
+        Dropped = Interlocked.Read(ref metrics.Dropped),
+        Coalesced = Interlocked.Read(ref metrics.Coalesced),
+      };
+    }
+
+    return result;
+  }
+
+  [NonAction]
+  public void RecordStreamDrop(string? endpoint = null, long count = 1)
+  {
+    var metrics = GetStreamMetrics(endpoint);
+    Interlocked.Add(ref metrics.Dropped, count);
+  }
+
+  [NonAction]
+  public void RecordStreamCoalesce(string? endpoint = null, long count = 1)
+  {
+    var metrics = GetStreamMetrics(endpoint);
+    Interlocked.Add(ref metrics.Coalesced, count);
+  }
+
+  private StreamMetrics GetStreamMetrics(string? endpoint = null)
+  {
+    endpoint ??= GetEndpointName();
+    return s_streamMetrics.GetOrAdd(endpoint, _ => new StreamMetrics());
+  }
+
+  private string GetEndpointName()
+  {
+    var endpoint = HttpContext.GetEndpoint();
+    return (endpoint as Microsoft.AspNetCore.Routing.RouteEndpoint)
+      ?.RoutePattern.RawText
+      ?? HttpContext.Request.Path.Value
+      ?? "unknown";
+  }
+
+  private void RegisterNdjsonStreamMetrics()
+  {
+    if (HttpContext.Items.ContainsKey(StreamMetricsRegisteredKey)) return;
+    HttpContext.Items[StreamMetricsRegisteredKey] = true;
+
+    var metrics = GetStreamMetrics();
+    Interlocked.Increment(ref metrics.Opened);
+    Interlocked.Increment(ref metrics.Active);
+
+    Response.OnCompleted(() =>
+    {
+      Interlocked.Increment(ref metrics.Closed);
+      long active;
+      do
+      {
+        active = Interlocked.Read(ref metrics.Active);
+        if (active <= 0) return Task.CompletedTask;
+      }
+      while (Interlocked.CompareExchange(ref metrics.Active, active - 1, active) != active);
+
+      return Task.CompletedTask;
+    });
+  }
+
   public class NdjsonStreamActionResult<T>(
     APIController controller,
     IEnumerable<T> enumerable)
@@ -151,6 +242,7 @@ public abstract class APIController : ControllerBase
   [NonAction]
   public void SetNdjsonContentType()
   {
+    RegisterNdjsonStreamMetrics();
     if (Response.HasStarted) return;
     Response.ContentType = "application/x-ndjson";
     Response.Headers.XContentTypeOptions = "nosniff";
@@ -244,7 +336,10 @@ public abstract class APIController : ControllerBase
     {
       if (Volatile.Read(ref acceptingCallbacks) && !requestAborted.IsCancellationRequested)
       {
-        channel.Writer.TryWrite(evt);
+        if (!channel.Writer.TryWrite(evt))
+        {
+          RecordStreamDrop();
+        }
       }
 
       return Task.CompletedTask;
@@ -312,7 +407,10 @@ public abstract class APIController : ControllerBase
     {
       if (Volatile.Read(ref acceptingCallbacks) && !streamToken.IsCancellationRequested)
       {
-        channel.Writer.TryWrite((arg1, arg2));
+        if (!channel.Writer.TryWrite((arg1, arg2)))
+        {
+          RecordStreamDrop();
+        }
       }
     }
     subscribe(eventCallback);
@@ -377,7 +475,10 @@ public abstract class APIController : ControllerBase
     {
       if (Volatile.Read(ref acceptingCallbacks) && !streamToken.IsCancellationRequested)
       {
-        channel.Writer.TryWrite((sender, args));
+        if (!channel.Writer.TryWrite((sender, args)))
+        {
+          RecordStreamDrop();
+        }
       }
     }
     subscribe(eventCallback);

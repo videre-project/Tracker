@@ -133,6 +133,8 @@ public static class GameAPIService
 
   private static long s_lastLoadedTournamentRefreshTicks;
   private static long s_clientScopeVersion;
+  private static long s_removedPlayerCountSubscriptions;
+  private static long s_coreHookInitializations;
   private static readonly object s_loadedTournamentRefreshLock = new();
   private static Task? s_loadedTournamentRefreshTask;
 
@@ -159,6 +161,28 @@ public static class GameAPIService
 
     LoadedTournamentDiscovered?.Invoke(null, tournament);
     return true;
+  }
+
+  public static object GetDiagnosticsSnapshot()
+  {
+    var instance = s_currentInstance;
+    return new
+    {
+      DiscoveredTournaments = DiscoveredTournaments.Count,
+      RetainedTournamentProxies = DiscoveredTournaments.Count,
+      PlayerCountSubscriptions = s_playerCountSubscriptions.Count,
+      RemovedPlayerCountSubscriptions = Interlocked.Read(ref s_removedPlayerCountSubscriptions),
+      ActiveEvents = instance?._activeEvents.Count ?? 0,
+      ActiveMatches = instance?._activeMatches.Count ?? 0,
+      ActiveGames = instance?._activeGames.Count ?? 0,
+      EventTrackers = instance?._eventTrackers.Count ?? 0,
+      MatchTrackers = instance?._matchTrackers.Count ?? 0,
+      GameTrackers = instance?._gameTrackers.Count ?? 0,
+      LoadedTournamentRefreshInFlight =
+        s_loadedTournamentRefreshTask is { IsCompleted: false },
+      ClientScopeVersion = Interlocked.Read(ref s_clientScopeVersion),
+      CoreHookInitializations = Interlocked.Read(ref s_coreHookInitializations),
+    };
   }
 
   private static void ResetClientScopedTournamentCache(string reason)
@@ -205,6 +229,7 @@ public static class GameAPIService
       {
         Try(() =>
           subscription.Tournament.OnTotalPlayersChanged -= subscription.Handler);
+        Interlocked.Increment(ref s_removedPlayerCountSubscriptions);
       }
     }
   }
@@ -380,10 +405,10 @@ public static class GameAPIService
   {
     internal readonly ConcurrentDictionary<int, Event> _activeEvents = new();
     internal readonly ConcurrentDictionary<int, Match> _activeMatches = new();
-    private readonly ConcurrentDictionary<int, Game> _activeGames = new();
+    internal readonly ConcurrentDictionary<int, Game> _activeGames = new();
 
-    private readonly ConcurrentDictionary<int, EventTracker> _eventTrackers = new();
-    private readonly ConcurrentDictionary<int, MatchTracker> _matchTrackers = new();
+    internal readonly ConcurrentDictionary<int, EventTracker> _eventTrackers = new();
+    internal readonly ConcurrentDictionary<int, MatchTracker> _matchTrackers = new();
     internal readonly ConcurrentDictionary<int, GameTracker> _gameTrackers = new();
 
     private volatile bool _isDisposed;
@@ -582,6 +607,7 @@ public static class GameAPIService
 
     private static void EnsureCoreHooksInitialized()
     {
+      Interlocked.Increment(ref s_coreHookInitializations);
       GameProcessor.EnsureHookInitialized();
       ActionProcessor.EnsureHookInitialized();
       PromptProcessor.EnsureHookInitialized();
