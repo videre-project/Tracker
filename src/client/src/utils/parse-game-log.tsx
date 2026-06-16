@@ -4,8 +4,12 @@
 **/
 
 import React from "react"
+import { HighlightedText } from "@/utils/highlighted-text"
 import { getManaSymbolSvgPath } from "@/utils/mana-symbols"
-import { getMtgoChatSymbolImagePath } from "@/utils/mtgo-chat-symbols"
+import {
+  getMtgoChatMarkupSymbol,
+  getMtgoChatSymbolImagePath,
+} from "@/utils/mtgo-chat-symbols"
 
 interface ParsedPart {
   type: "text" | "purple" | "card" | "mana" | "chatSymbol" | "italic"
@@ -18,6 +22,7 @@ function renderTextWithInlineMana(
   text: string,
   keyPrefix: string,
   symbolClassName: string,
+  highlightText?: string,
 ): React.ReactNode[] {
   const nodes: React.ReactNode[] = []
   const re = /\{([^}]+)\}/g
@@ -29,7 +34,10 @@ function renderTextWithInlineMana(
     if (match.index > cursor) {
       nodes.push(
         <React.Fragment key={`${keyPrefix}-t-${idx++}`}>
-          {text.slice(cursor, match.index)}
+          <HighlightedText
+            text={text.slice(cursor, match.index)}
+            highlight={highlightText}
+          />
         </React.Fragment>
       )
     }
@@ -59,7 +67,7 @@ function renderTextWithInlineMana(
   if (cursor < text.length) {
     nodes.push(
       <React.Fragment key={`${keyPrefix}-t-${idx++}`}>
-        {text.slice(cursor)}
+        <HighlightedText text={text.slice(cursor)} highlight={highlightText} />
       </React.Fragment>
     )
   }
@@ -196,10 +204,10 @@ export function parseGameLogMarkup(text: string): ParsedPart[] {
     if (text[i] === "[") {
       const closeIdx = text.indexOf("]", i)
       if (closeIdx > i) {
-        const symbol = text.slice(i + 1, closeIdx)
-        if (getMtgoChatSymbolImagePath(symbol)) {
+        const symbol = getMtgoChatMarkupSymbol(text.slice(i + 1, closeIdx))
+        if (symbol) {
           flush()
-          parts.push({ type: "chatSymbol", value: symbol })
+          parts.push(symbol)
           i = closeIdx + 1
           continue
         }
@@ -219,11 +227,14 @@ export function GameLogText({
   text,
   className,
   manaSymbolClassName,
+  highlightText,
 }: {
   text: string
   className?: string
   /** Optional class override for mana/tap glyph size in this render context. */
   manaSymbolClassName?: string
+  /** Optional case-insensitive text to highlight inside rendered text segments. */
+  highlightText?: string
 }) {
   const parts = parseGameLogMarkup(text)
   const symbolClassName = manaSymbolClassName ?? "inline h-3.5 w-3.5 align-text-bottom mx-px"
@@ -238,7 +249,12 @@ export function GameLogText({
           case "italic":
             return (
               <span key={i} className="gl-italic italic">
-                {renderTextWithInlineMana(part.value, `italic-${i}`, symbolClassName)}
+                {renderTextWithInlineMana(
+                  part.value,
+                  `italic-${i}`,
+                  symbolClassName,
+                  highlightText
+                )}
               </span>
             )
           case "mana": {
@@ -272,7 +288,11 @@ export function GameLogText({
             return <React.Fragment key={i}>{`[${part.value}]`}</React.Fragment>
           }
           default:
-            return <React.Fragment key={i}>{part.value}</React.Fragment>
+            return (
+              <React.Fragment key={i}>
+                <HighlightedText text={part.value} highlight={highlightText} />
+              </React.Fragment>
+            )
         }
       })}
     </span>

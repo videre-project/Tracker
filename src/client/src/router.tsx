@@ -25,6 +25,7 @@ import History from "@/pages/history";
 import MatchDetails from "@/pages/match-details";
 import GameWatch from "@/pages/game-watch";
 import GameReplay from "@/pages/game-replay";
+import Trades from "@/pages/trades";
 
 export enum NavType {
   Primary,
@@ -81,7 +82,7 @@ export const routes: RouteEntry[] = [
         name: 'Trades',
         icon: Package,
         type: NavType.Primary,
-        element: <DummyComponent />
+        element: <Trades />
       },
       {
         path: "/decks",

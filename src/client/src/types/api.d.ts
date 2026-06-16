@@ -1853,10 +1853,169 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/Trades": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a snapshot of trade partners and the current trade. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": TradeSnapshotDTO;
+                        "application/json": TradeSnapshotDTO;
+                        "text/json": TradeSnapshotDTO;
+                    };
+                };
+                /** @description Service Unavailable */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/Trades/posts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a paged snapshot of marketplace trade posts. */
+        get: {
+            parameters: {
+                query?: {
+                    page?: number;
+                    pageSize?: number;
+                    format?: string;
+                    user?: string;
+                    message?: string;
+                    force?: boolean;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": TradePostsPageDTO;
+                        "application/json": TradePostsPageDTO;
+                        "text/json": TradePostsPageDTO;
+                    };
+                };
+                /** @description Service Unavailable */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/Trades/watchmarketplace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Watch marketplace update notifications. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/x-ndjson": TradeMarketplaceUpdateDTO;
+                    };
+                };
+                /** @description Service Unavailable */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        "MTGOSDK.API.Collection.Binder": {
+            /** Format: int32 */
+            readonly id?: number;
+            readonly name?: string | null;
+            format?: string;
+            /** Format: date-time */
+            readonly timestamp?: string;
+            /** Format: int32 */
+            readonly itemCount?: number;
+            /** Format: int32 */
+            readonly maxItems?: number;
+            readonly hash?: string | null;
+            readonly items?: CardQuantityPair[] | null;
+            readonly itemIds?: number[] | null;
+            readonly getFrozenCollection?: CardQuantityPair[] | null;
+            readonly isLastUsedBinder?: boolean;
+            readonly isWishList?: boolean;
+            readonly isMegaBinder?: boolean;
+        };
         "MTGOSDK.API.Collection.Card": {
             /** Format: int32 */
             readonly id?: number;
@@ -1880,7 +2039,7 @@ export interface components {
             readonly artist?: string | null;
             /** Format: int32 */
             readonly artId?: number;
-            set?: Set;
+            set?: string;
             readonly collectorInfo?: string | null;
             /** Format: int32 */
             readonly collectorNumber?: number;
@@ -1896,15 +2055,29 @@ export interface components {
             /** Format: int32 */
             readonly id?: number;
             readonly name?: string | null;
-            card?: Card;
+            card?: string;
             /** Format: int32 */
             readonly quantity?: number;
+        };
+        "MTGOSDK.API.Collection.CollectionItem": {
+            /** Format: int32 */
+            readonly id?: number;
+            readonly name?: string | null;
+            readonly description?: string | null;
+            readonly isOpenable?: boolean;
+            readonly isSealedProduct?: boolean;
+            readonly isDigitalObject?: boolean;
+            readonly isBooster?: boolean;
+            readonly isCard?: boolean;
+            readonly isTicket?: boolean;
+            readonly isTradeable?: boolean;
+            readonly hasPremiumOdds?: boolean;
         };
         "MTGOSDK.API.Collection.Deck": {
             /** Format: int32 */
             readonly id?: number;
             readonly name?: string | null;
-            format?: PlayFormat;
+            format?: string;
             /** Format: date-time */
             readonly timestamp?: string;
             /** Format: int32 */
@@ -1922,6 +2095,12 @@ export interface components {
         };
         /** @enum {string} */
         "MTGOSDK.API.Collection.DeckRegion": "NotSet" | "MainDeck" | "Sideboard" | "CommandZone" | "Planechase" | "Vanguard" | "Hidden";
+        "MTGOSDK.API.Collection.ItemCollection": {
+            /** Format: int32 */
+            readonly count?: number;
+            readonly collectionItems?: CollectionItem[] | null;
+            readonly openableItems?: CollectionItem[] | null;
+        };
         "MTGOSDK.API.Collection.Set": {
             readonly code?: string | null;
             readonly name?: string | null;
@@ -1930,7 +2109,7 @@ export interface components {
             type?: SetType;
             /** Format: int32 */
             readonly age?: number;
-            readonly cards?: Card[] | null;
+            cards?: string[];
         };
         /** @enum {string} */
         "MTGOSDK.API.Collection.SetType": "NotSet" | "CoreSet" | "LargeExpansionSet" | "SmallExpansionSet" | "EventTicket" | "TestSet" | "Supplemental" | "PromotionalSet" | "Ancillary" | "FixedAncillary" | "Placeholder";
@@ -1939,11 +2118,11 @@ export interface components {
             readonly id?: number;
             /** Format: uuid */
             readonly token?: string;
-            format?: PlayFormat;
+            format?: string;
             readonly description?: string | null;
             /** Format: int32 */
             readonly totalPlayers?: number;
-            readonly players?: User[] | null;
+            players?: string[];
             registeredDeck?: Deck;
             /** Format: int32 */
             readonly minutesPerPlayer?: number;
@@ -1969,18 +2148,47 @@ export interface components {
             /** Format: int32 */
             readonly maxSideboardSize?: number;
             type?: PlayFormatType;
-            readonly legalSets?: Set[] | null;
-            readonly basicLands?: Card[] | null;
+            legalSets?: string[];
+            basicLands?: string[];
         };
         /** @enum {string} */
         "MTGOSDK.API.Play.PlayFormatType": "Null" | "Constructed" | "Sealed" | "Draft";
         /** @enum {string} */
         "MTGOSDK.API.Play.Tournaments.TournamentState": "NotSet" | "Fired" | "WaitingToStart" | "Drafting" | "Deckbuilding" | "DeckbuildingDeckSubmitted" | "WaitingForFirstRoundToStart" | "RoundInProgress" | "BetweenRounds" | "Finished";
+        /** @enum {string} */
+        "MTGOSDK.API.Trade.Enums.TradeFinalState": "EscrowNotAvailable" | "TradeNotFinal" | "UserCanceledInvitation" | "OtherCanceledInvitation" | "InvitationExpired" | "UserDeclinedInvitation" | "OtherDeclinedInvitation" | "OtherBusyTrading" | "TradeExpired" | "UserCanceledTrade" | "OtherCanceledTrade" | "OtherLoggedOut" | "InvalidParticipant" | "TradeComplete" | "TradeIncomplete" | "OpenpackNotPermitted" | "OpenpackInsufficientQuantity" | "OpenpackComplete" | "ReceivedUnexpectedMessage" | "ReceivedErroneousMessage" | "TradeCompleteWithErrors" | "Invalid" | "InvalidState" | "InsufficientQuantity" | "InsufficientPermission" | "GrantUnsuccessful" | "ErrorReceived" | "NoPayMode" | "AlreadyTrading" | "FinalListMismatch";
+        /** @enum {string} */
+        "MTGOSDK.API.Trade.Enums.TradePostFormat": "Invalid" | "OfferedWantedList" | "Message";
+        /** @enum {string} */
+        "MTGOSDK.API.Trade.Enums.TradeState": "Uninitialized" | "InviteSelectBinder" | "InviteSent" | "InviteReceived" | "InviteAccepted" | "InviteCollectionSent" | "NegotiateNoDeposit" | "NegotiateDepositSubmittedLocal" | "NegotiateDepositSubmittedOther" | "NegotiateDepositReceivedLocal" | "NegotiateDepositReceivedOther" | "NegotiateDepositReceivedBoth" | "NegotiateClearSent" | "ApprovalNone" | "ApprovalSubmittedLocal" | "ApprovalSubmittedOther" | "ApprovalReceivedLocal" | "ApprovalReceivedOther" | "ApprovalReceivedBoth" | "ApprovalClearSent" | "PackOpenSetupRequested" | "PackOpenUpdatelistSent" | "PackOpenProcessing" | "CancelRequested" | "Closed";
+        "MTGOSDK.API.Trade.TradeEscrow": {
+            /** Format: int32 */
+            readonly id?: number;
+            /** Format: uuid */
+            readonly token?: string;
+            state?: TradeState;
+            finalState?: TradeFinalState;
+            readonly isAccepted?: boolean;
+            readonly tradePartnerName?: string | null;
+            partnerTradedItems?: ItemCollection;
+            tradedItems?: ItemCollection;
+        };
+        "MTGOSDK.API.Trade.TradePartner": {
+            readonly posterName?: string | null;
+            /** Format: date-time */
+            readonly lastTradeTime?: string;
+        };
+        "MTGOSDK.API.Trade.TradePost": {
+            readonly posterName?: string | null;
+            format?: TradePostFormat;
+            readonly message?: string | null;
+            readonly wanted?: CardQuantityPair[] | null;
+            readonly offered?: CardQuantityPair[] | null;
+        };
         "MTGOSDK.API.Users.Avatar": {
             /** Format: int32 */
             readonly id?: number;
             readonly name?: string | null;
-            card?: Card;
         };
         "MTGOSDK.API.Users.User": {
             /** Format: int32 */
@@ -2351,6 +2559,28 @@ export interface components {
             rarity: string | null;
             zone?: string | null;
         };
+        "Tracker.Controllers.TradesController.TradeMarketplaceUpdateDTO": {
+            /** Format: date-time */
+            timestamp: string;
+        };
+        "Tracker.Controllers.TradesController.TradePostsPageDTO": {
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalCount: number;
+            /** Format: int32 */
+            totalPages: number;
+            hasNextPage: boolean;
+            hasPreviousPage: boolean;
+            posts?: TradePost[] | null;
+        };
+        "Tracker.Controllers.TradesController.TradeSnapshotDTO": {
+            myPost?: TradePost;
+            tradePartners?: TradePartner[] | null;
+            currentTrade?: TradeEscrow;
+        };
         "Tracker.Database.Models.CardEntry": {
             /** Format: int32 */
             catalogId?: number;
@@ -2417,16 +2647,25 @@ export interface components {
     headers: never;
     pathItems: never;
 }
+export type MtgosdkApiCollectionBinder = Binder;
 export type MtgosdkApiCollectionCard = Card;
 export type MtgosdkApiCollectionCardQuantityPair = CardQuantityPair;
+export type MtgosdkApiCollectionCollectionItem = CollectionItem;
 export type MtgosdkApiCollectionDeck = Deck;
 export type MtgosdkApiCollectionDeckRegion = DeckRegion;
+export type MtgosdkApiCollectionItemCollection = ItemCollection;
 export type MtgosdkApiCollectionSet = Set;
 export type MtgosdkApiCollectionSetType = SetType;
 export type MtgosdkApiPlayEvent = Event;
 export type MtgosdkApiPlayPlayFormat = PlayFormat;
 export type MtgosdkApiPlayPlayFormatType = PlayFormatType;
 export type MtgosdkApiPlayTournamentsTournamentState = TournamentState;
+export type MtgosdkApiTradeEnumsTradeFinalState = TradeFinalState;
+export type MtgosdkApiTradeEnumsTradePostFormat = TradePostFormat;
+export type MtgosdkApiTradeEnumsTradeState = TradeState;
+export type MtgosdkApiTradeTradeEscrow = TradeEscrow;
+export type MtgosdkApiTradeTradePartner = TradePartner;
+export type MtgosdkApiTradeTradePost = TradePost;
 export type MtgosdkApiUsersAvatar = Avatar;
 export type MtgosdkApiUsersUser = User;
 export type MicrosoftAspNetCoreMvcProblemDetails = ProblemDetails;
@@ -2455,6 +2694,9 @@ export type TrackerControllersReplayLogDto = ReplayLogDTO;
 export type TrackerControllersReplayPlayerDto = ReplayPlayerDTO;
 export type TrackerControllersReplaySnapshotDto = ReplaySnapshotDTO;
 export type TrackerControllersSortableCardEntry = SortableCardEntry;
+export type TrackerControllersTradesControllerTradeMarketplaceUpdateDto = TradeMarketplaceUpdateDTO;
+export type TrackerControllersTradesControllerTradePostsPageDto = TradePostsPageDTO;
+export type TrackerControllersTradesControllerTradeSnapshotDto = TradeSnapshotDTO;
 export type TrackerDatabaseModelsCardEntry = CardEntry;
 export type TrackerServicesMtgoEventsCardChangeData = CardChangeData;
 export type TrackerServicesMtgoEventsGameLogType = GameLogType;
@@ -2465,16 +2707,25 @@ export type $defs = Record<string, never>;
 export type operations = Record<string, never>;
 
 
+export type Binder = components['schemas']['MTGOSDK.API.Collection.Binder'];
 export type Card = components['schemas']['MTGOSDK.API.Collection.Card'];
 export type CardQuantityPair = components['schemas']['MTGOSDK.API.Collection.CardQuantityPair'];
+export type CollectionItem = components['schemas']['MTGOSDK.API.Collection.CollectionItem'];
 export type Deck = components['schemas']['MTGOSDK.API.Collection.Deck'];
 export type DeckRegion = components['schemas']['MTGOSDK.API.Collection.DeckRegion'];
+export type ItemCollection = components['schemas']['MTGOSDK.API.Collection.ItemCollection'];
 export type Set = components['schemas']['MTGOSDK.API.Collection.Set'];
 export type SetType = components['schemas']['MTGOSDK.API.Collection.SetType'];
 export type Event = components['schemas']['MTGOSDK.API.Play.Event'];
 export type PlayFormat = components['schemas']['MTGOSDK.API.Play.PlayFormat'];
 export type PlayFormatType = components['schemas']['MTGOSDK.API.Play.PlayFormatType'];
 export type TournamentState = components['schemas']['MTGOSDK.API.Play.Tournaments.TournamentState'];
+export type TradeFinalState = components['schemas']['MTGOSDK.API.Trade.Enums.TradeFinalState'];
+export type TradePostFormat = components['schemas']['MTGOSDK.API.Trade.Enums.TradePostFormat'];
+export type TradeState = components['schemas']['MTGOSDK.API.Trade.Enums.TradeState'];
+export type TradeEscrow = components['schemas']['MTGOSDK.API.Trade.TradeEscrow'];
+export type TradePartner = components['schemas']['MTGOSDK.API.Trade.TradePartner'];
+export type TradePost = components['schemas']['MTGOSDK.API.Trade.TradePost'];
 export type Avatar = components['schemas']['MTGOSDK.API.Users.Avatar'];
 export type User = components['schemas']['MTGOSDK.API.Users.User'];
 export type ProblemDetails = components['schemas']['Microsoft.AspNetCore.Mvc.ProblemDetails'];
@@ -2503,6 +2754,9 @@ export type ReplayLogDTO = components['schemas']['Tracker.Controllers.ReplayLogD
 export type ReplayPlayerDTO = components['schemas']['Tracker.Controllers.ReplayPlayerDTO'];
 export type ReplaySnapshotDTO = components['schemas']['Tracker.Controllers.ReplaySnapshotDTO'];
 export type SortableCardEntry = components['schemas']['Tracker.Controllers.SortableCardEntry'];
+export type TradeMarketplaceUpdateDTO = components['schemas']['Tracker.Controllers.TradesController.TradeMarketplaceUpdateDTO'];
+export type TradePostsPageDTO = components['schemas']['Tracker.Controllers.TradesController.TradePostsPageDTO'];
+export type TradeSnapshotDTO = components['schemas']['Tracker.Controllers.TradesController.TradeSnapshotDTO'];
 export type CardEntry = components['schemas']['Tracker.Database.Models.CardEntry'];
 export type CardChangeData = components['schemas']['Tracker.Services.MTGO.Events.CardChangeData'];
 export type GameLogType = components['schemas']['Tracker.Services.MTGO.Events.GameLogType'];

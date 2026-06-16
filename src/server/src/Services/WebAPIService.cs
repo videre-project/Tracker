@@ -220,6 +220,11 @@ public static class WebAPIService
     }
 
     var genericArguments = type.GetGenericArguments();
+    if (HasOnlyObjectGenericArguments(genericArguments))
+    {
+      return NormalizeOpenApiSchemaId(genericDefinitionName);
+    }
+
     var genericArgumentNames = new string[genericArguments.Length];
     for (int i = 0; i < genericArguments.Length; i++)
     {
@@ -262,6 +267,24 @@ public static class WebAPIService
 
   private static string NormalizeOpenApiSchemaId(string schemaId) =>
     schemaId.Replace("+", ".");
+
+  private static bool HasOnlyObjectGenericArguments(Type[] genericArguments)
+  {
+    if (genericArguments.Length == 0)
+    {
+      return false;
+    }
+
+    foreach (var genericArgument in genericArguments)
+    {
+      if (genericArgument != typeof(object))
+      {
+        return false;
+      }
+    }
+
+    return true;
+  }
 }
 
 /// <summary>
