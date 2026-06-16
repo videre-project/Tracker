@@ -280,6 +280,11 @@ public class ClientAPIProvider : IClientAPIProvider
         return false;
       }
 
+      if (!await WaitForCurrentUserReadyAsync(disposedTcs, cancellationToken))
+      {
+        return false;
+      }
+
       // Mark as ready and notify listeners
       IsReady = true;
       OnClientStateChanged();
@@ -290,6 +295,44 @@ public class ClientAPIProvider : IClientAPIProvider
       Log.Warning("Client initialization canceled.");
       return false;
     }
+  }
+
+  private async Task<bool> WaitForCurrentUserReadyAsync(
+    TaskCompletionSource<bool> disposedTcs,
+    CancellationToken cancellationToken)
+  {
+    Log.Trace("Waiting for current user data to become readable...");
+
+    using var timeoutCts =
+      CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+    timeoutCts.CancelAfter(TimeSpan.FromSeconds(30));
+
+    while (!timeoutCts.IsCancellationRequested)
+    {
+      if (disposedTcs.Task.IsCompleted ||
+          RemoteClient.IsDisposed ||
+          !RemoteClient.IsInitialized)
+      {
+        Log.Warning("Client disposed while waiting for current user data.");
+        return false;
+      }
+
+      if (this.TryGetCurrentUsername(out _, requireReady: false))
+      {
+        return true;
+      }
+
+      var delayTask = Task.Delay(TimeSpan.FromMilliseconds(250), timeoutCts.Token);
+      var completedTask = await Task.WhenAny(delayTask, disposedTcs.Task);
+      if (completedTask == disposedTcs.Task)
+      {
+        Log.Warning("Client disposed while waiting for current user data.");
+        return false;
+      }
+    }
+
+    Log.Warning("Timed out waiting for current user data to become readable.");
+    return false;
   }
 
   protected virtual void OnClientStateChanged()

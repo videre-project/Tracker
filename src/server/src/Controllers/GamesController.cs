@@ -49,8 +49,7 @@ public class GamesController(EventContext context, IClientAPIProvider clientProv
     [FromQuery] DateTime? maxDate,
     [FromQuery] string? format)
   {
-    var currentUser = clientProvider.Client?.CurrentUser?.Name;
-    if (string.IsNullOrEmpty(currentUser))
+    if (!clientProvider.TryGetCurrentUsername(out var currentUser))
     {
       return BadRequest("Client not ready or user not logged in.");
     }
@@ -195,8 +194,7 @@ public class GamesController(EventContext context, IClientAPIProvider clientProv
     [FromQuery] DateTime? maxDate,
     [FromQuery] string? format)
   {
-    var currentUser = clientProvider.Client?.CurrentUser?.Name;
-    if (string.IsNullOrEmpty(currentUser))
+    if (!clientProvider.TryGetCurrentUsername(out var currentUser))
     {
       return BadRequest("Client not ready or user not logged in.");
     }
@@ -299,8 +297,7 @@ public class GamesController(EventContext context, IClientAPIProvider clientProv
     [FromQuery] DateTime? maxDate = null,
     [FromQuery] string? format = null)
   {
-    var currentUser = clientProvider.Client?.CurrentUser?.Name;
-    if (string.IsNullOrEmpty(currentUser))
+    if (!clientProvider.TryGetCurrentUsername(out var currentUser))
     {
       return BadRequest("Client not ready or user not logged in.");
     }
@@ -569,8 +566,7 @@ public class GamesController(EventContext context, IClientAPIProvider clientProv
   [HttpGet("match/{matchId}")]
   public async Task<ActionResult<MatchDetailsDTO>> GetMatchDetails(int matchId)
   {
-    var currentUser = clientProvider.Client?.CurrentUser?.Name;
-    if (string.IsNullOrEmpty(currentUser))
+    if (!clientProvider.TryGetCurrentUsername(out var currentUser))
     {
       return BadRequest("Client not ready or user not logged in.");
     }
@@ -722,8 +718,7 @@ public class GamesController(EventContext context, IClientAPIProvider clientProv
       return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = "MTGO client is not ready" });
     }
 
-    var currentUser = clientProvider.Client?.CurrentUser?.Name;
-    if (string.IsNullOrEmpty(currentUser))
+    if (!clientProvider.TryGetCurrentUsername(out var currentUser))
     {
       return BadRequest("Client not ready or user not logged in.");
     }

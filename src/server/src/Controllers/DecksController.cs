@@ -599,8 +599,7 @@ public class DecksController(
     [FromQuery] DateTime? maxDate,
     [FromQuery] string? format)
   {
-    var currentUser = clientProvider.Client?.CurrentUser?.Name;
-    if (string.IsNullOrEmpty(currentUser))
+    if (!clientProvider.TryGetCurrentUsername(out var currentUser))
     {
       return Ok(new List<AggregatedArchetypeDTO>());
     }
