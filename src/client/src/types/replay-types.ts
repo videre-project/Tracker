@@ -168,7 +168,7 @@ export interface CardState {
 
 export function getCardImageUrl(catalogId: number | null): string | null {
   if (catalogId == null || catalogId <= 0) return null
-  return `https://r2.videreproject.com/${catalogId}-300px.png`
+  return `https://r2.videreproject.com/cards/${catalogId}-300px.png`
 }
 
 export function getCardImageFallbackUrl(catalogId: number | null): string | null {

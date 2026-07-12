@@ -12,7 +12,7 @@ import {
 } from "@/utils/mtgo-chat-symbols"
 
 interface ParsedPart {
-  type: "text" | "purple" | "card" | "mana" | "chatSymbol" | "italic"
+  type: "text" | "purple" | "card" | "mana" | "chatSymbol" | "italic" | "bold"
   value: string
   cardId?: number
   textureId?: number
@@ -202,6 +202,21 @@ export function parseGameLogMarkup(text: string): ParsedPart[] {
     }
 
     if (text[i] === "[") {
+      if (text.startsWith("[b]", i)) {
+        flush()
+        i += 3 // skip [b]
+        let value = ""
+        while (i < len) {
+          if (text.startsWith("[/b]", i)) {
+            i += 4 // skip closing [/b]
+            break
+          }
+          value += text[i++]
+        }
+        if (value) parts.push({ type: "bold", value })
+        continue
+      }
+
       const closeIdx = text.indexOf("]", i)
       if (closeIdx > i) {
         const symbol = getMtgoChatMarkupSymbol(text.slice(i + 1, closeIdx))
@@ -256,6 +271,17 @@ export function GameLogText({
                   highlightText
                 )}
               </span>
+            )
+          case "bold":
+            return (
+              <strong key={i} className="gl-bold font-semibold">
+                {renderTextWithInlineMana(
+                  part.value,
+                  `bold-${i}`,
+                  symbolClassName,
+                  highlightText
+                )}
+              </strong>
             )
           case "mana": {
             const symbolPath = getManaSymbolSvgPath(part.value)

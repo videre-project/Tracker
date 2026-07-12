@@ -11,8 +11,8 @@ export const TYPE_CONFIG: Record<GameLogType, { label: string; short: string; co
   CardChange:   { label: "Card Change",   short: "CARD",   color: "text-purple-400",  bg: "bg-purple-500/15" },
   PlayerChange: { label: "Player Change", short: "PLAYER", color: "text-emerald-400", bg: "bg-emerald-500/15" },
   LogMessage:   { label: "Log Message",   short: "LOG",    color: "text-muted-foreground", bg: "bg-muted/30" },
-  DamageAssignment: { label: "Damage", short: "DMG", color: "text-red-400", bg: "bg-red-500/15" },
-  Reveal:           { label: "Reveal",  short: "RVLR", color: "text-yellow-400", bg: "bg-yellow-500/15" },
+  DamageAssignment: { label: "Damage", short: "DAMAGE", color: "text-red-400", bg: "bg-red-500/15" },
+  Reveal:           { label: "Reveal",  short: "REVEAL", color: "text-yellow-400", bg: "bg-yellow-500/15" },
 }
 
 export const ALL_TYPES: GameLogType[] = Object.keys(TYPE_CONFIG) as GameLogType[]
