@@ -1,160 +1,125 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import { getApiUrl } from "../utils/api-config"
 
-export interface CardImage {
-  index: number
+export interface CollectionCardEntry {
+  catalogId: number
   name: string
-  imageData: string // base64-encoded PNG
+  quantity: number
+  price?: number | null
+  priceDate?: string | null
+  priceSource?: string | null
 }
 
-/**
- * Hook to stream rendered card images from the server.
- * This is the only API call needed - it streams card images with their names.
- * No need to call a separate endpoint for card list.
- */
-export function useCardImageStream() {
-  const [cards, setCards] = useState<CardImage[]>([])
-  const [loading, setLoading] = useState(false)
+export interface CollectionProductEntry {
+  catalogId: number
+  name: string
+  quantity: number
+  description?: string | null
+  setCode?: string | null
+  setName?: string | null
+  objectType?: string | null
+  imageUrl?: string | null
+  isTradable?: boolean | null
+  price?: number | null
+  priceDate?: string | null
+  priceSource?: string | null
+}
+
+export interface CollectionSnapshot {
+  hash: string
+  itemCount: number
+  uniqueCount: number
+  totalQuantity: number
+  timestamp: string
+  priceCacheExpiresAt: string
+  elapsedMilliseconds: number
+  cards: CollectionCardEntry[]
+  products: CollectionProductEntry[]
+}
+
+let cachedCollectionSnapshot: CollectionSnapshot | null = null
+
+function isCollectionSnapshotCacheFresh(snapshot: CollectionSnapshot | null) {
+  if (!snapshot) return false
+  const expiresAt = Date.parse(snapshot.priceCacheExpiresAt)
+  return Number.isFinite(expiresAt) && Date.now() < expiresAt
+}
+
+export function useCollectionCards() {
+  const initialSnapshot = isCollectionSnapshotCacheFresh(cachedCollectionSnapshot)
+    ? cachedCollectionSnapshot
+    : null
+  const [snapshot, setSnapshot] = useState<CollectionSnapshot | null>(initialSnapshot)
+  const [loading, setLoading] = useState(!initialSnapshot)
   const [error, setError] = useState<string | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
 
-  const startStream = useCallback(async () => {
-    // Abort any existing stream first
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort()
+  const refresh = useCallback(async (options?: { force?: boolean }) => {
+    if (!options?.force && isCollectionSnapshotCacheFresh(cachedCollectionSnapshot)) {
+      setSnapshot(cachedCollectionSnapshot)
+      setLoading(false)
+      setError(null)
+      return
     }
 
-    abortControllerRef.current = new AbortController()
-    const signal = abortControllerRef.current.signal
+    abortControllerRef.current?.abort()
+    const abortController = new AbortController()
+    abortControllerRef.current = abortController
 
     setLoading(true)
     setError(null)
-    setCards([])
-
-    console.log("[useCardImageStream] Starting stream...")
 
     try {
-      const response = await fetch(getApiUrl("/api/collection/cards/stream"), { signal })
-
-      console.log("[useCardImageStream] Response status:", response.status)
+      const response = await fetch(getApiUrl("/api/collection/cards"), {
+        signal: abortController.signal,
+      })
 
       if (!response.ok) {
-        // Try to get error details from JSON response
-        let errorMsg = `HTTP ${response.status}`
+        let message = `HTTP ${response.status}`
         try {
-          const errorData = await response.json()
-          if (errorData.error) {
-            errorMsg = errorData.error
-            if (errorData.hint) {
-              errorMsg += ` - ${errorData.hint}`
-            }
+          const data = await response.json()
+          if (data.error) {
+            message = data.hint ? `${data.error} - ${data.hint}` : data.error
           }
         } catch {
-          // Couldn't parse JSON, use status-based message
           if (response.status === 503) {
-            errorMsg = "MTGO client not ready. Please wait for it to initialize."
-          } else if (response.status === 400) {
-            errorMsg = "No cards could be rendered"
+            message = "MTGO client or collection is not ready yet."
           }
         }
-        throw new Error(errorMsg)
+
+        throw new Error(message)
       }
 
-      if (!response.body) {
-        throw new Error("No response body")
-      }
-
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ""
-
-      while (true) {
-        const { done, value } = await reader.read()
-
-        if (done) {
-          console.log("[useCardImageStream] Stream completed")
-          break
-        }
-
-        buffer += decoder.decode(value, { stream: true })
-
-        // Process complete NDJSON lines
-        const lines = buffer.split("\n")
-        buffer = lines.pop() || "" // Keep incomplete line in buffer
-
-        for (const line of lines) {
-          if (line.trim()) {
-            try {
-              const cardImage: CardImage = JSON.parse(line)
-              console.log("[useCardImageStream] Received card:", cardImage.name)
-              // Append each card as it arrives - this updates UI immediately
-              setCards(prev => [...prev, cardImage])
-            } catch (e) {
-              console.error("Failed to parse card image:", e, "Line:", line)
-            }
-          }
-        }
-      }
-
-      // Process any remaining buffer content
-      if (buffer.trim()) {
-        try {
-          const cardImage: CardImage = JSON.parse(buffer)
-          console.log("[useCardImageStream] Received final card:", cardImage.name)
-          setCards(prev => [...prev, cardImage])
-        } catch (e) {
-          console.error("Failed to parse final card image:", e)
-        }
-      }
+      const data = await response.json() as CollectionSnapshot
+      cachedCollectionSnapshot = data
+      setSnapshot(data)
     } catch (err) {
-      if (err instanceof Error && err.name === "AbortError") {
-        console.log("[useCardImageStream] Stream aborted")
-        // Stream was cancelled, not an error
-        return
-      }
-      console.error("[useCardImageStream] Error:", err)
+      if (err instanceof Error && err.name === "AbortError") return
       setError(err instanceof Error ? err.message : "Unknown error")
+      if (!cachedCollectionSnapshot) {
+        setSnapshot(null)
+      }
     } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  const stopStream = useCallback(() => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort()
-      abortControllerRef.current = null
-    }
-    setLoading(false)
-  }, [])
-
-  const reset = useCallback(() => {
-    stopStream()
-    setCards([])
-    setError(null)
-  }, [stopStream])
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort()
+      if (!abortController.signal.aborted) {
+        setLoading(false)
       }
     }
   }, [])
+
+  useEffect(() => {
+    void refresh()
+
+    return () => {
+      abortControllerRef.current?.abort()
+    }
+  }, [refresh])
 
   return {
-    cards,
+    snapshot,
+    cards: snapshot?.cards ?? [],
+    products: snapshot?.products ?? [],
     loading,
     error,
-    startStream,
-    stopStream,
-    reset
+    refresh,
   }
-}
-
-/**
- * Get a direct URL to a card image
- */
-export function getCardImageUrl(cardName: string): string {
-  return getApiUrl(`/api/collection/cards/${encodeURIComponent(cardName)}/image`)
 }

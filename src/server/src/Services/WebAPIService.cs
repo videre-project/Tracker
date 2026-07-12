@@ -25,6 +25,8 @@ using Swashbuckle.AspNetCore.SwaggerGen;
 using MTGOSDK.Core.Reflection.Serialization;
 
 using Tracker.Services.MTGO.Events;
+using Tracker.Services.Videre;
+using Tracker.Models.API.Games;
 
 
 namespace Tracker.Services;
@@ -86,6 +88,8 @@ public static class WebAPIService
 
     // Register HttpClient factory for external API calls
     builder.Services.AddHttpClient();
+    builder.Services.AddHttpClient<INBACArchetypeClient, NBACArchetypeClient>();
+    builder.Services.AddHttpClient<IVidereAPIClient, VidereAPIClient>();
 
     // Enable CORS for frontend development
     builder.Services.AddCors(options =>
@@ -168,15 +172,83 @@ public static class WebAPIService
       api.UseDefaultFiles();
     }
 
-    // Configure the HTTP request pipeline.
-    if (api.Environment.IsDevelopment())
-    {
-      // Use Swagger to generate OpenAPI documentation.
-      api.UseSwagger(o => o.RouteTemplate = "/openapi/{documentName}.json");
+    // Use Swagger to generate OpenAPI documentation.
+    api.UseSwagger(o => o.RouteTemplate = "/openapi/{documentName}.json");
 
-      api.MapOpenApi();
-      api.MapScalarApiReference(endpointPrefix: "/docs");
-    }
+    api.MapOpenApi();
+    api.MapScalarApiReference("/docs", scalarOptions =>
+    {
+      scalarOptions.WithTitle("Videre Tracker API");
+      scalarOptions.WithTheme(ScalarTheme.DeepSpace);
+      scalarOptions.ForceDarkMode();
+      scalarOptions.HideDarkModeToggle();
+      scalarOptions.HideClientButton();
+      scalarOptions.HideDeveloperTools();
+      scalarOptions.DisableAgent();
+      scalarOptions.WithCustomCss("""
+        :root {
+          --scalar-background-1: #020817;
+          --scalar-background-2: #06111f;
+          --scalar-background-3: #0f172a;
+          --scalar-border-color: rgba(148, 163, 184, 0.18);
+          --scalar-color-1: #f8fafc;
+          --scalar-color-2: #cbd5e1;
+          --scalar-color-3: #94a3b8;
+          --scalar-accent: #38bdf8;
+        }
+
+        body {
+          background: #020817;
+          margin: 0;
+        }
+
+        * {
+          scrollbar-width: thin;
+          scrollbar-color: rgba(148, 163, 184, 0.48) transparent;
+        }
+
+        *:hover {
+          scrollbar-color: rgba(203, 213, 225, 0.64) transparent;
+        }
+
+        *::-webkit-scrollbar {
+          width: 8px;
+          height: 8px;
+        }
+
+        *::-webkit-scrollbar-track {
+          background: #020817;
+        }
+
+        *::-webkit-scrollbar-thumb {
+          background: rgba(148, 163, 184, 0.44);
+          border: 2px solid #020817;
+          border-radius: 999px;
+        }
+
+        *::-webkit-scrollbar-thumb:hover {
+          background: rgba(203, 213, 225, 0.64);
+        }
+
+        *::-webkit-scrollbar-corner {
+          background: #020817;
+        }
+
+        .scalar-app,
+        .scalar-api-reference {
+          background: #020817;
+        }
+
+        .scalar-app aside,
+        .scalar-api-reference aside {
+          background:
+            linear-gradient(180deg, rgba(15, 23, 42, 0.84), rgba(2, 8, 23, 0.98)),
+            #020817;
+          border-color: rgba(148, 163, 184, 0.18);
+        }
+        """);
+    });
+
     api.UseRouting();
     api.UseCors();
     api.UseAuthorization();

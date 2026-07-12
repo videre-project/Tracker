@@ -143,4 +143,14 @@ public class ApplicationOptions(string[] args = null!)
   public string NbacApiUrl { get; internal set; } =
     Environment.GetEnvironmentVariable("NBAC_API_URL")
       ?? "https://ml.videreproject.com/nbac";
+
+  /// <summary>
+  /// The base URL for the Videre public API.
+  /// </summary>
+  /// <remarks>
+  /// Defaults to the production endpoint. Can be overridden via VIDERE_API_URL environment variable.
+  /// </remarks>
+  public string VidereAPIUrl { get; internal set; } =
+    Environment.GetEnvironmentVariable("VIDERE_API_URL")
+      ?? "https://api.videreproject.com";
 }

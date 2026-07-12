@@ -193,8 +193,7 @@ public abstract class APIController : ControllerBase
     {
       if (context == null) throw new ArgumentNullException(nameof(context));
 
-      controller.DisableBuffering();
-      controller.SetNdjsonContentType();
+      controller.StartNDJSONResponse();
       await controller.StreamResponse(
         ToAsyncEnumerable(enumerable, context.HttpContext.RequestAborted),
         context.HttpContext.RequestAborted);
@@ -210,8 +209,7 @@ public abstract class APIController : ControllerBase
     {
       if (context == null) throw new ArgumentNullException(nameof(context));
 
-      controller.DisableBuffering();
-      controller.SetNdjsonContentType();
+      controller.StartNDJSONResponse();
       await controller.StreamResponse(
         asyncEnumerable,
         context.HttpContext.RequestAborted);
@@ -220,9 +218,9 @@ public abstract class APIController : ControllerBase
 
   private readonly byte[] _ndDelimiter = Encoding.UTF8.GetBytes("\n");
 
-  private JsonSerializerOptions _serializerOptions = null!;
-  private JsonSerializerOptions GetSerializerOptions() =>
-    _serializerOptions ??= new(
+  private JsonSerializerOptions _responseSerializerOptions = null!;
+  private JsonSerializerOptions GetResponseSerializerOptions() =>
+    _responseSerializerOptions ??= new(
       HttpContext.RequestServices
         .GetRequiredService<IOptions<JsonOptions>>()
         .Value
@@ -232,20 +230,33 @@ public abstract class APIController : ControllerBase
       WriteIndented = false,
     };
 
-  [NonAction]
-  public void DisableBuffering()
+  private void DisableResponseBuffering()
   {
     if (Response.HasStarted) return;
     HttpContext.Features.Get<IHttpResponseBodyFeature>()?.DisableBuffering();
   }
 
-  [NonAction]
-  public void SetNdjsonContentType()
+  private void SetNDJSONContentType()
   {
     RegisterNdjsonStreamMetrics();
     if (Response.HasStarted) return;
     Response.ContentType = "application/x-ndjson";
     Response.Headers.XContentTypeOptions = "nosniff";
+  }
+
+  protected void StartNDJSONResponse()
+  {
+    DisableResponseBuffering();
+    SetNDJSONContentType();
+  }
+
+  protected CancellationTokenSource BeginNDJSONStream(
+    CancellationToken externalCancellationToken = default)
+  {
+    StartNDJSONResponse();
+    return CancellationTokenSource.CreateLinkedTokenSource(
+      HttpContext.RequestAborted,
+      externalCancellationToken);
   }
 
   [NonAction]
@@ -286,19 +297,12 @@ public abstract class APIController : ControllerBase
   {
     try
     {
-      var serializerOptions = GetSerializerOptions();
+      var serializerOptions = GetResponseSerializerOptions();
       await foreach (var item in asyncEnumerable.WithCancellation(cancellationToken))
       {
         if (cancellationToken.IsCancellationRequested) break;
 
-        await JsonSerializer.SerializeAsync<T>(
-          Response.Body,
-          item,
-          serializerOptions,
-          cancellationToken
-        );
-        await Response.Body.WriteAsync(_ndDelimiter, cancellationToken);
-        await Response.Body.FlushAsync(cancellationToken);
+        await WriteNDJSONLine(item, serializerOptions, cancellationToken);
       }
     }
     catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -309,6 +313,25 @@ public abstract class APIController : ControllerBase
     {
       // ASP.NET may dispose response features before late stream writes unwind.
     }
+  }
+
+  protected Task WriteCompactNDJSONLine<T>(
+    T item,
+    CancellationToken cancellationToken = default) =>
+    WriteNDJSONLine(item, JsonSerializerOptions.Web, cancellationToken);
+
+  private async Task WriteNDJSONLine<T>(
+    T item,
+    JsonSerializerOptions serializerOptions,
+    CancellationToken cancellationToken)
+  {
+    await JsonSerializer.SerializeAsync(
+      Response.Body,
+      item,
+      serializerOptions,
+      cancellationToken);
+    await Response.Body.WriteAsync(_ndDelimiter, cancellationToken);
+    await Response.Body.FlushAsync(cancellationToken);
   }
 
   /// <summary>
@@ -325,8 +348,7 @@ public abstract class APIController : ControllerBase
     Action<Func<TEvent, Task>> unsubscribe,
     Func<TEvent, Task> onEvent)
   {
-    DisableBuffering();
-    SetNdjsonContentType();
+    StartNDJSONResponse();
 
     var requestAborted = HttpContext.RequestAborted;
     var channel = Channel.CreateBounded<TEvent>(StreamCallbackChannelOptions());
@@ -391,12 +413,7 @@ public abstract class APIController : ControllerBase
     Func<T1, T2, Task> onEvent,
     CancellationToken externalCancellationToken = default)
   {
-    DisableBuffering();
-    SetNdjsonContentType();
-
-    using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
-      HttpContext.RequestAborted,
-      externalCancellationToken);
+    using var linkedCts = BeginNDJSONStream(externalCancellationToken);
     var streamToken = linkedCts.Token;
 
     var channel =
@@ -459,12 +476,7 @@ public abstract class APIController : ControllerBase
     Func<object?, TEventArgs, Task> onEvent,
     CancellationToken externalCancellationToken = default)
   {
-    DisableBuffering();
-    SetNdjsonContentType();
-
-    using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
-      HttpContext.RequestAborted,
-      externalCancellationToken);
+    using var linkedCts = BeginNDJSONStream(externalCancellationToken);
     var streamToken = linkedCts.Token;
 
     var channel = Channel.CreateBounded<(object? Sender, TEventArgs Args)>(

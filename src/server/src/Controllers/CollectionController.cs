@@ -6,6 +6,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -19,7 +20,9 @@ using MTGOSDK.API.Graphics;
 using MTGOSDK.Core.Logging;
 
 using Tracker.Controllers.Base;
+using Tracker.Models.API.Collection;
 using Tracker.Services.MTGO;
+using Tracker.Services.Videre;
 
 
 namespace Tracker.Controllers;
@@ -29,313 +32,27 @@ namespace Tracker.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
-public class CollectionController(IClientAPIProvider clientProvider) : APIController
+public class CollectionController(
+  IClientAPIProvider clientProvider,
+  IVidereAPIClient videreAPIClient) : APIController
 {
-  // The Power Nine cards from the BasicBot example
-  private static readonly string[] s_powerNineCards =
-  [
-    "Black Lotus",
-    "Mox Sapphire",
-    "Mox Jet",
-    "Mox Pearl",
-    "Mox Ruby",
-    "Mox Emerald",
-    "Ancestral Recall",
-    "Time Walk",
-    "Timetwister"
-  ];
-
-  // Cache for rendered card images (base64-encoded PNG)
-  // Key: card name, Value: base64 image data
-  private static readonly ConcurrentDictionary<string, string> s_imageCache = new();
+  private static readonly object s_collectionSnapshotCacheSync = new();
+  private static readonly SemaphoreSlim s_collectionSnapshotCacheLock = new(1, 1);
+  private static string? s_collectionSnapshotCacheKey;
+  private static CollectionSnapshotDTO? s_collectionSnapshotCache;
+  private static DateTimeOffset s_collectionSnapshotCacheExpiresAtUtc;
+  private static readonly object s_collectionPriceCacheSync = new();
+  private static readonly Dictionary<int, ViderePriceResult> s_collectionPriceCache = new();
+  private static readonly HashSet<int> s_collectionPriceMissingCache = [];
+  private static DateTimeOffset s_collectionPriceCacheExpiresAtUtc;
 
   /// <summary>
-  /// Stream rendered card images as PNG data
+  /// Get the user's MTGO collection as a compact card/quantity snapshot.
   /// </summary>
-  /// <returns>NDJSON stream of base64-encoded PNG images</returns>
-  [HttpGet("cards/stream")] // GET /api/collection/cards/stream
-  public async Task<IActionResult> StreamCardImages(CancellationToken cancellationToken)
-  {
-    // Check if client is ready before attempting SDK operations
-    if (!clientProvider.IsReady)
-    {
-      return StatusCode(StatusCodes.Status503ServiceUnavailable, new
-      {
-        error = "MTGO client not ready",
-        hint = "Please wait for the client to fully initialize and log in"
-      });
-    }
-
-    var cardObjects = s_powerNineCards
-      .Select(name => CollectionManager.GetCard(name))
-      .Where(card => card != null)
-      .ToList();
-
-    // Only set NDJSON content type AFTER validation passes
-    DisableBuffering();
-    SetNdjsonContentType();
-
-    try
-    {
-      var serializerOptions = new System.Text.Json.JsonSerializerOptions
-      {
-        PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
-      };
-      var newline = System.Text.Encoding.UTF8.GetBytes("\n");
-
-      // Render all cards and stream each result
-      var catalogIds = cardObjects.Select(card => (int)card!).ToArray();
-      var base64Images = CardRenderer.RenderCards(catalogIds);
-
-      for (int index = 0; index < base64Images.Length; index++)
-      {
-        if (cancellationToken.IsCancellationRequested) break;
-
-        var base64 = base64Images[index];
-
-        var dto = new CardImageDTO
-        {
-          Index = index,
-          Name = "",
-          ImageData = base64
-        };
-
-        // Write JSON and flush immediately
-        await System.Text.Json.JsonSerializer.SerializeAsync(
-          Response.Body, dto, serializerOptions, cancellationToken);
-        await Response.Body.WriteAsync(newline, cancellationToken);
-        await Response.Body.FlushAsync(cancellationToken);
-
-        index++;
-      }
-    }
-    catch (Exception ex)
-    {
-      Console.Error.WriteLine($"Error during card rendering: {ex.Message}");
-      Console.Error.WriteLine(ex.StackTrace);
-    }
-
-    return new EmptyResult();
-  }
-
-  /// <summary>
-  /// Get a single rendered card image as PNG
-  /// </summary>
-  /// <param name="name">Card name</param>
-  /// <returns>PNG image data</returns>
-  [HttpGet("cards/{name}/image")] // GET /api/collection/cards/{name}/image
-  [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
-  [ProducesResponseType(StatusCodes.Status404NotFound)]
-  public ActionResult GetCardImage(string name)
-  {
-    // Check if client is ready before attempting SDK operations
-    if (!clientProvider.IsReady)
-    {
-      return StatusCode(StatusCodes.Status503ServiceUnavailable, new
-      {
-        error = "MTGO client not ready",
-        hint = "Please wait for the client to fully initialize and log in"
-      });
-    }
-
-    name = Uri.UnescapeDataString(name);
-
-    // Check cache first
-    if (s_imageCache.TryGetValue(name, out var cachedBase64))
-    {
-      return File(Convert.FromBase64String(cachedBase64), "image/png", $"{name}.png");
-    }
-
-    try
-    {
-      var card = CollectionManager.GetCard(name);
-      if (card == null)
-      {
-        return NotFound(new { error = $"Card '{name}' not found" });
-      }
-
-      // Render the card (single card)
-      var base64 = CardRenderer.RenderCards([(int)card]).FirstOrDefault();
-      if (string.IsNullOrEmpty(base64))
-      {
-        return NotFound(new { error = $"Failed to render card '{name}'" });
-      }
-
-      // Cache and return
-      s_imageCache[name] = base64;
-      var pngData = Convert.FromBase64String(base64);
-
-      return File(pngData, "image/png", $"{name}.png");
-    }
-    catch (KeyNotFoundException)
-    {
-      return NotFound(new { error = $"Card '{name}' not found in collection" });
-    }
-  }
-
-  /// <summary>
-  /// Get a card's art image as JPEG (from MTGO client)
-  /// </summary>
-  /// <param name="name">Card name</param>
-  /// <returns>JPEG image data</returns>
-  [HttpGet("cards/{name}/art")] // GET /api/collection/cards/{name}/art
-  [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
-  [ProducesResponseType(StatusCodes.Status404NotFound)]
+  [HttpGet("cards")] // GET /api/collection/cards
+  [ProducesResponseType(typeof(CollectionSnapshotDTO), StatusCodes.Status200OK)]
   [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
-  public async Task<ActionResult> GetCardArt(string name)
-  {
-    // Check if client is ready before attempting SDK operations
-    if (!clientProvider.IsReady)
-    {
-      return StatusCode(StatusCodes.Status503ServiceUnavailable, new
-      {
-        error = "MTGO client not ready",
-        hint = "Please wait for the client to fully initialize and log in"
-      });
-    }
-
-    name = Uri.UnescapeDataString(name);
-
-    try
-    {
-      var card = CollectionManager.GetCard(name);
-      if (card == null)
-      {
-        return NotFound(new { error = $"Card '{name}' not found" });
-      }
-
-      var artPath = await CardRenderer.GetCardArtPath(card);
-      if (artPath == null || !System.IO.File.Exists(artPath))
-      {
-        return NotFound(new { error = $"Art not available for card '{name}'" });
-      }
-
-      // Read and return the art file
-      var artBytes = await System.IO.File.ReadAllBytesAsync(artPath);
-      var contentType = artPath.EndsWith(".png", StringComparison.OrdinalIgnoreCase)
-        ? "image/png"
-        : "image/jpeg";
-
-      return File(artBytes, contentType, $"{name}_art{Path.GetExtension(artPath)}");
-    }
-    catch (KeyNotFoundException)
-    {
-      return NotFound(new { error = $"Card '{name}' not found in collection" });
-    }
-  }
-
-  /// <summary>
-  /// Get a single rendered card image as PNG by catalog ID
-  /// </summary>
-  [HttpGet("cards/{id:int}/image")] // GET /api/collection/cards/116306/image
-  [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
-  [ProducesResponseType(StatusCodes.Status404NotFound)]
-  [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
-  public ActionResult GetCardImageById(int id)
-  {
-    if (!clientProvider.IsReady)
-    {
-      return StatusCode(StatusCodes.Status503ServiceUnavailable, new
-      {
-        error = "MTGO client not ready",
-        hint = "Please wait for the client to fully initialize and log in"
-      });
-    }
-
-    var cacheKey = $"id:{id}";
-    if (s_imageCache.TryGetValue(cacheKey, out var cachedBase64))
-      return File(Convert.FromBase64String(cachedBase64), "image/png", $"{id}.png");
-
-    try
-    {
-      var card = CollectionManager.GetCard(id);
-      if (card == null)
-      {
-        Log.Debug("GetCardImageById: catalog ID {Id} not found in collection", id);
-        return NotFound(new { error = $"Card with ID {id} not found" });
-      }
-
-      var base64 = CardRenderer.RenderCard(id);
-      if (string.IsNullOrEmpty(base64))
-      {
-        Log.Warning("GetCardImageById: render returned empty result for catalog ID {Id}", id);
-        return NotFound(new { error = $"Failed to render card ID {id}" });
-      }
-
-      s_imageCache[cacheKey] = base64;
-      Log.Debug("GetCardImageById: rendered catalog ID {Id} ({Name})", id, card.Name);
-      return File(Convert.FromBase64String(base64), "image/png", $"{id}.png");
-    }
-    catch (KeyNotFoundException)
-    {
-      Log.Debug("GetCardImageById: catalog ID {Id} not found (KeyNotFoundException)", id);
-      return NotFound(new { error = $"Card with ID {id} not found in collection" });
-    }
-    catch (Exception ex)
-    {
-      Log.Error(ex, "GetCardImageById: unexpected error for catalog ID {Id}", id);
-      return StatusCode(StatusCodes.Status500InternalServerError, new { error = ex.Message });
-    }
-  }
-
-  /// <summary>
-  /// Get a card's art image by catalog ID (from MTGO client)
-  /// </summary>
-  /// <param name="id">Card catalog ID</param>
-  /// <returns>Art image data</returns>
-  [HttpGet("cards/{id:int}/art")] // GET /api/collection/cards/123/art
-  [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
-  [ProducesResponseType(StatusCodes.Status404NotFound)]
-  [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
-  public async Task<ActionResult> GetCardArtById(int id)
-  {
-    if (!clientProvider.IsReady)
-    {
-      return StatusCode(StatusCodes.Status503ServiceUnavailable, new
-      {
-        error = "MTGO client not ready",
-        hint = "Please wait for the client to fully initialize and log in"
-      });
-    }
-
-    try
-    {
-      var card = CollectionManager.GetCard(id);
-      if (card == null)
-      {
-        return NotFound(new { error = $"Card with ID {id} not found" });
-      }
-
-      var artPath = await CardRenderer.GetCardArtPath(card);
-      if (artPath == null || !System.IO.File.Exists(artPath))
-      {
-        return NotFound(new { error = $"Art not available for card ID {id}" });
-      }
-
-      var artBytes = await System.IO.File.ReadAllBytesAsync(artPath);
-      var contentType = artPath.EndsWith(".png", StringComparison.OrdinalIgnoreCase)
-        ? "image/png"
-        : "image/jpeg";
-
-      return File(artBytes, contentType, $"{id}_art{Path.GetExtension(artPath)}");
-    }
-    catch (KeyNotFoundException)
-    {
-      return NotFound(new { error = $"Card with ID {id} not found in collection" });
-    }
-  }
-
-  /// <summary>
-  /// Get card art for multiple cards in parallel (streams as NDJSON)
-  /// </summary>
-  /// <param name="cards">Comma-separated list of card names</param>
-  /// <param name="cancellationToken">Cancellation token</param>
-  /// <returns>NDJSON stream of base64-encoded art</returns>
-  [HttpGet("cards/art/batch")] // GET /api/collection/cards/art/batch?cards=name1,name2
-  [ProducesResponseType(StatusCodes.Status200OK)]
-  [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
-  public async Task<IActionResult> GetCardArtBatch(
-    [FromQuery] string cards,
+  public async Task<ActionResult<CollectionSnapshotDTO>> GetCollectionCards(
     CancellationToken cancellationToken)
   {
     if (!clientProvider.IsReady)
@@ -347,151 +64,473 @@ public class CollectionController(IClientAPIProvider clientProvider) : APIContro
       });
     }
 
-    if (string.IsNullOrWhiteSpace(cards))
-    {
-      return BadRequest(new { error = "cards parameter required" });
-    }
-
-    var cardNames = cards.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-    if (cardNames.Length == 0)
-    {
-      return BadRequest(new { error = "No valid card names provided" });
-    }
-
-    DisableBuffering();
-    SetNdjsonContentType();
-
-    var serializerOptions = new System.Text.Json.JsonSerializerOptions
-    {
-      PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
-    };
-    var newline = System.Text.Encoding.UTF8.GetBytes("\n");
-
     try
     {
-      // Resolve all cards first
-      var cardObjects = cardNames
-        .Select(name => (Name: name, Card: CollectionManager.GetCard(name)))
-        .ToList();
-
-      // Load all art paths in parallel
-      var artTasks = cardObjects.Select(async (item, index) =>
+      var collection = CollectionManager.Collection;
+      if (collection == null)
       {
-        if (item.Card == null)
-          return new CardArtDTO { Index = index, Name = item.Name, ImageData = null };
-
-        var artPath = await CardRenderer.GetCardArtPath(item.Card);
-        if (artPath == null || !System.IO.File.Exists(artPath))
-          return new CardArtDTO { Index = index, Name = item.Name, ImageData = null };
-
-        var artBytes = await System.IO.File.ReadAllBytesAsync(artPath, cancellationToken);
-        return new CardArtDTO
+        return StatusCode(StatusCodes.Status503ServiceUnavailable, new
         {
-          Index = index,
-          Name = item.Name,
-          ImageData = Convert.ToBase64String(artBytes)
-        };
-      });
+          error = "Collection not loaded",
+          hint = "Please wait for MTGO to finish loading your collection"
+        });
+      }
 
-      // Process results as they complete
-      foreach (var task in artTasks)
+      var collectionHash = TryGetCollectionHash(collection);
+      var cachedSnapshot = GetCachedCollectionSnapshot(collectionHash);
+      if (cachedSnapshot is not null)
       {
-        if (cancellationToken.IsCancellationRequested) break;
+        return Ok(cachedSnapshot);
+      }
 
-        var result = await task;
-        await System.Text.Json.JsonSerializer.SerializeAsync(
-          Response.Body, result, serializerOptions, cancellationToken);
-        await Response.Body.WriteAsync(newline, cancellationToken);
-        await Response.Body.FlushAsync(cancellationToken);
+      var stopwatch = Stopwatch.StartNew();
+      var frozenCollection = collection.GetFrozenCollection;
+      stopwatch.Stop();
+
+      var collectionItems = frozenCollection
+        .Where(card => card.Id > 0 && card.Quantity > 0)
+        .ToArray();
+      var cacheKey = string.IsNullOrWhiteSpace(collectionHash)
+        ? BuildCollectionItemsCacheKey(collectionItems)
+        : collectionHash;
+
+      cachedSnapshot = GetCachedCollectionSnapshot(cacheKey);
+      if (cachedSnapshot is not null)
+      {
+        return Ok(cachedSnapshot);
+      }
+
+      await s_collectionSnapshotCacheLock.WaitAsync(cancellationToken);
+      try
+      {
+        cachedSnapshot = GetCachedCollectionSnapshot(cacheKey);
+        if (cachedSnapshot is not null)
+        {
+          return Ok(cachedSnapshot);
+        }
+
+        var snapshot = await BuildCollectionSnapshotAsync(
+          collection,
+          collectionItems,
+          cacheKey,
+          stopwatch.Elapsed.TotalMilliseconds,
+          cancellationToken);
+        SetCachedCollectionSnapshot(cacheKey, snapshot);
+        return Ok(snapshot);
+      }
+      finally
+      {
+        s_collectionSnapshotCacheLock.Release();
       }
     }
     catch (Exception ex)
     {
-      Console.Error.WriteLine($"Error loading card art: {ex.Message}");
-      Console.Error.WriteLine(ex.StackTrace);
+      Log.Error(ex, "Failed to serialize MTGO collection");
+      return StatusCode(StatusCodes.Status500InternalServerError, new { error = ex.Message });
+    }
+  }
+
+  /// <summary>
+  /// Search the user's MTGO collection with Videre card query syntax.
+  /// </summary>
+  [HttpPost("cards/search")] // POST /api/collection/cards/search
+  [ProducesResponseType(typeof(CollectionSearchResultDTO), StatusCodes.Status200OK)]
+  [ProducesResponseType(StatusCodes.Status502BadGateway)]
+  [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+  public async Task<ActionResult<CollectionSearchResultDTO>> SearchCollectionCards(
+    [FromBody] CollectionSearchRequestDTO? request,
+    CancellationToken cancellationToken)
+  {
+    var query = request?.Query?.Trim();
+    if (string.IsNullOrWhiteSpace(query))
+    {
+      return Ok(new CollectionSearchResultDTO
+      {
+        Query = "",
+        CatalogIds = []
+      });
     }
 
-    return new EmptyResult();
-  }
-
-  /// <summary>
-  /// Clears the image cache
-  /// </summary>
-  [HttpPost("cache/clear")] // POST /api/collection/cache/clear
-  public IActionResult ClearCache()
-  {
-    var count = s_imageCache.Count;
-    s_imageCache.Clear();
-    return Ok(new { cleared = count });
-  }
-
-  /// <summary>
-  /// Renders cards with caching - returns cached results immediately,
-  /// only renders cards not in cache.
-  /// </summary>
-  private static IEnumerable<CardImageDTO> RenderCardsWithCache(IList<Card> cards)
-  {
-    var uncachedCards = new List<(int Index, Card Card)>();
-
-    // First, yield all cached cards immediately
-    for (int i = 0; i < cards.Count; i++)
+    if (!clientProvider.IsReady)
     {
-      var card = cards[i];
-      if (s_imageCache.TryGetValue(card.Name, out var cachedBase64))
+      return StatusCode(StatusCodes.Status503ServiceUnavailable, new
       {
-        yield return new CardImageDTO
+        error = "MTGO client not ready",
+        hint = "Please wait for the client to fully initialize and log in"
+      });
+    }
+
+    try
+    {
+      var collection = CollectionManager.Collection;
+      if (collection == null)
+      {
+        return StatusCode(StatusCodes.Status503ServiceUnavailable, new
         {
-          Index = i,
-          Name = card.Name,
-          ImageData = cachedBase64
-        };
+          error = "Collection not loaded",
+          hint = "Please wait for MTGO to finish loading your collection"
+        });
       }
-      else
+
+      var collectionIds = collection.GetFrozenCollection
+        .Where(item => item.Id > 0 && item.Quantity > 0)
+        .Select(item => item.Id)
+        .Distinct()
+        .ToArray();
+
+      if (collectionIds.Length == 0)
       {
-        uncachedCards.Add((i, card));
+        return Ok(new CollectionSearchResultDTO
+        {
+          Query = query,
+          CatalogIds = []
+        });
       }
-    }
 
-    // If all cards were cached, we're done
-    if (uncachedCards.Count == 0)
-    {
-      yield break;
-    }
-
-    // Render uncached cards
-    var cardsToRender = uncachedCards.Select(x => x.Card).ToList();
-    var catalogIds = cardsToRender.Select(c => (int)c).ToArray();
-    var renderedImages = CardRenderer.RenderCards(catalogIds);
-
-    for (int renderIndex = 0; renderIndex < renderedImages.Length; renderIndex++)
-    {
-      var (originalIndex, card) = uncachedCards[renderIndex];
-      var base64 = renderedImages[renderIndex];
-
-      // Cache the result
-      s_imageCache[card.Name] = base64;
-
-      yield return new CardImageDTO
+      const int maxInlineCollectionIds = 10_000;
+      var catalogIdSet = new HashSet<int>();
+      foreach (var chunk in collectionIds.Chunk(maxInlineCollectionIds))
       {
-        Index = originalIndex,
-        Name = card.Name,
-        ImageData = base64
-      };
+        var chunkCatalogIds = await FetchCollectionSearchIdsAsync(
+          chunk,
+          query,
+          cancellationToken);
+
+        foreach (var catalogId in chunkCatalogIds)
+        {
+          catalogIdSet.Add(catalogId);
+        }
+      }
+
+      return Ok(new CollectionSearchResultDTO
+      {
+        Query = query,
+        CatalogIds = catalogIdSet
+          .OrderBy(id => id)
+          .ToArray()
+      });
+    }
+    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+    {
+      throw;
+    }
+    catch (VidereAPIException ex)
+    {
+      return StatusCode(StatusCodes.Status502BadGateway, new
+      {
+        error = "Videre collection search request failed",
+        message = ex.Message
+      });
+    }
+    catch (Exception ex)
+    {
+      Log.Error(ex, "Failed to search MTGO collection");
+      return StatusCode(StatusCodes.Status500InternalServerError, new { error = ex.Message });
     }
   }
-}
 
-public class CardImageDTO
-{
-  public required int Index { get; set; }
-  public required string Name { get; set; }
-  public required string ImageData { get; set; }
-}
+  private async Task<CollectionSnapshotDTO> BuildCollectionSnapshotAsync(
+    MTGOSDK.API.Collection.Collection collection,
+    IReadOnlyCollection<CardQuantityPair> collectionItems,
+    string cacheKey,
+    double elapsedMilliseconds,
+    CancellationToken cancellationToken)
+  {
+    var productsById = await GetCollectionProductsAsync(collectionItems, cancellationToken);
+    var pricesById = await GetCollectionPricesAsync(collectionItems, cancellationToken);
+    var cards = new List<CollectionCardDTO>(collectionItems.Count);
+    var products = new List<CollectionProductDTO>();
 
-public class CardArtDTO
-{
-  public required int Index { get; set; }
-  public required string Name { get; set; }
-  public string? ImageData { get; set; }
-}
+    foreach (var item in collectionItems)
+    {
+      if (productsById.TryGetValue(item.Id, out var product))
+      {
+        pricesById.TryGetValue(item.Id, out var productPrice);
+        products.Add(new CollectionProductDTO
+        {
+          CatalogId = item.Id,
+          Name = string.IsNullOrWhiteSpace(product.Name)
+            ? GetItemName(item.Id, item.Name)
+            : product.Name,
+          Quantity = item.Quantity,
+          Description = product.Description,
+          SetCode = product.SetCode,
+          SetName = product.SetName,
+          ObjectType = product.ObjectType,
+          ImageUrl = string.IsNullOrWhiteSpace(product.ImageUrl)
+            ? $"https://r2.videreproject.com/products/{item.Id}-300px.png"
+            : product.ImageUrl,
+          IsTradable = product.IsTradable,
+          Price = productPrice?.SellPrice,
+          PriceDate = productPrice?.PriceDate,
+          PriceSource = productPrice?.Source
+        });
+        continue;
+      }
 
+      pricesById.TryGetValue(item.Id, out var cardPrice);
+      cards.Add(new CollectionCardDTO
+      {
+        CatalogId = item.Id,
+        Name = GetItemName(item.Id, item.Name),
+        Quantity = item.Quantity,
+        Price = cardPrice?.SellPrice,
+        PriceDate = cardPrice?.PriceDate,
+        PriceSource = cardPrice?.Source
+      });
+    }
+
+    cards = cards
+      .OrderBy(card => card.Name, StringComparer.OrdinalIgnoreCase)
+      .ThenBy(card => card.CatalogId)
+      .ToList();
+
+    products = products
+      .OrderBy(product => product.Name, StringComparer.OrdinalIgnoreCase)
+      .ThenBy(product => product.CatalogId)
+      .ToList();
+
+    return new CollectionSnapshotDTO
+    {
+      Hash = cacheKey,
+      ItemCount = collection.ItemCount,
+      UniqueCount = cards.Count + products.Count,
+      TotalQuantity = cards.Sum(card => (long)card.Quantity) +
+        products.Sum(product => (long)product.Quantity),
+      Timestamp = collection.Timestamp,
+      PriceCacheExpiresAt = PriceAPISchedule.GetCacheExpiration(DateTimeOffset.UtcNow),
+      ElapsedMilliseconds = elapsedMilliseconds,
+      Cards = cards.ToArray(),
+      Products = products.ToArray()
+    };
+  }
+
+  private static CollectionSnapshotDTO? GetCachedCollectionSnapshot(string? cacheKey)
+  {
+    if (string.IsNullOrWhiteSpace(cacheKey))
+    {
+      return null;
+    }
+
+    lock (s_collectionSnapshotCacheSync)
+    {
+      if (s_collectionSnapshotCache is not null &&
+        DateTimeOffset.UtcNow >= s_collectionSnapshotCacheExpiresAtUtc)
+      {
+        s_collectionSnapshotCacheKey = null;
+        s_collectionSnapshotCache = null;
+        s_collectionSnapshotCacheExpiresAtUtc = DateTimeOffset.MinValue;
+        return null;
+      }
+
+      return string.Equals(s_collectionSnapshotCacheKey, cacheKey, StringComparison.Ordinal)
+        ? s_collectionSnapshotCache
+        : null;
+    }
+  }
+
+  private static void SetCachedCollectionSnapshot(string cacheKey, CollectionSnapshotDTO snapshot)
+  {
+    lock (s_collectionSnapshotCacheSync)
+    {
+      s_collectionSnapshotCacheKey = cacheKey;
+      s_collectionSnapshotCache = snapshot;
+      s_collectionSnapshotCacheExpiresAtUtc = snapshot.PriceCacheExpiresAt;
+    }
+  }
+
+  private static string? TryGetCollectionHash(MTGOSDK.API.Collection.Collection collection)
+  {
+    try
+    {
+      return string.IsNullOrWhiteSpace(collection.Hash)
+        ? null
+        : collection.Hash;
+    }
+    catch (Exception ex)
+    {
+      Log.Warning(ex, "Failed to read MTGO collection hash for snapshot cache");
+      return null;
+    }
+  }
+
+  private static string BuildCollectionItemsCacheKey(IEnumerable<CardQuantityPair> collectionItems)
+  {
+    return string.Join(
+      "|",
+      collectionItems
+        .OrderBy(item => item.Id)
+        .ThenBy(item => item.Quantity)
+        .Select(item => $"{item.Id}:{item.Quantity}"));
+  }
+
+  private async Task<IReadOnlyDictionary<int, VidereProductResult>> GetCollectionProductsAsync(
+    IReadOnlyCollection<CardQuantityPair> collectionItems,
+    CancellationToken cancellationToken)
+  {
+    const int maxInlineCollectionIds = 10_000;
+    var collectionIds = collectionItems
+      .Select(item => item.Id)
+      .Where(id => id > 0)
+      .Distinct()
+      .ToArray();
+
+    if (collectionIds.Length == 0)
+    {
+      return new Dictionary<int, VidereProductResult>();
+    }
+
+    try
+    {
+      var products = new Dictionary<int, VidereProductResult>();
+      foreach (var chunk in collectionIds.Chunk(maxInlineCollectionIds))
+      {
+        var chunkProducts = await FetchCollectionProductsAsync(chunk, cancellationToken);
+        foreach (var product in chunkProducts)
+        {
+          products[product.Key] = product.Value;
+        }
+      }
+
+      return products;
+    }
+    catch (VidereAPIException ex)
+    {
+      Log.Warning(ex, "Failed to classify collection products with Videre cards search");
+      return new Dictionary<int, VidereProductResult>();
+    }
+  }
+
+  private async Task<IReadOnlyDictionary<int, VidereProductResult>> FetchCollectionProductsAsync(
+    int[] collectionIds,
+    CancellationToken cancellationToken)
+  {
+    return await videreAPIClient.GetCollectionProductsAsync(collectionIds, cancellationToken);
+  }
+
+  private async Task<int[]> FetchCollectionSearchIdsAsync(
+    int[] collectionIds,
+    string query,
+    CancellationToken cancellationToken)
+  {
+    var matchingIds = await videreAPIClient.SearchCollectionAsync(
+      collectionIds,
+      query,
+      cancellationToken);
+    return matchingIds
+      .OrderBy(id => id)
+      .ToArray();
+  }
+
+  /// <summary>
+  /// Get daily price history for one MTGO catalog ID.
+  /// </summary>
+  private async Task<IReadOnlyDictionary<int, ViderePriceResult>> GetCollectionPricesAsync(
+    IReadOnlyCollection<CardQuantityPair> collectionItems,
+    CancellationToken cancellationToken)
+  {
+    const int maxInlineCollectionIds = 10_000;
+    var collectionIds = collectionItems
+      .Select(item => item.Id)
+      .Where(id => id > 0)
+      .Distinct()
+      .ToArray();
+
+    if (collectionIds.Length == 0)
+    {
+      return new Dictionary<int, ViderePriceResult>();
+    }
+
+    var now = DateTimeOffset.UtcNow;
+    var expiresAtUtc = PriceAPISchedule.GetCacheExpiration(now);
+    List<int> idsToFetch;
+    Dictionary<int, ViderePriceResult> cachedPrices;
+
+    lock (s_collectionPriceCacheSync)
+    {
+      if (now >= s_collectionPriceCacheExpiresAtUtc)
+      {
+        s_collectionPriceCache.Clear();
+        s_collectionPriceMissingCache.Clear();
+        s_collectionPriceCacheExpiresAtUtc = expiresAtUtc;
+      }
+
+      cachedPrices = collectionIds
+        .Where(s_collectionPriceCache.ContainsKey)
+        .ToDictionary(id => id, id => s_collectionPriceCache[id]);
+      idsToFetch = collectionIds
+        .Where(id => !s_collectionPriceCache.ContainsKey(id) &&
+          !s_collectionPriceMissingCache.Contains(id))
+        .ToList();
+    }
+
+    if (idsToFetch.Count == 0)
+    {
+      return cachedPrices;
+    }
+
+    try
+    {
+      var fetchedPrices = new Dictionary<int, ViderePriceResult>();
+      var missingIds = new HashSet<int>();
+
+      foreach (var chunk in idsToFetch.Chunk(maxInlineCollectionIds))
+      {
+        var chunkPrices = await FetchCollectionPricesAsync(chunk, cancellationToken);
+        foreach (var price in chunkPrices.Prices)
+        {
+          fetchedPrices[price.Key] = price.Value;
+        }
+
+        foreach (var missingId in chunkPrices.MissingIds)
+        {
+          missingIds.Add(missingId);
+        }
+      }
+
+      lock (s_collectionPriceCacheSync)
+      {
+        if (DateTimeOffset.UtcNow >= s_collectionPriceCacheExpiresAtUtc)
+        {
+          s_collectionPriceCache.Clear();
+          s_collectionPriceMissingCache.Clear();
+          s_collectionPriceCacheExpiresAtUtc = PriceAPISchedule.GetCacheExpiration(DateTimeOffset.UtcNow);
+        }
+
+        foreach (var price in fetchedPrices)
+        {
+          s_collectionPriceCache[price.Key] = price.Value;
+        }
+
+        foreach (var missingId in missingIds)
+        {
+          s_collectionPriceMissingCache.Add(missingId);
+        }
+      }
+
+      foreach (var price in fetchedPrices)
+      {
+        cachedPrices[price.Key] = price.Value;
+      }
+
+      return cachedPrices;
+    }
+    catch (VidereAPIException ex)
+    {
+      Log.Warning(ex, "Failed to fetch collection prices with Videre prices API");
+      return cachedPrices;
+    }
+  }
+
+  private async Task<(IReadOnlyDictionary<int, ViderePriceResult> Prices, IReadOnlyCollection<int> MissingIds)>
+    FetchCollectionPricesAsync(
+      int[] collectionIds,
+      CancellationToken cancellationToken)
+  {
+    var result = await videreAPIClient.GetLatestPricesAsync(collectionIds, cancellationToken);
+    return (result.Prices, result.MissingIds);
+  }
+
+  private static string GetItemName(int catalogId, string? name) =>
+    string.IsNullOrWhiteSpace(name) ? $"Catalog {catalogId}" : name;
+}
