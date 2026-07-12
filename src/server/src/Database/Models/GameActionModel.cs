@@ -16,12 +16,6 @@ namespace Tracker.Database.Models;
 
 public class GameActionModel
 {
-  private static readonly JsonSerializerOptions s_jsonOptions = new()
-  {
-    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-    WriteIndented = false,
-  };
-
   public GameActionModel() { }
 
   public GameActionModel(GameAction action)
@@ -40,7 +34,7 @@ public class GameActionModel
         var targetSets = cardAction.Targets;
         if (targetSets?.Count > 0)
           Targets = JsonSerializer.Serialize(
-            targetSets.Select(t => t.ToString()), s_jsonOptions);
+            targetSets.Select(t => t.ToString()), JsonSerializerOptions.Web);
       }
       catch { }
     }

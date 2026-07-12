@@ -35,12 +35,6 @@ public class GameTracker : IDisposable
   private readonly BlockingCollection<GameLogEntry> _eventLog;
   private readonly EventDatabaseWriter _dbWriter;
 
-  private static readonly JsonSerializerOptions s_jsonOptions = new()
-  {
-    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-    WriteIndented = false,
-  };
-
   // State tracking
   private readonly HashSet<int> _seenCardIds = new();
   private readonly HashSet<int> _seenPlayerIndices = new();
@@ -266,7 +260,7 @@ public class GameTracker : IDisposable
           Phase = phase,
           PreviousTurn = _lastTurnNumber,
           PreviousPhase = _lastPhase
-        }, s_jsonOptions), _currentNonce));
+        }, JsonSerializerOptions.Web), _currentNonce));
 
       _lastTurnNumber = _pendingSnapshot.TurnNumber;
       _lastPhase = phase;
@@ -485,7 +479,7 @@ public class GameTracker : IDisposable
             CardId = zt.CardId, CardName = zt.CardName,
             FromZone = zt.FromZone, ToZone = zt.ToZone,
             SourceId = zt.SourceId, Type = zt.Type
-          }), s_jsonOptions), e.Nonce));
+          }), JsonSerializerOptions.Web), e.Nonce));
       }
 
       Log.Trace("[Game {Id}] {Count} revealed zone transfers (nonce {Nonce})",
@@ -572,7 +566,7 @@ public class GameTracker : IDisposable
             CardId = zt.CardId, CardName = zt.CardName,
             FromZone = zt.FromZone, ToZone = zt.ToZone,
             SourceId = zt.SourceId, Type = zt.Type
-          }), s_jsonOptions), e.Nonce));
+          }), JsonSerializerOptions.Web), e.Nonce));
       }
 
       Log.Trace("[Game {Id}] {Count} zone transfers (nonce {Nonce})",
@@ -607,7 +601,7 @@ public class GameTracker : IDisposable
             CardId = cc.CardId, CardName = cc.CardName,
             Property = cc.Property, OldValue = cc.OldValue,
             NewValue = cc.NewValue
-          }), s_jsonOptions), e.Nonce));
+          }), JsonSerializerOptions.Web), e.Nonce));
 
         Log.Trace("[Game {Id}] {Count} card changes for {Card} (nonce {Nonce})",
           _game.Id, changes.Count, e.Current.Name, e.Nonce);
@@ -652,7 +646,7 @@ public class GameTracker : IDisposable
               PlayerIndex = pc.PlayerIndex, PlayerName = pc.PlayerName,
               Property = pc.Property, OldValue = pc.OldValue,
               NewValue = pc.NewValue
-            }), s_jsonOptions), e.Nonce));
+            }), JsonSerializerOptions.Web), e.Nonce));
 
           Log.Trace("[Game {Id}] {Count} player changes for {Name} (nonce {Nonce})",
             _game.Id, changes.Count, e.Current.Name, e.Nonce);
@@ -774,7 +768,7 @@ public class GameTracker : IDisposable
             };
           })
         };
-      }), s_jsonOptions);
+      }), JsonSerializerOptions.Web);
 
       _pendingLogs.Add(new GameLogModel
       {
@@ -938,7 +932,7 @@ public class GameTracker : IDisposable
             CardName = card.Name,
             Property = "Associations",
             OldValue = "{}",
-            NewValue = JsonSerializer.Serialize(assoc, s_jsonOptions)
+            NewValue = JsonSerializer.Serialize(assoc, JsonSerializerOptions.Web)
           });
         }
       }
@@ -1117,8 +1111,8 @@ public class GameTracker : IDisposable
           CardId = cardId,
           CardName = cardName,
           Property = "Abilities",
-          OldValue = JsonSerializer.Serialize(prevAbilities, s_jsonOptions),
-          NewValue = JsonSerializer.Serialize(currAbilities, s_jsonOptions)
+          OldValue = JsonSerializer.Serialize(prevAbilities, JsonSerializerOptions.Web),
+          NewValue = JsonSerializer.Serialize(currAbilities, JsonSerializerOptions.Web)
         });
       }
     }
@@ -1145,8 +1139,8 @@ public class GameTracker : IDisposable
           CardId = cardId,
           CardName = cardName,
           Property = "Counters",
-          OldValue = JsonSerializer.Serialize(prevCounters, s_jsonOptions),
-          NewValue = JsonSerializer.Serialize(currCounters, s_jsonOptions)
+          OldValue = JsonSerializer.Serialize(prevCounters, JsonSerializerOptions.Web),
+          NewValue = JsonSerializer.Serialize(currCounters, JsonSerializerOptions.Web)
         });
       }
     }
@@ -1164,8 +1158,8 @@ public class GameTracker : IDisposable
           CardId = cardId,
           CardName = cardName,
           Property = "AttackingOrders",
-          OldValue = JsonSerializer.Serialize(prevAttacking, s_jsonOptions),
-          NewValue = JsonSerializer.Serialize(currAttacking, s_jsonOptions)
+          OldValue = JsonSerializer.Serialize(prevAttacking, JsonSerializerOptions.Web),
+          NewValue = JsonSerializer.Serialize(currAttacking, JsonSerializerOptions.Web)
         });
       }
     }
@@ -1183,8 +1177,8 @@ public class GameTracker : IDisposable
           CardId = cardId,
           CardName = cardName,
           Property = "BlockingOrders",
-          OldValue = JsonSerializer.Serialize(prevBlocking, s_jsonOptions),
-          NewValue = JsonSerializer.Serialize(currBlocking, s_jsonOptions)
+          OldValue = JsonSerializer.Serialize(prevBlocking, JsonSerializerOptions.Web),
+          NewValue = JsonSerializer.Serialize(currBlocking, JsonSerializerOptions.Web)
         });
       }
     }
@@ -1200,8 +1194,8 @@ public class GameTracker : IDisposable
       {
         var prevAssoc = prevPartial.ResolveAssociations();
         var currAssoc = currPartial.ResolveAssociations();
-        var prevJson = JsonSerializer.Serialize(prevAssoc, s_jsonOptions);
-        var currJson = JsonSerializer.Serialize(currAssoc, s_jsonOptions);
+        var prevJson = JsonSerializer.Serialize(prevAssoc, JsonSerializerOptions.Web);
+        var currJson = JsonSerializer.Serialize(currAssoc, JsonSerializerOptions.Web);
         if (prevJson != currJson)
         {
           changes.Add(new CardStateChangeModel
@@ -1337,7 +1331,7 @@ public class GameTracker : IDisposable
           Symbol = Mana.ToSymbol((MagicColors)kvp.Key),
           Amount = kvp.Value
         }),
-      s_jsonOptions);
+      JsonSerializerOptions.Web);
 
   //
   // Diff helpers

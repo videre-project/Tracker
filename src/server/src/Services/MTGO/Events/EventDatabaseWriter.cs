@@ -464,12 +464,6 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
   // Structured game state methods
   //
 
-  private static readonly JsonSerializerOptions s_jsonOptions = new()
-  {
-    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-    WriteIndented = false,
-  };
-
   /// <summary>
   /// Builds a GameCardModel from a GameCard without touching the database.
   /// FirstSeenStateId is set during flush.
@@ -486,7 +480,7 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
         .GroupBy(c => c)
         .ToDictionary(g => g.Key.ToString(), g => g.Count());
       if (counters?.Count > 0)
-        countersJson = JsonSerializer.Serialize(counters, s_jsonOptions);
+        countersJson = JsonSerializer.Serialize(counters, JsonSerializerOptions.Web);
     }
     catch { }
 
@@ -496,7 +490,7 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
       var abilities = card.Abilities?.ToList();
       if (abilities?.Count > 0)
         abilitiesJson = JsonSerializer.Serialize(
-          abilities.Select(a => a.ToString()), s_jsonOptions);
+          abilities.Select(a => a.ToString()), JsonSerializerOptions.Web);
     }
     catch { }
 
@@ -566,7 +560,7 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
           {
             Symbol = Mana.ToSymbol(m.Color),
             Amount = m.Amount
-          }), s_jsonOptions);
+          }), JsonSerializerOptions.Web);
     }
     catch { }
 

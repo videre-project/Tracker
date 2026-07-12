@@ -14,6 +14,7 @@ using System.Threading.Tasks;
 
 using MTGOSDK.API.Collection;
 
+using Tracker.Services.Videre;
 
 namespace Tracker.Database.Models;
 
@@ -169,7 +170,7 @@ public class DeckModel
   {
     // Build request body with card names and quantities
     var cards = deck.Mainboard
-      .Select(c => new { name = c.name, quantity = c.quantity })
+      .Select(card => new NBACDeckCard(card.name, card.quantity))
       .ToList();
 
     // NBAC requires at least 2 cards
@@ -180,12 +181,7 @@ public class DeckModel
 
     try
     {
-      var jsonOptions = new JsonSerializerOptions
-      {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-      };
-
-      var requestBody = JsonSerializer.Serialize(cards, jsonOptions);
+      var requestBody = JsonSerializer.Serialize(cards);
       var content = new StringContent(requestBody, Encoding.UTF8, "application/json");
 
       // Use explain=1 to get the top contributing card

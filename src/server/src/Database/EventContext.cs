@@ -34,7 +34,7 @@ public class EventContext(DbContextOptions<EventContext> options)
   public DbSet<PlayerStateChangeModel> PlayerStateChanges { get; set; }
   public DbSet<GameLogModel> GameLogs { get; set; }
 
-  private static readonly JsonSerializerOptions s_jsonOptions = new()
+  private static readonly JsonSerializerOptions s_databaseJsonOptions = new()
   {
     PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
     WriteIndented = true,
@@ -62,16 +62,16 @@ public class EventContext(DbContextOptions<EventContext> options)
     modelBuilder.Entity<DeckModel>()
       .Property(d => d.Mainboard)
       .HasConversion(
-          e => JsonSerializer.Serialize(e, s_jsonOptions),
-          e => JsonSerializer.Deserialize<List<CardEntry>>(e, s_jsonOptions)!)
+          e => JsonSerializer.Serialize(e, s_databaseJsonOptions),
+          e => JsonSerializer.Deserialize<List<CardEntry>>(e, s_databaseJsonOptions)!)
       .Metadata
         .SetValueComparer(CardEntryComparerExtensions.CardEntryListComparer);
 
     modelBuilder.Entity<DeckModel>()
       .Property(d => d.Sideboard)
       .HasConversion(
-          e => JsonSerializer.Serialize(e, s_jsonOptions),
-          e => JsonSerializer.Deserialize<List<CardEntry>>(e, s_jsonOptions)!)
+          e => JsonSerializer.Serialize(e, s_databaseJsonOptions),
+          e => JsonSerializer.Deserialize<List<CardEntry>>(e, s_databaseJsonOptions)!)
       .Metadata
         .SetValueComparer(CardEntryComparerExtensions.CardEntryListComparer);
 
@@ -174,16 +174,16 @@ public class EventContext(DbContextOptions<EventContext> options)
     modelBuilder.Entity<MatchModel>()
       .Property(m => m.PlayerResults)
       .HasConversion(
-          e => JsonSerializer.Serialize(e, s_jsonOptions),
-          e => JsonSerializer.Deserialize<List<PlayerResult>>(e, s_jsonOptions)!)
+          e => JsonSerializer.Serialize(e, s_databaseJsonOptions),
+          e => JsonSerializer.Deserialize<List<PlayerResult>>(e, s_databaseJsonOptions)!)
       .Metadata
         .SetValueComparer(PlayerResultComparerExtensions.PlayerResultListComparer);
 
     modelBuilder.Entity<MatchModel>()
       .Property(m => m.SideboardChanges)
       .HasConversion(
-          e => JsonSerializer.Serialize(e, s_jsonOptions),
-          e => JsonSerializer.Deserialize<Dictionary<int, List<CardEntry>>>(e, s_jsonOptions)!)
+          e => JsonSerializer.Serialize(e, s_databaseJsonOptions),
+          e => JsonSerializer.Deserialize<Dictionary<int, List<CardEntry>>>(e, s_databaseJsonOptions)!)
       .Metadata
         .SetValueComparer(SideboardChangesComparerExtensions.SideboardChangesComparer);
 
@@ -194,8 +194,8 @@ public class EventContext(DbContextOptions<EventContext> options)
     modelBuilder.Entity<GameModel>()
       .Property(d => d.GamePlayerResults)
       .HasConversion(
-          e => JsonSerializer.Serialize(e, s_jsonOptions),
-          e => JsonSerializer.Deserialize<List<GamePlayerResult>>(e, s_jsonOptions)!)
+          e => JsonSerializer.Serialize(e, s_databaseJsonOptions),
+          e => JsonSerializer.Deserialize<List<GamePlayerResult>>(e, s_databaseJsonOptions)!)
       .Metadata
         .SetValueComparer(GamePlayerResultComparerExtensions.GamePlayerResultListComparer);
   }
