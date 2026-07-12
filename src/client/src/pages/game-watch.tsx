@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react"
-import { useParams, useNavigate } from "react-router-dom"
+import { useParams, useNavigate, useSearchParams } from "react-router-dom"
 import { getApiUrl } from "@/utils/api-config"
 import { useClientState } from "@/hooks/use-client-state"
 import { useNDJSONStream } from "@/hooks/use-ndjson-stream"
@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, ArrowDown, Filter, Copy, Check } from "lucide-react"
 import type { GameLogDTO, GameLogType, GameStateData } from "@/types/api"
 import { TYPE_CONFIG, ALL_TYPES, TYPE_ORDER, renderData, formatDataAsText } from "@/utils/game-log-rendering"
-import { useMatchDetails } from "./match-details"
+import { useMatchDetails } from "@/hooks/use-match-details"
 
 // -- Types --
 
@@ -227,7 +227,11 @@ function LogRow({ entry, expanded, onToggle }: { entry: LogEntry; expanded: bool
 export default function GameWatch() {
   const { matchId } = useParams<{ matchId: string }>()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const parsedMatchId = matchId ? parseInt(matchId, 10) : null
+  const gameIdParam = searchParams.get("gameId")
+  const parsedGameId = gameIdParam == null ? null : Number.parseInt(gameIdParam, 10)
+  const selectedGameId = parsedGameId != null && Number.isFinite(parsedGameId) ? parsedGameId : null
 
   const { isReady: clientReady } = useClientState()
 
@@ -250,6 +254,8 @@ export default function GameWatch() {
 
   // Handle incoming SSE messages
   const onMessage = useCallback((dto: GameLogDTO) => {
+    if (selectedGameId != null && (dto.gameId ?? 0) !== selectedGameId) return
+
     const ts = new Date(dto.timestamp ?? Date.now())
     const seq = seqRef.current++
     const deltaMs = lastTsRef.current ? ts.getTime() - lastTsRef.current.getTime() : null
@@ -273,7 +279,7 @@ export default function GameWatch() {
       return next.length > 2000 ? next.slice(-1500) : next
     })
     setEventCount(c => c + 1)
-  }, [])
+  }, [selectedGameId])
 
   // Connect to SSE stream
   const streamUrl = parsedMatchId
@@ -297,14 +303,17 @@ export default function GameWatch() {
     if (eventCount > 0) setConnected(true)
   }, [eventCount])
 
-  // Reset all state when matchId changes
+  // Reset all state when match or selected game changes
   useEffect(() => {
     historyMergedRef.current = false
     setEntries([])
     seqRef.current = 0
     lastTsRef.current = null
     setEventCount(0)
-  }, [parsedMatchId])
+    setConnected(false)
+    setAutoScroll(true)
+    setExpandedRows(new Set())
+  }, [parsedMatchId, selectedGameId])
 
   // Merge historical logs when they arrive — prepend before any live entries
   useEffect(() => {
@@ -315,6 +324,7 @@ export default function GameWatch() {
       // Flatten all game logs — backend already sorted within each game by
       // nonce/type/timestamp, and games are sequential, so just concatenate.
       const allLogs: GameLogDTO[] = (matchData.games ?? [])
+        .filter(g => selectedGameId == null || (g.id ?? g.gameNumber ?? 0) === selectedGameId)
         .flatMap(g => g.logs ?? [])
 
       let seq = 0
@@ -353,7 +363,7 @@ export default function GameWatch() {
       const combined = [...historical, ...resequenced]
       return combined.length > 2000 ? combined.slice(-1500) : combined
     })
-  }, [matchData])
+  }, [matchData, selectedGameId])
 
   // Auto-scroll
   useEffect(() => {
@@ -400,23 +410,39 @@ export default function GameWatch() {
     })
   }, [])
 
+  const selectedGame = useMemo(() => {
+    if (selectedGameId == null) return null
+    return (matchData?.games ?? []).find(g => (g.id ?? g.gameNumber ?? 0) === selectedGameId) ?? null
+  }, [matchData, selectedGameId])
+
+  const logTitle = selectedGameId == null
+    ? "Game Log"
+    : `Game ${selectedGame?.gameNumber ?? selectedGameId} Log`
+
   return (
-    <div className="flex flex-col h-[calc(100vh-60px)]">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-sidebar-border/60 bg-card/50 shrink-0">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="shrink-0 h-8 w-8">
-            <ArrowLeft className="h-4 w-4" />
+    <div className="relative mx-auto flex h-[calc(100vh-2.5rem)] min-h-0 w-full max-w-7xl flex-col gap-4 overflow-hidden px-4 pb-4 pt-1">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-3">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate(-1)}
+            className="mt-0.5 h-8 w-8 shrink-0"
+            aria-label="Back"
+          >
+            <ArrowLeft className="h-5 w-5" />
           </Button>
-          <div>
-            <h1 className="text-sm font-semibold tracking-tight">
-              Game Watch
-              <span className="text-muted-foreground font-normal ml-2">Match #{parsedMatchId}</span>
+          <div className="min-w-0 pt-0.5">
+            <h1 className="min-w-0 truncate text-xl font-semibold leading-7 tracking-tight">
+              {logTitle}
+              <span className="text-muted-foreground font-normal ml-2">
+                - Match #{parsedMatchId}
+              </span>
             </h1>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <Badge variant={connected ? "success" : "outline"} className="text-[10px] font-mono">
+        <div className="flex h-8 items-center gap-3">
+          <Badge variant={connected ? "success" : "secondary"} className="rounded-md text-[10px] font-mono">
             {connected ? "LIVE" : "WAITING"}
           </Badge>
           <span className="text-[11px] text-muted-foreground font-mono">
@@ -425,59 +451,61 @@ export default function GameWatch() {
         </div>
       </div>
 
-      {/* Filter bar */}
-      <div className="px-4 py-2 border-b border-sidebar-border/60 bg-muted/30 shrink-0 flex items-center gap-3">
-        <TypeFilterBar enabled={enabledTypes} onToggle={toggleType} />
-        <CopyLogButton entries={filtered} />
-      </div>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-sidebar-border/60 bg-card">
+        {/* Filter bar */}
+        <div className="flex shrink-0 items-center gap-3 border-b border-sidebar-border/60 bg-muted/30 px-3 py-2">
+          <TypeFilterBar enabled={enabledTypes} onToggle={toggleType} />
+          <CopyLogButton entries={filtered} />
+        </div>
 
-      {/* Log table */}
-      <div
-        ref={scrollRef}
-        onScroll={handleScroll}
-        className="flex-1 overflow-y-auto overflow-x-hidden bg-background"
-      >
-        {filtered.length === 0 ? (
-          <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-            {entries.length === 0
-              ? (historyLoading ? "Loading historical events..." : "Waiting for game events...")
-              : "No events match the current filters."}
-          </div>
-        ) : (
-          <table className="w-full font-mono">
-            <thead className="sticky top-0 z-10">
-              <tr className="bg-muted/50 border-b border-sidebar-border/60 text-[10px] text-muted-foreground font-semibold tracking-wider uppercase">
-                <th className="w-[110px] px-3 py-1.5 text-left">Time</th>
-                <th className="w-[70px] px-2 py-1.5 text-right">Delta</th>
-                <th className="w-[70px] px-2 py-1.5 text-left">Type</th>
-                <th className="px-3 py-1.5 text-left">Data</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((entry, idx) => {
-                const prevNonce = idx > 0 ? filtered[idx - 1].nonce : entry.nonce
-                const nonceChanged = idx > 0 && entry.nonce !== 0 && entry.nonce !== prevNonce
+        {/* Log table */}
+        <div
+          ref={scrollRef}
+          onScroll={handleScroll}
+          className="flex-1 overflow-y-auto overflow-x-hidden bg-background"
+        >
+          {filtered.length === 0 ? (
+            <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+              {entries.length === 0
+                ? (historyLoading ? "Loading historical events..." : "Waiting for game events...")
+                : "No events match the current filters."}
+            </div>
+          ) : (
+            <table className="w-full font-mono">
+              <thead className="sticky top-0 z-10">
+                <tr className="bg-muted/50 border-b border-sidebar-border/60 text-[10px] text-muted-foreground font-semibold tracking-wider uppercase">
+                  <th className="w-[110px] px-3 py-1.5 text-left">Time</th>
+                  <th className="w-[70px] px-2 py-1.5 text-right">Delta</th>
+                  <th className="w-[70px] px-2 py-1.5 text-left">Type</th>
+                  <th className="px-3 py-1.5 text-left">Data</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((entry, idx) => {
+                  const prevNonce = idx > 0 ? filtered[idx - 1].nonce : entry.nonce
+                  const nonceChanged = idx > 0 && entry.nonce !== 0 && entry.nonce !== prevNonce
 
-                // GameState entries render as section headers (already visually separated)
-                if (entry.gameLogType === "GameState") {
-                  return <GameStateHeader key={entry.seq} entry={entry} />
-                }
+                  // GameState entries render as section headers
+                  if (entry.gameLogType === "GameState") {
+                    return <GameStateHeader key={entry.seq} entry={entry} />
+                  }
 
-                // Emit a separator bar when the nonce changes and there's no GameState header
-                return (
-                  <React.Fragment key={entry.seq}>
-                    {nonceChanged && <NonceSeparator />}
-                    <LogRow
-                      entry={entry}
-                      expanded={expandedRows.has(entry.seq)}
-                      onToggle={() => toggleExpand(entry.seq)}
-                    />
-                  </React.Fragment>
-                )
-              })}
-            </tbody>
-          </table>
-        )}
+                  // Emit a separator bar when the nonce changes and there's no GameState header
+                  return (
+                    <React.Fragment key={entry.seq}>
+                      {nonceChanged && <NonceSeparator />}
+                      <LogRow
+                        entry={entry}
+                        expanded={expandedRows.has(entry.seq)}
+                        onToggle={() => toggleExpand(entry.seq)}
+                      />
+                    </React.Fragment>
+                  )
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
       </div>
 
       {/* Auto-scroll indicator */}

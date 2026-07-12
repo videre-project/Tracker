@@ -126,7 +126,7 @@ export const routes: RouteEntry[] = [
       },
       {
         path: "/history/:matchId/watch",
-        name: "Game Watch",
+        name: "Game Log",
         type: NavType.Secondary,
         element: <GameWatch />
       },

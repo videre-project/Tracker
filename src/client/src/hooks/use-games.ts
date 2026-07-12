@@ -166,7 +166,13 @@ export interface PaginatedMatches {
   totalPages: number
 }
 
-export function useGamesHistory(page: number, pageSize: number, timeRange: string | DateRange | undefined, format?: string) {
+export function useGamesHistory(
+  page: number,
+  pageSize: number,
+  timeRange: string | DateRange | undefined,
+  format?: string,
+  deckHash?: string
+) {
   const [data, setData] = useState<PaginatedMatches | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<any>(null)
@@ -187,6 +193,7 @@ export function useGamesHistory(page: number, pageSize: number, timeRange: strin
     params.append("page", page.toString())
     params.append("pageSize", pageSize.toString())
     if (format) params.append("format", format)
+    if (deckHash) params.append("deckHash", deckHash)
 
     const now = new Date()
     now.setHours(23, 59, 59, 999)
@@ -229,7 +236,7 @@ export function useGamesHistory(page: number, pageSize: number, timeRange: strin
         setError(err)
         setLoading(false)
       })
-  }, [page, pageSize, timeRange, format, clientReady, clientLoading])
+  }, [page, pageSize, timeRange, format, deckHash, clientReady, clientLoading])
 
   return { data, loading, error }
 }

@@ -1,0 +1,181 @@
+/** @file
+  Copyright (c) 2026, Cory Bennett. All rights reserved.
+  SPDX-License-Identifier: Apache-2.0
+**/
+
+import type { GameLogDTO, ZoneTransferData } from "@/types/api"
+import type { GameAction } from "@/types/game-types"
+type ReplayCardCatalog = {
+  cards: Array<{ cardId: number; catalogId?: number | null }>
+}
+const TYPE_ORDER: Record<string, number> = {
+  GameState: 0,
+  GameAction: 1,
+  ZoneChange: 2,
+  Reveal: 2,
+  CardChange: 3,
+  PlayerChange: 4,
+  LogMessage: 5,
+  DamageAssignment: 6,
+}
+export type OpeningHandCard = {
+  key: string
+  name: string
+  catalogId?: number | null
+}
+
+export type SideboardingCard = {
+  key: string
+  name: string
+  quantity: number
+  catalogId?: number | null
+}
+
+export type SideboardingDiff = {
+  in: SideboardingCard[]
+  out: SideboardingCard[]
+  emptyMessage: string
+}
+
+function getLogTime(log: GameLogDTO) {
+  const time = log.timestamp ? new Date(log.timestamp).getTime() : 0
+  return Number.isFinite(time) ? time : 0
+}
+
+function sortGameLogs(logs: GameLogDTO[]) {
+  return logs
+    .map((log, index) => ({ log, index }))
+    .sort((a, b) => {
+      const timeDiff = getLogTime(a.log) - getLogTime(b.log)
+      if (timeDiff !== 0) return timeDiff
+
+      const aType = TYPE_ORDER[a.log.gameLogType] ?? 6
+      const bType = TYPE_ORDER[b.log.gameLogType] ?? 6
+      if (aType !== bType) return aType - bType
+
+      return a.index - b.index
+    })
+}
+
+function isOpeningKeepAction(log: GameLogDTO) {
+  if (log.gameLogType !== "GameAction") return false
+
+  try {
+    const action = JSON.parse(log.data ?? "{}") as GameAction
+    const name = action.name?.trim().toLowerCase()
+    const response = typeof action.response === "string"
+      ? action.response.trim().toLowerCase()
+      : null
+    return name === "keep" || response === "keep"
+  } catch {
+    return false
+  }
+}
+
+function transferKeys(transfer: ZoneTransferData) {
+  return [
+    transfer.cardId != null ? `card:${transfer.cardId}` : null,
+    transfer.sourceId != null ? `card:${transfer.sourceId}` : null,
+  ].filter(Boolean) as string[]
+}
+
+function applyHandTransfer(
+  hand: Map<string, OpeningHandCard>,
+  transfer: ZoneTransferData,
+  catalogIdByCardId: Map<number, number | null>
+) {
+  const cardName = transfer.cardName?.trim()
+  if (!cardName) return
+
+  const fromHand = transfer.fromZone === "Hand"
+  const toHand = transfer.toZone === "Hand"
+
+  if (fromHand && !toHand) {
+    for (const key of transferKeys(transfer)) {
+      hand.delete(key)
+    }
+    return
+  }
+
+  if (!toHand) return
+
+  for (const key of transferKeys(transfer)) {
+    hand.delete(key)
+  }
+
+  const key = transfer.cardId != null
+    ? `card:${transfer.cardId}`
+    : transfer.sourceId != null
+      ? `card:${transfer.sourceId}`
+      : `name:${cardName}:${hand.size}`
+
+  hand.set(key, {
+    key,
+    name: cardName,
+    catalogId: transfer.cardId != null
+      ? catalogIdByCardId.get(transfer.cardId) ?? null
+      : transfer.sourceId != null
+        ? catalogIdByCardId.get(transfer.sourceId) ?? null
+        : null,
+  })
+}
+
+function applyHandLog(
+  hand: Map<string, OpeningHandCard>,
+  log: GameLogDTO,
+  catalogIdByCardId: Map<number, number | null>
+) {
+  if (log.gameLogType !== "ZoneChange" && log.gameLogType !== "Reveal") return
+
+  try {
+    const transfers = JSON.parse(log.data ?? "[]") as ZoneTransferData[]
+    for (const transfer of transfers) {
+      applyHandTransfer(hand, transfer, catalogIdByCardId)
+    }
+  } catch {
+    // Ignore malformed historical log payloads.
+  }
+}
+
+export function getOpeningHandCards(logs: GameLogDTO[], catalogIdByCardId: Map<number, number | null>) {
+  const sorted = sortGameLogs(logs)
+  const keepEntry = sorted.find(entry => isOpeningKeepAction(entry.log))
+  if (!keepEntry) return []
+
+  const hand = new Map<string, OpeningHandCard>()
+  for (const entry of sorted) {
+    if (entry.index === keepEntry.index) break
+    applyHandLog(hand, entry.log, catalogIdByCardId)
+  }
+
+  if (hand.size === 0) {
+    const keepTime = getLogTime(keepEntry.log)
+    for (const entry of sorted) {
+      if (getLogTime(entry.log) > keepTime) break
+      applyHandLog(hand, entry.log, catalogIdByCardId)
+    }
+  }
+
+  return Array.from(hand.values())
+}
+
+export function getCatalogIdByCardId(replay?: ReplayCardCatalog | null) {
+  const catalogIdByCardId = new Map<number, number | null>()
+  if (!replay) return catalogIdByCardId
+
+  for (const card of replay.cards) {
+    if (!catalogIdByCardId.has(card.cardId)) {
+      catalogIdByCardId.set(card.cardId, card.catalogId ?? null)
+    }
+  }
+
+  return catalogIdByCardId
+}
+
+export function getSideboardingDiff(): SideboardingDiff {
+  return {
+    in: [],
+    out: [],
+    emptyMessage: "No sideboard changes.",
+  }
+}

@@ -4,7 +4,7 @@ import { useGames } from "@/hooks/use-games"
 import { useClientState } from "@/hooks/use-client-state"
 import { useNDJSONStream } from "@/hooks/use-ndjson-stream"
 import { getApiUrl } from "@/utils/api-config"
-import { Link } from "react-router-dom"
+import { useNavigate } from "react-router-dom"
 import { ColumnDef } from "@tanstack/react-table"
 import { DataTable } from "@/components/ui/data-table"
 import { EventsTableSkeleton } from "@/components/events-table-skeleton"
@@ -14,6 +14,7 @@ import { ChevronDown } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { DatePickerWithRange } from "@/components/ui/date-range-picker"
 import { DateRange } from "react-day-picker"
+import { cn } from "@/lib/utils"
 
 export interface MatchHistoryDTO {
   id: number
@@ -25,6 +26,11 @@ export interface MatchHistoryDTO {
   record: string
   duration: string
   deckName?: string
+  deckColors?: string[] | null
+  opponentName?: string | null
+  opponentDeckName?: string | null
+  opponentDeckArchetype?: string | null
+  opponentDeckColors?: string[] | null
   isActive?: boolean
   isEvent?: boolean
   matches?: MatchHistoryDTO[]
@@ -42,6 +48,65 @@ function formatDate(dateString?: string) {
   })
 }
 
+function DeckManaSymbols({ colors }: { colors?: string[] | null }) {
+  if (!colors) return null
+
+  const visibleColors = colors.length > 0 ? colors : ["C"]
+
+  return (
+    <span className="inline-flex h-4 items-center gap-0.5 translate-y-px leading-none">
+      {visibleColors.map((color, index) => (
+        <img
+          key={`${color}-${index}`}
+          src={`/mana-symbols/${color}.svg`}
+          alt={color}
+          className="block h-3.5 w-3.5 rounded-full bg-background shadow-sm ring-1 ring-background"
+        />
+      ))}
+    </span>
+  )
+}
+
+function MatchResultPill({ result, isActive }: { result: string; isActive?: boolean }) {
+  const inProgress = isActive || result === "In Progress"
+  const variant = inProgress ? "secondary" : result === "Win" ? "default" : result === "Loss" ? "destructive" : "secondary"
+
+  return (
+    <Badge
+      variant={variant}
+      className={cn(
+        "rounded-md capitalize",
+        inProgress && "border-yellow-500/30 bg-yellow-500/15 text-yellow-700 dark:text-yellow-400"
+      )}
+    >
+      {inProgress ? "In Progress" : result}
+    </Badge>
+  )
+}
+
+function OpponentSummary({ match }: { match: MatchHistoryDTO }) {
+  if (match.isEvent) {
+    return <span className="text-muted-foreground">-</span>
+  }
+
+  const opponentName = match.opponentName?.trim()
+  const opponentDeckLabel = match.opponentDeckArchetype?.trim()
+    || match.opponentDeckName?.trim()
+    || "Deck unknown"
+
+  return (
+    <div className="min-w-0">
+      <div className="truncate text-sm font-medium">
+        {opponentName ? `vs ${opponentName}` : "Opponent unknown"}
+      </div>
+      <div className="mt-0.5 inline-flex max-w-full items-center gap-1.5 text-xs text-muted-foreground">
+        <span className="truncate">{opponentDeckLabel}</span>
+        <DeckManaSymbols colors={match.opponentDeckColors} />
+      </div>
+    </div>
+  )
+}
+
 const columns: ColumnDef<MatchHistoryDTO>[] = [
   {
     accessorKey: "eventName",
@@ -57,8 +122,23 @@ const columns: ColumnDef<MatchHistoryDTO>[] = [
     header: "Deck",
     cell: ({ row }) => {
       const deckName = row.original.deckName
-      return <span className={deckName ? "" : "text-muted-foreground italic"}>{deckName || "Unknown"}</span>
+      if (!deckName) {
+        return <span className="text-muted-foreground italic">Unknown</span>
+      }
+
+      return (
+        <span className="inline-flex min-w-0 items-center gap-1.5">
+          <span className="truncate">{deckName}</span>
+          <DeckManaSymbols colors={row.original.deckColors} />
+        </span>
+      )
     }
+  },
+  {
+    id: "opponent",
+    header: "Opponent",
+    size: 190,
+    cell: ({ row }) => <OpponentSummary match={row.original} />,
   },
   {
     accessorKey: "startTime",
@@ -71,22 +151,7 @@ const columns: ColumnDef<MatchHistoryDTO>[] = [
     header: "Result",
     size: 80,
     cell: ({ row }) => {
-      const { result, isActive } = row.original
-      if (isActive || result === "In Progress") {
-        return (
-          <Badge variant="secondary" className="capitalize bg-yellow-500/15 text-yellow-700 dark:text-yellow-400 border-yellow-500/30">
-            In Progress
-          </Badge>
-        )
-      }
-      let variant: "default" | "secondary" | "destructive" | "outline" = "outline"
-      if (result === "Win") variant = "default"
-      if (result === "Loss") variant = "destructive"
-      return (
-        <Badge variant={variant} className="capitalize">
-          {result}
-        </Badge>
-      )
+      return <MatchResultPill result={row.original.result} isActive={row.original.isActive} />
     }
   },
   {
@@ -99,22 +164,15 @@ const columns: ColumnDef<MatchHistoryDTO>[] = [
     header: "Duration",
     size: 70,
   },
-  {
-    id: "actions",
-    size: 60,
-    cell: ({ row }) => {
-      const { id, isActive, isEvent } = row.original
-      if (isEvent) return null
-      return (
-        <Button variant="ghost" size="sm" asChild>
-          <Link to={`/history/${id}`}>{isActive ? "Watch" : "View"}</Link>
-        </Button>
-      )
-    }
-  }
 ]
 
+function getHistoryRowHref(match: MatchHistoryDTO): string | null {
+  if (match.isEvent) return `/events/${match.eventId}`
+  return `/history/${match.id}`
+}
+
 export default function History() {
+  const navigate = useNavigate()
   const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
     const to = new Date()
     const from = new Date()
@@ -217,11 +275,15 @@ export default function History() {
     setLiveItems([])
   }
 
+  const handleRowClick = useCallback((match: MatchHistoryDTO) => {
+    const href = getHistoryRowHref(match)
+    if (href) navigate(href)
+  }, [navigate])
+
   return (
-    <div className="container mx-auto py-4 px-4 space-y-4">
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <h1 className="text-2xl font-bold tracking-tight">Match History</h1>
-        <div className="flex items-center gap-2">
+    <div className="container mx-auto space-y-4 px-4 pb-4 pt-1">
+      <div className="flex flex-wrap items-center justify-start gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="h-8 gap-2 border-dashed border-sidebar-border/60">
@@ -230,7 +292,7 @@ export default function History() {
                 <ChevronDown className="h-4 w-4 text-muted-foreground" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="start">
               <DropdownMenuItem onClick={() => handleFormatSelect("")}>
                 All
               </DropdownMenuItem>
@@ -284,6 +346,7 @@ export default function History() {
             columns={columns}
             data={mergedItems}
             getSubRows={(row) => row.matches}
+            onRowClick={handleRowClick}
           />
 
           {data && data.totalPages > 1 && (
