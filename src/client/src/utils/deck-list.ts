@@ -3,11 +3,6 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-/** @file
-  Copyright (c) 2026, Cory Bennett. All rights reserved.
-  SPDX-License-Identifier: Apache-2.0
-**/
-
 type DeckListCard = { name: string; quantity: number }
 type DeckListDetail = { mainboard: DeckListCard[]; sideboard: DeckListCard[] }
 
