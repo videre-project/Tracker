@@ -96,6 +96,10 @@ export default defineConfig({
       '/docs': {
         target,
         secure: false
+      },
+      '/openapi': {
+        target,
+        secure: false
       }
     }
   }

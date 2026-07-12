@@ -5,6 +5,7 @@ import {
   type LucideProps,
   Bug,
   CalendarClock,
+  FileJson,
   Settings,
   LibraryBig,
   BookCopy,
@@ -18,6 +19,7 @@ import Events from "@/pages/events";
 import EventDetails from "@/pages/event-details";
 import Home from "@/pages/home";
 import SettingsPage from "@/pages/settings";
+import ApiDocs from "@/pages/api-docs";
 import Diagnostics from "@/pages/diagnostics";
 import Decks from "@/pages/decks";
 import DeckEditor from "@/pages/deck-editor";
@@ -136,7 +138,14 @@ export const routes: RouteEntry[] = [
         type: NavType.Secondary,
         element: <GameReplay />
       },
-{
+      {
+        path: "/settings/api-docs",
+        name: "API Docs",
+        icon: FileJson,
+        type: NavType.Secondary,
+        element: <ApiDocs />
+      },
+      {
         path: "/settings/diagnostics",
         name: "Diagnostics",
         icon: Bug,

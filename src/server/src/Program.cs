@@ -141,7 +141,7 @@ public class Program
     }
 
     // Configure the HostForm and the WebView2 control.
-    HostForm hostForm = null!;
+    HostForm? hostForm = null;
     if (!options.DisableUI)
     {
       hostForm = new HostForm(options) { Source = options.UiUrl };
@@ -172,10 +172,12 @@ public class Program
       }
 
       // Redirect logging to the WebView2 console if the UI is enabled.
-      if (!options.DisableUI)
+      if (!options.DisableUI && hostForm is not null)
       {
         builder.UseConsole(hostForm);
       }
+
+      builder.Services.AddSingleton(new WebViewHostAccessor(hostForm));
 
       // Configure API services and database context.
       builder.UseDatabase<EventContext>(options);

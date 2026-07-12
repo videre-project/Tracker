@@ -85,7 +85,9 @@
   </Target>
 
   <!-- Generate Typescript types from the Web API's OpenAPI spec on build -->
-  <Target Name="GenerateOpenApiSpec" AfterTargets="Build">
+  <Target Name="GenerateOpenApiSpec"
+          AfterTargets="Build"
+          Condition="'$(SkipOpenApiGeneration)' != 'true'">
     <Exec Command="dotnet tool restore"
           WorkingDirectory="$(ProjectDir)" />
     <Exec Command="dotnet swagger tofile --output &quot;$(OutputPath)openapi.json&quot; &quot;$(OutputPath)$(AssemblyName).dll&quot; v1"

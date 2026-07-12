@@ -11,6 +11,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -285,6 +286,57 @@ public partial class HostForm : Form
     }
 
     return await runCommand();
+  }
+
+  /// <summary>
+  /// Captures the currently rendered WebView2 page as a PNG.
+  /// </summary>
+  public async Task<byte[]> CapturePageScreenshotAsync(
+    bool fullPage = false,
+    CancellationToken cancellationToken = default)
+  {
+    async Task<string> runCommand()
+    {
+      if (WebView.InvokeRequired)
+      {
+        return await WebView.Invoke(new Func<Task<string>>(runCommand));
+      }
+
+      if (IsDisposed || WebView.IsDisposed || WebView.CoreWebView2 is null)
+      {
+        throw new InvalidOperationException("The tracker WebView is not ready.");
+      }
+
+      if (!AllowShowDisplay)
+      {
+        throw new InvalidOperationException("The tracker UI has not finished loading.");
+      }
+
+      await WebView.CoreWebView2.CallDevToolsProtocolMethodAsync(
+        "Page.enable",
+        "{}");
+
+      var captureArgs = JsonSerializer.Serialize(new
+      {
+        format = "png",
+        fromSurface = true,
+        captureBeyondViewport = fullPage,
+      });
+
+      return await WebView.CoreWebView2.CallDevToolsProtocolMethodAsync(
+        "Page.captureScreenshot",
+        captureArgs);
+    }
+
+    string result = await runCommand().WaitAsync(cancellationToken);
+    using var json = JsonDocument.Parse(result);
+    if (!json.RootElement.TryGetProperty("data", out var dataElement) ||
+        dataElement.GetString() is not { Length: > 0 } base64)
+    {
+      throw new InvalidOperationException("WebView2 did not return screenshot data.");
+    }
+
+    return Convert.FromBase64String(base64);
   }
 
   /// <summary>

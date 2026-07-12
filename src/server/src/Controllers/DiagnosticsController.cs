@@ -6,7 +6,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Threading;
 using System.Threading.Tasks;
 
 using Microsoft.AspNetCore.Http;
@@ -17,6 +16,7 @@ using MTGOSDK.Core.Remoting;
 
 using Tracker.Controllers.Base;
 using Tracker.Services;
+using Tracker.WebView;
 
 
 namespace Tracker.Controllers;
@@ -26,8 +26,53 @@ namespace Tracker.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/[controller]/[action]")]
-public class DiagnosticsController : APIController
+public class DiagnosticsController(
+  WebViewHostAccessor webViewHost) : APIController
 {
+  /// <summary>
+  /// Capture the currently rendered tracker UI as a PNG.
+  /// </summary>
+  [HttpGet] // GET /api/diagnostics/screenshot?waitMs=250&fullPage=false
+  [Produces("image/png")]
+  [ProducesResponseType(StatusCodes.Status200OK)]
+  [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+  public async Task<IActionResult> Screenshot(
+    [FromQuery] int waitMs = 250,
+    [FromQuery] bool fullPage = false)
+  {
+    var hostForm = webViewHost.HostForm;
+    if (hostForm is null)
+    {
+      return StatusCode(503, "Tracker UI is disabled; no WebView is available to capture.");
+    }
+
+    int boundedWaitMs = Math.Clamp(waitMs, 0, 5000);
+    if (boundedWaitMs > 0)
+    {
+      await Task.Delay(boundedWaitMs, HttpContext.RequestAborted);
+    }
+
+    try
+    {
+      byte[] image = await hostForm.CapturePageScreenshotAsync(
+        fullPage,
+        HttpContext.RequestAborted);
+
+      Response.Headers.Append("Cache-Control", "no-store");
+      return File(image, "image/png");
+    }
+    catch (ObjectDisposedException ex)
+    {
+      Log.Warning(ex, "[DiagnosticsController] Screenshot failed");
+      return StatusCode(503, "The tracker WebView is no longer available.");
+    }
+    catch (InvalidOperationException ex)
+    {
+      Log.Warning(ex, "[DiagnosticsController] Screenshot failed");
+      return StatusCode(503, ex.Message);
+    }
+  }
+
   /// <summary>
   /// Stream real-time SDK and Diver diagnostics as NDJSON (polled every 500ms).
   /// </summary>
@@ -35,8 +80,7 @@ public class DiagnosticsController : APIController
   [Produces("application/x-ndjson")]
   public async Task<IActionResult> WatchMetrics()
   {
-    DisableBuffering();
-    SetNdjsonContentType();
+    StartNDJSONResponse();
     Response.Headers.Append("Cache-Control", "no-cache");
 
     try
@@ -98,7 +142,6 @@ public class DiagnosticsController : APIController
     });
   }
 
-
   /// <summary>
   /// Stream unified SDK/Tracker + Diver logs as NDJSON.
   /// </summary>
@@ -106,8 +149,7 @@ public class DiagnosticsController : APIController
   [Produces("application/x-ndjson")]
   public async Task<IActionResult> WatchLogs()
   {
-    DisableBuffering();
-    SetNdjsonContentType();
+    StartNDJSONResponse();
     Response.Headers.Append("Cache-Control", "no-cache");
 
     // Ensure Diver log tailing is running (idempotent)
@@ -205,8 +247,7 @@ public class DiagnosticsController : APIController
       return NotFound($"Diver log not found: {logPath}");
     }
 
-    DisableBuffering();
-    SetNdjsonContentType();
+    StartNDJSONResponse();
     Response.Headers.Append("Cache-Control", "no-cache");
 
     try
