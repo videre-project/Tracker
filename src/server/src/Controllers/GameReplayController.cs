@@ -13,7 +13,7 @@ using Microsoft.EntityFrameworkCore;
 using Tracker.Controllers.Base;
 using Tracker.Database;
 using Tracker.Database.Models;
-using Tracker.Models.API.Replays;
+using Tracker.Controllers.Models.Replays;
 using Tracker.Services.MTGO;
 using Tracker.Services.MTGO.Events;
 

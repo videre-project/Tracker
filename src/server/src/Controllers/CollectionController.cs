@@ -17,7 +17,7 @@ using MTGOSDK.API.Collection;
 using MTGOSDK.Core.Logging;
 
 using Tracker.Controllers.Base;
-using Tracker.Models.API.Collection;
+using Tracker.Controllers.Models.Collection;
 using Tracker.Services.MTGO;
 using Tracker.Services.Videre;
 
@@ -31,7 +31,7 @@ namespace Tracker.Controllers;
 [Route("api/[controller]")]
 public class CollectionController(
   IClientAPIProvider clientProvider,
-  IVidereAPIClient videreAPIClient) : APIController
+  VidereAPIClient videreAPIClient) : APIController
 {
   private static readonly object s_collectionSnapshotCacheSync = new();
   private static readonly SemaphoreSlim s_collectionSnapshotCacheLock = new(1, 1);
@@ -295,7 +295,7 @@ public class CollectionController(
       TotalQuantity = cards.Sum(card => (long)card.Quantity) +
         products.Sum(product => (long)product.Quantity),
       Timestamp = collection.Timestamp,
-      PriceCacheExpiresAt = PriceAPISchedule.GetCacheExpiration(DateTimeOffset.UtcNow),
+      PriceCacheExpiresAt = VidereAPIClient.GetPriceCacheExpiration(DateTimeOffset.UtcNow),
       ElapsedMilliseconds = elapsedMilliseconds,
       Cards = cards.ToArray(),
       Products = products.ToArray()
@@ -439,7 +439,7 @@ public class CollectionController(
     }
 
     var now = DateTimeOffset.UtcNow;
-    var expiresAtUtc = PriceAPISchedule.GetCacheExpiration(now);
+    var expiresAtUtc = VidereAPIClient.GetPriceCacheExpiration(now);
     List<int> idsToFetch;
     Dictionary<int, ViderePriceResult> cachedPrices;
 
@@ -491,7 +491,7 @@ public class CollectionController(
         {
           s_collectionPriceCache.Clear();
           s_collectionPriceMissingCache.Clear();
-          s_collectionPriceCacheExpiresAtUtc = PriceAPISchedule.GetCacheExpiration(DateTimeOffset.UtcNow);
+          s_collectionPriceCacheExpiresAtUtc = VidereAPIClient.GetPriceCacheExpiration(DateTimeOffset.UtcNow);
         }
 
         foreach (var price in fetchedPrices)

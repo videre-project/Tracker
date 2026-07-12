@@ -29,7 +29,7 @@ using MTGOSDK.Core.Reflection.Serialization;
 using Tracker.Controllers.Base;
 using Tracker.Database;
 using Tracker.Database.Models;
-using Tracker.Models.API.Decks;
+using Tracker.Controllers.Models.Decks;
 using Tracker.Services.MTGO;
 using Tracker.Services.Videre;
 

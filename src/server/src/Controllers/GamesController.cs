@@ -16,9 +16,9 @@ using MTGOSDK.API.Play.Games;
 
 using Tracker.Controllers.Base;
 using Tracker.Database;
-using Tracker.Models.API.Games;
+using Tracker.Controllers.Models.Games;
 using Tracker.Services.MTGO;
-using static Tracker.Services.Games.MatchHistorySerialization;
+using static Tracker.Services.MTGO.Events.MatchHistorySerialization;
 
 
 namespace Tracker.Controllers;

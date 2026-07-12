@@ -16,6 +16,7 @@ using MTGOSDK.Core.Remoting;
 
 using Tracker.Controllers.Base;
 using Tracker.Services;
+using Tracker.Services.Base;
 using Tracker.WebView;
 
 
@@ -196,7 +197,7 @@ public class DiagnosticsController(
 
   private static object BuildTrackerEndpoints()
   {
-    var snapshot = RequestMetrics.GetSnapshot();
+    var snapshot = RequestMetricsService.GetSnapshot();
     var endpoints = new Dictionary<string, object>();
     foreach (var kvp in snapshot)
     {

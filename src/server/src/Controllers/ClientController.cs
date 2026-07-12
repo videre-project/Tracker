@@ -14,7 +14,7 @@ using Microsoft.AspNetCore.Mvc;
 using MTGOSDK.Core.Remoting;
 
 using Tracker.Controllers.Base;
-using Tracker.Models.API.Client;
+using Tracker.Controllers.Models.Client;
 using Tracker.Services.MTGO;
 
 

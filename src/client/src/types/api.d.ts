@@ -582,162 +582,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    [path: `/api/decks/${string}/archetype`]: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get archetype information for a deck from the NBAC API */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    /** @description Deck hash */
-                    hash: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "text/plain": unknown;
-                        "application/json": unknown;
-                        "text/json": unknown;
-                    };
-                };
-                /** @description Not Found */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "text/plain": ProblemDetails;
-                        "application/json": ProblemDetails;
-                        "text/json": ProblemDetails;
-                    };
-                };
-                /** @description Bad Gateway */
-                502: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    [path: `/api/decks/${string}/colors`]: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get the colors of a deck by analyzing all cards in the mainboard */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    /** @description Deck hash */
-                    hash: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "text/plain": DeckColorsDTO;
-                        "application/json": DeckColorsDTO;
-                        "text/json": DeckColorsDTO;
-                    };
-                };
-                /** @description Not Found */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "text/plain": ProblemDetails;
-                        "application/json": ProblemDetails;
-                        "text/json": ProblemDetails;
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/decks/archetypes/aggregated": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get aggregated archetype statistics across all decks with win/loss data */
-        get: {
-            parameters: {
-                query?: {
-                    /** @description Minimum event start date */
-                    minDate?: string;
-                    /** @description Maximum event start date */
-                    maxDate?: string;
-                    /** @description Format filter */
-                    format?: string;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "text/plain": AggregatedArchetypeDTO[];
-                        "application/json": AggregatedArchetypeDTO[];
-                        "text/json": AggregatedArchetypeDTO[];
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/Decks": {
         parameters: {
             query?: never;
@@ -975,6 +819,162 @@ export interface paths {
                         "text/plain": ProblemDetails;
                         "application/json": ProblemDetails;
                         "text/json": ProblemDetails;
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    [path: `/api/decks/${string}/archetype`]: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get archetype information for a deck from the NBAC API */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description Deck hash */
+                    hash: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": unknown;
+                        "application/json": unknown;
+                        "text/json": unknown;
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": ProblemDetails;
+                        "application/json": ProblemDetails;
+                        "text/json": ProblemDetails;
+                    };
+                };
+                /** @description Bad Gateway */
+                502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    [path: `/api/decks/${string}/colors`]: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get the colors of a deck by analyzing all cards in the mainboard */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description Deck hash */
+                    hash: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": DeckColorsDTO;
+                        "application/json": DeckColorsDTO;
+                        "text/json": DeckColorsDTO;
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": ProblemDetails;
+                        "application/json": ProblemDetails;
+                        "text/json": ProblemDetails;
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/decks/archetypes/aggregated": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get aggregated archetype statistics across all decks with win/loss data */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Minimum event start date */
+                    minDate?: string;
+                    /** @description Maximum event start date */
+                    maxDate?: string;
+                    /** @description Format filter */
+                    format?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": AggregatedArchetypeDTO[];
+                        "application/json": AggregatedArchetypeDTO[];
+                        "text/json": AggregatedArchetypeDTO[];
                     };
                 };
             };
@@ -1589,65 +1589,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    [path: `/api/events/watchstandings/${number}`]: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Stream tournament standings. Emits all current standings first,
-         *     then streams deltas using a (Rank, Points) fingerprint per standing
-         *     to detect and emit only changed records.
-         */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    /** @description Tournament ID */
-                    id: number;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/x-ndjson": IStandingResult[];
-                    };
-                };
-                /** @description Not Found */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/x-ndjson": ProblemDetails;
-                    };
-                };
-                /** @description Service Unavailable */
-                503: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     [path: `/api/events/watchtournamentupdates/${number}`]: {
         parameters: {
             query?: never;
@@ -1716,6 +1657,65 @@ export interface paths {
                     };
                     content: {
                         "application/x-ndjson": ITournamentPlayerUpdate[];
+                    };
+                };
+                /** @description Service Unavailable */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    [path: `/api/events/watchstandings/${number}`]: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stream tournament standings. Emits all current standings first,
+         *     then streams deltas using a (Rank, Points) fingerprint per standing
+         *     to detect and emit only changed records.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description Tournament ID */
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/x-ndjson": IStandingResult[];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/x-ndjson": ProblemDetails;
                     };
                 };
                 /** @description Service Unavailable */
@@ -2467,39 +2467,7 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        "Tracker.Models.API.Decks.AggregatedArchetypeDTO": {
-            archetype: string | null;
-            colors: string[] | null;
-            /** Format: int32 */
-            matches: number;
-            /** Format: int32 */
-            wins: number;
-            /** Format: int32 */
-            losses: number;
-            /** Format: double */
-            winrate: number;
-            topCard: string | null;
-            /** Format: double */
-            topCardAvgScore: number;
-            /** Format: double */
-            topCardAvgQuantity: number;
-        };
-        "Tracker.Models.API.Decks.CardSearchResultDTO": {
-            id: string | null;
-            /** Format: int32 */
-            mtgoId: number;
-            setCode: string | null;
-            name: string | null;
-            type: string | null;
-            text: string | null;
-            colors?: string[] | null;
-            imageUrl: string | null;
-            power?: string | null;
-            toughness?: string | null;
-            loyalty?: string | null;
-            defense?: string | null;
-        };
-        "Tracker.Controllers.ClientController.IClientState": {
+        "Tracker.Controllers.Models.Client.IClientState": {
             readonly isConnected?: boolean;
             readonly isInitialized?: boolean;
             /** Format: int32 */
@@ -2512,7 +2480,7 @@ export interface components {
             /** Format: int64 */
             readonly virtualMemory?: number | null;
         };
-        "Tracker.Models.API.Collection.CollectionCardDTO": {
+        "Tracker.Controllers.Models.Collection.CollectionCardDTO": {
             /** Format: int32 */
             catalogId: number;
             name: string | null;
@@ -2523,7 +2491,7 @@ export interface components {
             priceDate?: string | null;
             priceSource?: string | null;
         };
-        "Tracker.Models.API.Collection.CollectionCardDetailDTO": {
+        "Tracker.Controllers.Models.Collection.CollectionCardDetailDTO": {
             /** Format: int32 */
             catalogId: number;
             name: string | null;
@@ -2548,20 +2516,20 @@ export interface components {
             artist?: string | null;
             promoLabel?: string | null;
         };
-        "Tracker.Models.API.Collection.CollectionPriceHistoryDTO": {
+        "Tracker.Controllers.Models.Collection.CollectionPriceHistoryDTO": {
             /** Format: int32 */
             catalogId: number;
             /** Format: date-time */
             priceCacheExpiresAt: string;
             prices: CollectionPricePointDTO[] | null;
         };
-        "Tracker.Models.API.Collection.CollectionPricePointDTO": {
+        "Tracker.Controllers.Models.Collection.CollectionPricePointDTO": {
             date: string | null;
             /** Format: double */
             price: number;
             source?: string | null;
         };
-        "Tracker.Models.API.Collection.CollectionProductDTO": {
+        "Tracker.Controllers.Models.Collection.CollectionProductDTO": {
             /** Format: int32 */
             catalogId: number;
             name: string | null;
@@ -2578,14 +2546,14 @@ export interface components {
             priceDate?: string | null;
             priceSource?: string | null;
         };
-        "Tracker.Models.API.Collection.CollectionSearchRequestDTO": {
+        "Tracker.Controllers.Models.Collection.CollectionSearchRequestDTO": {
             query?: string | null;
         };
-        "Tracker.Models.API.Collection.CollectionSearchResultDTO": {
+        "Tracker.Controllers.Models.Collection.CollectionSearchResultDTO": {
             query: string | null;
             catalogIds: number[] | null;
         };
-        "Tracker.Models.API.Collection.CollectionSnapshotDTO": {
+        "Tracker.Controllers.Models.Collection.CollectionSnapshotDTO": {
             hash: string | null;
             /** Format: int32 */
             itemCount: number;
@@ -2602,35 +2570,44 @@ export interface components {
             cards: CollectionCardDTO[] | null;
             products: CollectionProductDTO[] | null;
         };
-        "Tracker.Models.API.Games.DashboardStatsDTO": {
+        "Tracker.Controllers.Models.Decks.AggregatedArchetypeDTO": {
+            archetype: string | null;
+            colors: string[] | null;
+            /** Format: int32 */
+            matches: number;
+            /** Format: int32 */
+            wins: number;
+            /** Format: int32 */
+            losses: number;
             /** Format: double */
-            overallWinrate?: number;
-            /** Format: int32 */
-            totalMatches?: number;
-            /** Format: int32 */
-            wins?: number;
-            /** Format: int32 */
-            losses?: number;
-            /** Format: int32 */
-            ties?: number;
+            winrate: number;
+            topCard: string | null;
             /** Format: double */
-            playWinrate?: number;
-            /** Format: int32 */
-            playMatches?: number;
+            topCardAvgScore: number;
             /** Format: double */
-            drawWinrate?: number;
-            /** Format: int32 */
-            drawMatches?: number;
-            averageDuration?: string | null;
-            durationTwoGames?: string | null;
-            durationThreeGames?: string | null;
+            topCardAvgQuantity: number;
         };
-        "Tracker.Models.API.Decks.DeckColorsDTO": {
+        "Tracker.Controllers.Models.Decks.CardSearchResultDTO": {
+            id: string | null;
+            /** Format: int32 */
+            mtgoId: number;
+            setCode: string | null;
+            name: string | null;
+            type: string | null;
+            text: string | null;
+            colors?: string[] | null;
+            imageUrl: string | null;
+            power?: string | null;
+            toughness?: string | null;
+            loyalty?: string | null;
+            defense?: string | null;
+        };
+        "Tracker.Controllers.Models.Decks.DeckColorsDTO": {
             hash: string | null;
             colors: string[] | null;
             colorString: string | null;
         };
-        "Tracker.Models.API.Decks.DeckDTO": {
+        "Tracker.Controllers.Models.Decks.DeckDTO": {
             hash: string | null;
             /** Format: int32 */
             id: number;
@@ -2646,7 +2623,7 @@ export interface components {
             colors?: string[] | null;
             featuredCards?: CardEntry[] | null;
         };
-        "Tracker.Models.API.Decks.DeckDetailDTO": {
+        "Tracker.Controllers.Models.Decks.DeckDetailDTO": {
             hash: string | null;
             /** Format: int32 */
             id: number;
@@ -2657,14 +2634,32 @@ export interface components {
             mainboard: CardEntry[] | null;
             sideboard: CardEntry[] | null;
         };
-        "Tracker.Models.API.Decks.DeckIdentifierDTO": {
+        "Tracker.Controllers.Models.Decks.DeckIdentifierDTO": {
             hash: string | null;
             /** Format: int32 */
             id: number;
             name: string | null;
             format: string | null;
         };
-        "Tracker.Controllers.EventsController.IEventStructure": {
+        /** @description Card entry with sortable metadata (CMC, Colors, Types) */
+        "Tracker.Controllers.Models.Decks.SortableCardEntry": {
+            /** Format: int32 */
+            index?: number;
+            /** Format: int32 */
+            originalIndex?: number;
+            /** Format: int32 */
+            catalogId: number;
+            name: string | null;
+            /** Format: int32 */
+            quantity?: number;
+            /** Format: int32 */
+            cmc?: number;
+            colors?: string[] | null;
+            types?: string[] | null;
+            rarity: string | null;
+            zone?: string | null;
+        };
+        "Tracker.Controllers.Models.Events.IEventStructure": {
             readonly name?: string | null;
             readonly isConstructed?: boolean;
             readonly isLimited?: boolean;
@@ -2674,7 +2669,7 @@ export interface components {
             readonly isSwiss?: boolean;
             readonly hasPlayoffs?: boolean;
         };
-        "Tracker.Controllers.EventsController.IStandingResult": {
+        "Tracker.Controllers.Models.Events.IStandingResult": {
             /** Format: int32 */
             readonly rank?: number;
             /** Format: int32 */
@@ -2684,7 +2679,7 @@ export interface components {
             readonly gameWinPercentage?: string | null;
             readonly opponentGameWinPercentage?: string | null;
         };
-        "Tracker.Controllers.EventsController.ITournament": {
+        "Tracker.Controllers.Models.Events.ITournament": {
             /** Format: int32 */
             readonly id?: number;
             readonly description?: string | null;
@@ -2707,7 +2702,7 @@ export interface components {
             readonly roundEndTime?: string;
             readonly inPlayoffs?: boolean;
         };
-        "Tracker.Controllers.EventsController.ITournamentPlayerUpdate": {
+        "Tracker.Controllers.Models.Events.ITournamentPlayerUpdate": {
             /** Format: int32 */
             readonly id?: number;
             /** Format: int32 */
@@ -2717,7 +2712,7 @@ export interface components {
             /** Format: date-time */
             readonly endTime?: string;
         };
-        "Tracker.Controllers.EventsController.ITournamentStateUpdate": {
+        "Tracker.Controllers.Models.Events.ITournamentStateUpdate": {
             /** Format: int32 */
             readonly id?: number;
             state?: TournamentState;
@@ -2729,7 +2724,30 @@ export interface components {
             readonly activePlayerNames?: string[] | null;
             readonly playerNamesWithMatchesInProgress?: string[] | null;
         };
-        "Tracker.Models.API.Games.GameDetailsDTO": {
+        "Tracker.Controllers.Models.Games.DashboardStatsDTO": {
+            /** Format: double */
+            overallWinrate?: number;
+            /** Format: int32 */
+            totalMatches?: number;
+            /** Format: int32 */
+            wins?: number;
+            /** Format: int32 */
+            losses?: number;
+            /** Format: int32 */
+            ties?: number;
+            /** Format: double */
+            playWinrate?: number;
+            /** Format: int32 */
+            playMatches?: number;
+            /** Format: double */
+            drawWinrate?: number;
+            /** Format: int32 */
+            drawMatches?: number;
+            averageDuration?: string | null;
+            durationTwoGames?: string | null;
+            durationThreeGames?: string | null;
+        };
+        "Tracker.Controllers.Models.Games.GameDetailsDTO": {
             /** Format: int32 */
             id?: number;
             /** Format: int32 */
@@ -2739,7 +2757,7 @@ export interface components {
             playDraw: string | null;
             logs?: GameLogDTO[] | null;
         };
-        "Tracker.Models.API.Games.GameLogDTO": {
+        "Tracker.Controllers.Models.Games.GameLogDTO": {
             /** Format: int32 */
             id?: number;
             /** Format: int32 */
@@ -2751,7 +2769,7 @@ export interface components {
             /** Format: int32 */
             nonce?: number;
         };
-        "Tracker.Models.API.Games.MatchDetailsDTO": {
+        "Tracker.Controllers.Models.Games.MatchDetailsDTO": {
             /** Format: int32 */
             id?: number;
             /** Format: int32 */
@@ -2774,7 +2792,7 @@ export interface components {
             isActive?: boolean;
             games?: GameDetailsDTO[] | null;
         };
-        "Tracker.Models.API.Games.MatchHistoryDTO": {
+        "Tracker.Controllers.Models.Games.MatchHistoryDTO": {
             /** Format: int32 */
             id?: number;
             /** Format: int32 */
@@ -2797,7 +2815,7 @@ export interface components {
             isEvent?: boolean;
             matches?: MatchHistoryDTO[] | null;
         };
-        "Tracker.Models.API.Games.PaginatedMatchesDTO": {
+        "Tracker.Controllers.Models.Games.PaginatedMatchesDTO": {
             items?: MatchHistoryDTO[] | null;
             /** Format: int32 */
             totalCount?: number;
@@ -2808,7 +2826,7 @@ export interface components {
             /** Format: int32 */
             totalPages?: number;
         };
-        "Tracker.Models.API.Games.PerformanceTrendDTO": {
+        "Tracker.Controllers.Models.Games.PerformanceTrendDTO": {
             date: string | null;
             /** Format: date-time */
             rawDate: string;
@@ -2822,7 +2840,7 @@ export interface components {
             ci80?: number[] | null;
             ci50?: number[] | null;
         };
-        "Tracker.Models.API.Games.ReplayActionDTO": {
+        "Tracker.Controllers.Models.Replays.ReplayActionDTO": {
             actionType: string | null;
             actionName?: string | null;
             /** Format: int32 */
@@ -2835,7 +2853,7 @@ export interface components {
             /** Format: int32 */
             nonce?: number;
         };
-        "Tracker.Models.API.Games.ReplayCardDTO": {
+        "Tracker.Controllers.Models.Replays.ReplayCardDTO": {
             /** Format: int32 */
             cardId?: number;
             name: string | null;
@@ -2858,19 +2876,19 @@ export interface components {
             /** Format: int32 */
             firstSeenSnapshotIndex?: number;
         };
-        "Tracker.Models.API.Games.ReplayDataDTO": {
+        "Tracker.Controllers.Models.Replays.ReplayDataDTO": {
             /** Format: int32 */
             gameId?: number;
             players?: ReplayPlayerDTO[] | null;
             cards?: ReplayCardDTO[] | null;
             snapshots?: ReplaySnapshotDTO[] | null;
         };
-        "Tracker.Models.API.Games.ReplayLogDTO": {
+        "Tracker.Controllers.Models.Replays.ReplayLogDTO": {
             /** Format: date-time */
             timestamp?: string;
             data: string | null;
         };
-        "Tracker.Models.API.Games.ReplayPlayerDTO": {
+        "Tracker.Controllers.Models.Replays.ReplayPlayerDTO": {
             /** Format: int32 */
             playerIndex?: number;
             name: string | null;
@@ -2892,7 +2910,7 @@ export interface components {
             /** Format: int32 */
             avatarId?: number;
         };
-        "Tracker.Models.API.Games.ReplaySnapshotDTO": {
+        "Tracker.Controllers.Models.Replays.ReplaySnapshotDTO": {
             /** Format: int32 */
             index?: number;
             /** Format: int32 */
@@ -2905,34 +2923,13 @@ export interface components {
             /** Format: int32 */
             promptedPlayer?: number;
             promptText: string | null;
-            /**
-             * @description JSON array of available prompt actions, e.g. [{"type":"ChooseOption","name":"OK"}].
-             *     Null for snapshots captured before this feature was added.
-             */
+            /** @description JSON array of available prompt actions, e.g. [{"type":"ChooseOption","name":"OK"}]. */
             promptOptions?: string | null;
             zoneTransfers?: ZoneTransferData[] | null;
             cardChanges?: CardChangeData[] | null;
             playerChanges?: PlayerChangeData[] | null;
             actions?: ReplayActionDTO[] | null;
             logs?: ReplayLogDTO[] | null;
-        };
-        /** @description Card entry with sortable metadata (CMC, Colors, Types) */
-        "Tracker.Controllers.SortableCardEntry": {
-            /** Format: int32 */
-            index?: number;
-            /** Format: int32 */
-            originalIndex?: number;
-            /** Format: int32 */
-            catalogId: number;
-            name: string | null;
-            /** Format: int32 */
-            quantity?: number;
-            /** Format: int32 */
-            cmc?: number;
-            colors?: string[] | null;
-            types?: string[] | null;
-            rarity: string | null;
-            zone?: string | null;
         };
         "Tracker.Controllers.TradesController.TradeMarketplaceUpdateDTO": {
             /** Format: date-time */
@@ -3044,40 +3041,40 @@ export type MtgosdkApiTradeTradePost = TradePost;
 export type MtgosdkApiUsersAvatar = Avatar;
 export type MtgosdkApiUsersUser = User;
 export type MicrosoftAspNetCoreMvcProblemDetails = ProblemDetails;
-export type TrackerControllersAggregatedArchetypeDto = AggregatedArchetypeDTO;
-export type TrackerControllersCardSearchResultDto = CardSearchResultDTO;
-export type TrackerControllersClientControllerIClientState = IClientState;
-export type TrackerControllersCollectionCardDto = CollectionCardDTO;
-export type TrackerControllersCollectionCardDetailDto = CollectionCardDetailDTO;
-export type TrackerControllersCollectionPriceHistoryDto = CollectionPriceHistoryDTO;
-export type TrackerControllersCollectionPricePointDto = CollectionPricePointDTO;
-export type TrackerControllersCollectionProductDto = CollectionProductDTO;
-export type TrackerControllersCollectionSearchRequestDto = CollectionSearchRequestDTO;
-export type TrackerControllersCollectionSearchResultDto = CollectionSearchResultDTO;
-export type TrackerControllersCollectionSnapshotDto = CollectionSnapshotDTO;
-export type TrackerControllersDashboardStatsDto = DashboardStatsDTO;
-export type TrackerControllersDeckColorsDto = DeckColorsDTO;
-export type TrackerControllersDeckDto = DeckDTO;
-export type TrackerControllersDeckDetailDto = DeckDetailDTO;
-export type TrackerControllersDeckIdentifierDto = DeckIdentifierDTO;
-export type TrackerControllersEventsControllerIEventStructure = IEventStructure;
-export type TrackerControllersEventsControllerIStandingResult = IStandingResult;
-export type TrackerControllersEventsControllerITournament = ITournament;
-export type TrackerControllersEventsControllerITournamentPlayerUpdate = ITournamentPlayerUpdate;
-export type TrackerControllersEventsControllerITournamentStateUpdate = ITournamentStateUpdate;
-export type TrackerControllersGameDetailsDto = GameDetailsDTO;
-export type TrackerControllersGameLogDto = GameLogDTO;
-export type TrackerControllersMatchDetailsDto = MatchDetailsDTO;
-export type TrackerControllersMatchHistoryDto = MatchHistoryDTO;
-export type TrackerControllersPaginatedMatchesDto = PaginatedMatchesDTO;
-export type TrackerControllersPerformanceTrendDto = PerformanceTrendDTO;
-export type TrackerControllersReplayActionDto = ReplayActionDTO;
-export type TrackerControllersReplayCardDto = ReplayCardDTO;
-export type TrackerControllersReplayDataDto = ReplayDataDTO;
-export type TrackerControllersReplayLogDto = ReplayLogDTO;
-export type TrackerControllersReplayPlayerDto = ReplayPlayerDTO;
-export type TrackerControllersReplaySnapshotDto = ReplaySnapshotDTO;
-export type TrackerControllersSortableCardEntry = SortableCardEntry;
+export type TrackerControllersModelsClientIClientState = IClientState;
+export type TrackerControllersModelsCollectionCollectionCardDto = CollectionCardDTO;
+export type TrackerControllersModelsCollectionCollectionCardDetailDto = CollectionCardDetailDTO;
+export type TrackerControllersModelsCollectionCollectionPriceHistoryDto = CollectionPriceHistoryDTO;
+export type TrackerControllersModelsCollectionCollectionPricePointDto = CollectionPricePointDTO;
+export type TrackerControllersModelsCollectionCollectionProductDto = CollectionProductDTO;
+export type TrackerControllersModelsCollectionCollectionSearchRequestDto = CollectionSearchRequestDTO;
+export type TrackerControllersModelsCollectionCollectionSearchResultDto = CollectionSearchResultDTO;
+export type TrackerControllersModelsCollectionCollectionSnapshotDto = CollectionSnapshotDTO;
+export type TrackerControllersModelsDecksAggregatedArchetypeDto = AggregatedArchetypeDTO;
+export type TrackerControllersModelsDecksCardSearchResultDto = CardSearchResultDTO;
+export type TrackerControllersModelsDecksDeckColorsDto = DeckColorsDTO;
+export type TrackerControllersModelsDecksDeckDto = DeckDTO;
+export type TrackerControllersModelsDecksDeckDetailDto = DeckDetailDTO;
+export type TrackerControllersModelsDecksDeckIdentifierDto = DeckIdentifierDTO;
+export type TrackerControllersModelsDecksSortableCardEntry = SortableCardEntry;
+export type TrackerControllersModelsEventsIEventStructure = IEventStructure;
+export type TrackerControllersModelsEventsIStandingResult = IStandingResult;
+export type TrackerControllersModelsEventsITournament = ITournament;
+export type TrackerControllersModelsEventsITournamentPlayerUpdate = ITournamentPlayerUpdate;
+export type TrackerControllersModelsEventsITournamentStateUpdate = ITournamentStateUpdate;
+export type TrackerControllersModelsGamesDashboardStatsDto = DashboardStatsDTO;
+export type TrackerControllersModelsGamesGameDetailsDto = GameDetailsDTO;
+export type TrackerControllersModelsGamesGameLogDto = GameLogDTO;
+export type TrackerControllersModelsGamesMatchDetailsDto = MatchDetailsDTO;
+export type TrackerControllersModelsGamesMatchHistoryDto = MatchHistoryDTO;
+export type TrackerControllersModelsGamesPaginatedMatchesDto = PaginatedMatchesDTO;
+export type TrackerControllersModelsGamesPerformanceTrendDto = PerformanceTrendDTO;
+export type TrackerControllersModelsReplaysReplayActionDto = ReplayActionDTO;
+export type TrackerControllersModelsReplaysReplayCardDto = ReplayCardDTO;
+export type TrackerControllersModelsReplaysReplayDataDto = ReplayDataDTO;
+export type TrackerControllersModelsReplaysReplayLogDto = ReplayLogDTO;
+export type TrackerControllersModelsReplaysReplayPlayerDto = ReplayPlayerDTO;
+export type TrackerControllersModelsReplaysReplaySnapshotDto = ReplaySnapshotDTO;
 export type TrackerControllersTradesControllerTradeMarketplaceUpdateDto = TradeMarketplaceUpdateDTO;
 export type TrackerControllersTradesControllerTradePostsPageDto = TradePostsPageDTO;
 export type TrackerControllersTradesControllerTradeSnapshotDto = TradeSnapshotDTO;
@@ -3113,40 +3110,40 @@ export type TradePost = components['schemas']['MTGOSDK.API.Trade.TradePost'];
 export type Avatar = components['schemas']['MTGOSDK.API.Users.Avatar'];
 export type User = components['schemas']['MTGOSDK.API.Users.User'];
 export type ProblemDetails = components['schemas']['Microsoft.AspNetCore.Mvc.ProblemDetails'];
-export type AggregatedArchetypeDTO = components['schemas']['Tracker.Models.API.Decks.AggregatedArchetypeDTO'];
-export type CardSearchResultDTO = components['schemas']['Tracker.Models.API.Decks.CardSearchResultDTO'];
-export type IClientState = components['schemas']['Tracker.Controllers.ClientController.IClientState'];
-export type CollectionCardDTO = components['schemas']['Tracker.Models.API.Collection.CollectionCardDTO'];
-export type CollectionCardDetailDTO = components['schemas']['Tracker.Models.API.Collection.CollectionCardDetailDTO'];
-export type CollectionPriceHistoryDTO = components['schemas']['Tracker.Models.API.Collection.CollectionPriceHistoryDTO'];
-export type CollectionPricePointDTO = components['schemas']['Tracker.Models.API.Collection.CollectionPricePointDTO'];
-export type CollectionProductDTO = components['schemas']['Tracker.Models.API.Collection.CollectionProductDTO'];
-export type CollectionSearchRequestDTO = components['schemas']['Tracker.Models.API.Collection.CollectionSearchRequestDTO'];
-export type CollectionSearchResultDTO = components['schemas']['Tracker.Models.API.Collection.CollectionSearchResultDTO'];
-export type CollectionSnapshotDTO = components['schemas']['Tracker.Models.API.Collection.CollectionSnapshotDTO'];
-export type DashboardStatsDTO = components['schemas']['Tracker.Models.API.Games.DashboardStatsDTO'];
-export type DeckColorsDTO = components['schemas']['Tracker.Models.API.Decks.DeckColorsDTO'];
-export type DeckDTO = components['schemas']['Tracker.Models.API.Decks.DeckDTO'];
-export type DeckDetailDTO = components['schemas']['Tracker.Models.API.Decks.DeckDetailDTO'];
-export type DeckIdentifierDTO = components['schemas']['Tracker.Models.API.Decks.DeckIdentifierDTO'];
-export type IEventStructure = components['schemas']['Tracker.Controllers.EventsController.IEventStructure'];
-export type IStandingResult = components['schemas']['Tracker.Controllers.EventsController.IStandingResult'];
-export type ITournament = components['schemas']['Tracker.Controllers.EventsController.ITournament'];
-export type ITournamentPlayerUpdate = components['schemas']['Tracker.Controllers.EventsController.ITournamentPlayerUpdate'];
-export type ITournamentStateUpdate = components['schemas']['Tracker.Controllers.EventsController.ITournamentStateUpdate'];
-export type GameDetailsDTO = components['schemas']['Tracker.Models.API.Games.GameDetailsDTO'];
-export type GameLogDTO = components['schemas']['Tracker.Models.API.Games.GameLogDTO'];
-export type MatchDetailsDTO = components['schemas']['Tracker.Models.API.Games.MatchDetailsDTO'];
-export type MatchHistoryDTO = components['schemas']['Tracker.Models.API.Games.MatchHistoryDTO'];
-export type PaginatedMatchesDTO = components['schemas']['Tracker.Models.API.Games.PaginatedMatchesDTO'];
-export type PerformanceTrendDTO = components['schemas']['Tracker.Models.API.Games.PerformanceTrendDTO'];
-export type ReplayActionDTO = components['schemas']['Tracker.Models.API.Games.ReplayActionDTO'];
-export type ReplayCardDTO = components['schemas']['Tracker.Models.API.Games.ReplayCardDTO'];
-export type ReplayDataDTO = components['schemas']['Tracker.Models.API.Games.ReplayDataDTO'];
-export type ReplayLogDTO = components['schemas']['Tracker.Models.API.Games.ReplayLogDTO'];
-export type ReplayPlayerDTO = components['schemas']['Tracker.Models.API.Games.ReplayPlayerDTO'];
-export type ReplaySnapshotDTO = components['schemas']['Tracker.Models.API.Games.ReplaySnapshotDTO'];
-export type SortableCardEntry = components['schemas']['Tracker.Controllers.SortableCardEntry'];
+export type IClientState = components['schemas']['Tracker.Controllers.Models.Client.IClientState'];
+export type CollectionCardDTO = components['schemas']['Tracker.Controllers.Models.Collection.CollectionCardDTO'];
+export type CollectionCardDetailDTO = components['schemas']['Tracker.Controllers.Models.Collection.CollectionCardDetailDTO'];
+export type CollectionPriceHistoryDTO = components['schemas']['Tracker.Controllers.Models.Collection.CollectionPriceHistoryDTO'];
+export type CollectionPricePointDTO = components['schemas']['Tracker.Controllers.Models.Collection.CollectionPricePointDTO'];
+export type CollectionProductDTO = components['schemas']['Tracker.Controllers.Models.Collection.CollectionProductDTO'];
+export type CollectionSearchRequestDTO = components['schemas']['Tracker.Controllers.Models.Collection.CollectionSearchRequestDTO'];
+export type CollectionSearchResultDTO = components['schemas']['Tracker.Controllers.Models.Collection.CollectionSearchResultDTO'];
+export type CollectionSnapshotDTO = components['schemas']['Tracker.Controllers.Models.Collection.CollectionSnapshotDTO'];
+export type AggregatedArchetypeDTO = components['schemas']['Tracker.Controllers.Models.Decks.AggregatedArchetypeDTO'];
+export type CardSearchResultDTO = components['schemas']['Tracker.Controllers.Models.Decks.CardSearchResultDTO'];
+export type DeckColorsDTO = components['schemas']['Tracker.Controllers.Models.Decks.DeckColorsDTO'];
+export type DeckDTO = components['schemas']['Tracker.Controllers.Models.Decks.DeckDTO'];
+export type DeckDetailDTO = components['schemas']['Tracker.Controllers.Models.Decks.DeckDetailDTO'];
+export type DeckIdentifierDTO = components['schemas']['Tracker.Controllers.Models.Decks.DeckIdentifierDTO'];
+export type SortableCardEntry = components['schemas']['Tracker.Controllers.Models.Decks.SortableCardEntry'];
+export type IEventStructure = components['schemas']['Tracker.Controllers.Models.Events.IEventStructure'];
+export type IStandingResult = components['schemas']['Tracker.Controllers.Models.Events.IStandingResult'];
+export type ITournament = components['schemas']['Tracker.Controllers.Models.Events.ITournament'];
+export type ITournamentPlayerUpdate = components['schemas']['Tracker.Controllers.Models.Events.ITournamentPlayerUpdate'];
+export type ITournamentStateUpdate = components['schemas']['Tracker.Controllers.Models.Events.ITournamentStateUpdate'];
+export type DashboardStatsDTO = components['schemas']['Tracker.Controllers.Models.Games.DashboardStatsDTO'];
+export type GameDetailsDTO = components['schemas']['Tracker.Controllers.Models.Games.GameDetailsDTO'];
+export type GameLogDTO = components['schemas']['Tracker.Controllers.Models.Games.GameLogDTO'];
+export type MatchDetailsDTO = components['schemas']['Tracker.Controllers.Models.Games.MatchDetailsDTO'];
+export type MatchHistoryDTO = components['schemas']['Tracker.Controllers.Models.Games.MatchHistoryDTO'];
+export type PaginatedMatchesDTO = components['schemas']['Tracker.Controllers.Models.Games.PaginatedMatchesDTO'];
+export type PerformanceTrendDTO = components['schemas']['Tracker.Controllers.Models.Games.PerformanceTrendDTO'];
+export type ReplayActionDTO = components['schemas']['Tracker.Controllers.Models.Replays.ReplayActionDTO'];
+export type ReplayCardDTO = components['schemas']['Tracker.Controllers.Models.Replays.ReplayCardDTO'];
+export type ReplayDataDTO = components['schemas']['Tracker.Controllers.Models.Replays.ReplayDataDTO'];
+export type ReplayLogDTO = components['schemas']['Tracker.Controllers.Models.Replays.ReplayLogDTO'];
+export type ReplayPlayerDTO = components['schemas']['Tracker.Controllers.Models.Replays.ReplayPlayerDTO'];
+export type ReplaySnapshotDTO = components['schemas']['Tracker.Controllers.Models.Replays.ReplaySnapshotDTO'];
 export type TradeMarketplaceUpdateDTO = components['schemas']['Tracker.Controllers.TradesController.TradeMarketplaceUpdateDTO'];
 export type TradePostsPageDTO = components['schemas']['Tracker.Controllers.TradesController.TradePostsPageDTO'];
 export type TradeSnapshotDTO = components['schemas']['Tracker.Controllers.TradesController.TradeSnapshotDTO'];

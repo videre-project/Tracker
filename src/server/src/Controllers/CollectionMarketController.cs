@@ -16,7 +16,7 @@ using Microsoft.AspNetCore.Mvc;
 using MTGOSDK.Core.Logging;
 
 using Tracker.Controllers.Base;
-using Tracker.Models.API.Collection;
+using Tracker.Controllers.Models.Collection;
 using Tracker.Services.Videre;
 
 
@@ -25,7 +25,7 @@ namespace Tracker.Controllers;
 [ApiController]
 [Route("api/collection")]
 public sealed class CollectionMarketController(
-  IVidereAPIClient videreAPIClient) : APIController
+  VidereAPIClient videreAPIClient) : APIController
 {
   private static readonly object s_collectionPriceHistoryCacheSync = new();
   private static readonly Dictionary<string, CollectionPriceHistoryDTO> s_collectionPriceHistoryCache = new();
@@ -147,7 +147,7 @@ public sealed class CollectionMarketController(
     return new CollectionPriceHistoryDTO
     {
       CatalogId = catalogId,
-      PriceCacheExpiresAt = PriceAPISchedule.GetCacheExpiration(DateTimeOffset.UtcNow),
+      PriceCacheExpiresAt = VidereAPIClient.GetPriceCacheExpiration(DateTimeOffset.UtcNow),
       Prices = prices
     };
   }
@@ -200,7 +200,7 @@ public sealed class CollectionMarketController(
       if (now >= s_collectionPriceHistoryCacheExpiresAtUtc)
       {
         s_collectionPriceHistoryCache.Clear();
-        s_collectionPriceHistoryCacheExpiresAtUtc = PriceAPISchedule.GetCacheExpiration(now);
+        s_collectionPriceHistoryCacheExpiresAtUtc = VidereAPIClient.GetPriceCacheExpiration(now);
         return null;
       }
 
@@ -220,7 +220,7 @@ public sealed class CollectionMarketController(
       if (now >= s_collectionPriceHistoryCacheExpiresAtUtc)
       {
         s_collectionPriceHistoryCache.Clear();
-        s_collectionPriceHistoryCacheExpiresAtUtc = PriceAPISchedule.GetCacheExpiration(now);
+        s_collectionPriceHistoryCacheExpiresAtUtc = VidereAPIClient.GetPriceCacheExpiration(now);
       }
 
       s_collectionPriceHistoryCache[cacheKey] = history;

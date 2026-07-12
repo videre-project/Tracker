@@ -15,13 +15,23 @@ using System.Threading.Tasks;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Remoting;
 
+
 [assembly: MetadataUpdateHandler(typeof(Tracker.Services.LogStreamHotReloadHandler))]
 
 namespace Tracker.Services;
 
 /// <summary>
+/// Flushes the log buffer on hot reload so stale entries don't persist.
+/// </summary>
+internal static class LogStreamHotReloadHandler
+{
+  static void ClearCache(Type[]? _) => LogStreamService.Clear();
+  static void UpdateApplication(Type[]? _) => LogStreamService.Clear();
+}
+
+/// <summary>
 /// Static in-memory log buffer that captures SDK/Tracker and Diver log entries
-/// for the diagnostics page. Modeled after <see cref="RequestMetrics"/>.
+/// for the diagnostics page. Modeled after <see cref="RequestMetricsService"/>.
 /// </summary>
 public static class LogStreamService
 {
@@ -203,13 +213,4 @@ public static class LogStreamService
 
     s_diverLogPosition = stream.Position;
   }
-}
-
-/// <summary>
-/// Flushes the log buffer on hot reload so stale entries don't persist.
-/// </summary>
-internal static class LogStreamHotReloadHandler
-{
-  static void ClearCache(Type[]? _) => LogStreamService.Clear();
-  static void UpdateApplication(Type[]? _) => LogStreamService.Clear();
 }

@@ -12,7 +12,7 @@ using MTGOSDK.API.Play.Tournaments;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection.Serialization;
 
-using Tracker.Controllers;
+using Tracker.Controllers.Models.Events;
 
 using TournamentMatch = MTGOSDK.API.Play.Match;
 using static MTGOSDK.Core.Reflection.DLRWrapper;
@@ -25,7 +25,7 @@ internal static class TournamentSerialization
   internal static IEnumerable<object> SerializeStandings(IList<StandingRecord> standings)
   {
     var serialized = standings
-      .SerializeAs<EventsController.IStandingResult>()
+      .SerializeAs<IStandingResult>()
       .ToList();
 
     return serialized.Zip(standings, (dto, standing) => (object)new
@@ -44,7 +44,7 @@ internal static class TournamentSerialization
     Tournament tournament,
     int? roundNumberOverride = null)
   {
-    var dto = tournament.SerializeAs<EventsController.ITournamentStateCore>();
+    var dto = tournament.SerializeAs<ITournamentStateCore>();
     int roundNumber = ResolveRoundNumber(dto.RoundNumber, roundNumberOverride);
 
     return new
@@ -164,7 +164,7 @@ internal static class TournamentSerialization
   {
     try
     {
-      var dto = tournament.SerializeAs<EventsController.ITournament>();
+      var dto = tournament.SerializeAs<ITournament>();
       int roundNumber = ResolveRoundNumber(dto.RoundNumber, roundNumberOverride);
 
       return new

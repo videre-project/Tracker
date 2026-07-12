@@ -24,9 +24,9 @@ using Swashbuckle.AspNetCore.SwaggerGen;
 
 using MTGOSDK.Core.Reflection.Serialization;
 
+using Tracker.Services.Base;
 using Tracker.Services.MTGO.Events;
 using Tracker.Services.Videre;
-using Tracker.Models.API.Games;
 
 
 namespace Tracker.Services;
@@ -89,7 +89,7 @@ public static class WebAPIService
     // Register HttpClient factory for external API calls
     builder.Services.AddHttpClient();
     builder.Services.AddHttpClient<INBACArchetypeClient, NBACArchetypeClient>();
-    builder.Services.AddHttpClient<IVidereAPIClient, VidereAPIClient>();
+    builder.Services.AddHttpClient<VidereAPIClient>();
 
     // Enable CORS for frontend development
     builder.Services.AddCors(options =>

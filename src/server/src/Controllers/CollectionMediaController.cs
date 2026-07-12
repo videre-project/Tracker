@@ -19,7 +19,7 @@ using MTGOSDK.API.Graphics;
 using MTGOSDK.Core.Logging;
 
 using Tracker.Controllers.Base;
-using Tracker.Models.API.Collection;
+using Tracker.Controllers.Models.Collection;
 using Tracker.Services.MTGO;
 
 

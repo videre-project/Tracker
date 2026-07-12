@@ -17,7 +17,7 @@ using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection.Serialization;
 
 using Tracker.Controllers.Base;
-using Tracker.Models.API.Events;
+using Tracker.Controllers.Models.Events;
 using Tracker.Services.MTGO;
 
 using static Tracker.Services.MTGO.Events.TournamentSerialization;
