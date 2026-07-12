@@ -57,6 +57,16 @@ function getEventStartTime(event: ActiveGame) {
   return event._rawStartTime ? new Date(event._rawStartTime).getTime() : 0
 }
 
+function getEventEndTime(event: ActiveGame) {
+  return event._rawEndTime ? new Date(event._rawEndTime).getTime() : 0
+}
+
+function isRecentCompletedEvent(event: ActiveGame) {
+  if (event.status !== "completed") return true
+  const completedCutoff = Date.now() - TIMELINE_COMPLETED_EVENT_WINDOW_MS
+  return getEventEndTime(event) >= completedCutoff
+}
+
 function useEntryFee(eventId: string, enabled: boolean) {
   const [fee, setFee] = useState(() => enabled ? entryFeeCache.get(eventId) : undefined)
 
@@ -96,10 +106,10 @@ function useEntryFee(eventId: string, enabled: boolean) {
   return fee
 }
 
-function EntryFeeCell({ event }: { event: ActiveGame }) {
-  const shouldFetch = event.status !== "completed"
+function EntryFeeCell({ event, enabled }: { event: ActiveGame; enabled: boolean }) {
+  const shouldFetch = enabled && event.status !== "completed"
   const fee = useEntryFee(event.id, shouldFetch)
-  if (!shouldFetch) return <span className="text-muted-foreground">-</span>
+  if (event.status === "completed") return <span className="text-muted-foreground">-</span>
   return <span className="text-muted-foreground">{fee ?? "..."}</span>
 }
 
@@ -109,9 +119,12 @@ export default function Events() {
   const { activeGames, upcomingGames, completedGames, loading, error, hoveredEventId, setHoveredEventId, selectedEventId, setSelectedEventId } = useEvents()
   const tableAreaRef = useRef<HTMLDivElement>(null)
   const [areaHeight, setAreaHeight] = useState<number | undefined>()
+  const [currentPageEventIds, setCurrentPageEventIds] = useState<Set<string>>(() => new Set())
+  const [timelineScrollKey, setTimelineScrollKey] = useState(0)
 
   const events = useMemo(() => {
     return [...activeGames, ...upcomingGames, ...completedGames]
+      .filter(isRecentCompletedEvent)
       .sort((a, b) => getEventStartTime(a) - getEventStartTime(b))
   }, [activeGames, upcomingGames, completedGames])
 
@@ -160,6 +173,24 @@ export default function Events() {
     setSelectedEventId(selectedEventId === event.id ? null : event.id)
   }, [selectedEventId, setSelectedEventId])
 
+  const handleTimelineEventClick = useCallback((event: ActiveGame) => {
+    setSelectedEventId(event.id)
+    setTimelineScrollKey(key => key + 1)
+  }, [setSelectedEventId])
+
+  const handlePageRowsChange = useCallback((rows: ActiveGame[]) => {
+    setCurrentPageEventIds((current) => {
+      const next = new Set(rows.map(row => row.id))
+      if (
+        next.size === current.size &&
+        Array.from(next).every(id => current.has(id))
+      ) {
+        return current
+      }
+      return next
+    })
+  }, [])
+
   const columns: ColumnDef<ActiveGame>[] = useMemo(() => [
     {
       accessorKey: "name",
@@ -187,7 +218,12 @@ export default function Events() {
       header: "Entry Fee",
       size: 86,
       cell: ({ row }) => {
-        return <EntryFeeCell event={row.original} />
+        return (
+          <EntryFeeCell
+            event={row.original}
+            enabled={currentPageEventIds.has(row.original.id)}
+          />
+        )
       },
     },
     {
@@ -221,15 +257,15 @@ export default function Events() {
       header: "Rounds",
       size: 56,
     },
-  ], [playersDigitsWidth])
+  ], [currentPageEventIds, playersDigitsWidth])
 
   return (
     <div className="-mt-10">
-      <EventsTimeline events={timelineEvents} focusedEventId={hoveredEventId ?? selectedEvent?.id ?? null} activeEventIds={activeEventIdSet} onEventClick={handleRowClick} />
+      <EventsTimeline events={timelineEvents} focusedEventId={hoveredEventId ?? selectedEvent?.id ?? null} activeEventIds={activeEventIdSet} onEventClick={handleTimelineEventClick} />
 
       <div ref={tableAreaRef} className="flex" style={areaHeight ? { height: areaHeight } : undefined}>
         {/* Table area */}
-        <div className="flex-1 min-w-0 overflow-y-auto px-4 pt-2 pb-4 space-y-4">
+        <div className="flex min-h-0 flex-1 min-w-0 flex-col gap-4 overflow-hidden px-4 pt-2 pb-4">
           {error && (
             <div className="bg-destructive/15 text-destructive px-4 py-3 rounded-md text-sm font-medium">
               Error loading events: {error}
@@ -258,15 +294,19 @@ export default function Events() {
               columns={columns}
               data={events}
               autoResetPageIndex={false}
-              wrapperClassName="overflow-visible"
+              containerClassName="flex min-h-0 flex-1 flex-col"
+              tableContainerClassName="flex min-h-0 flex-1 flex-col overflow-visible"
+              bodyWrapperClassName="min-h-0 flex-1 overflow-y-auto overflow-x-hidden"
               onRowHover={(event: ActiveGame) => setHoveredEventId(event.id)}
               onRowLeave={() => setHoveredEventId(null)}
               onRowClick={handleRowClick}
+              onPageRowsChange={handlePageRowsChange}
               getRowClassName={(event: ActiveGame) => cn(
                 event.id !== selectedEventId && event._rawStartTime && new Date(event._rawStartTime).getTime() < Date.now() && "opacity-60",
                 selectedEvent?.id === event.id && "outline outline-1 outline-white/80 -outline-offset-1 bg-muted/50",
               )}
               activeRowId={selectedEvent?.id ?? null}
+              activeRowScrollKey={timelineScrollKey}
               getRowId={(event: ActiveGame) => event.id}
             />
           )}
@@ -275,6 +315,7 @@ export default function Events() {
         {/* Detail panel — appears on row click */}
         <EventDetailPanel
           event={selectedEvent}
+          loadDetails={Boolean(selectedEvent)}
           onClose={() => setSelectedEventId(null)}
         />
       </div>

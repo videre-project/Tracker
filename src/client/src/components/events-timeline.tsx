@@ -274,12 +274,22 @@ export function EventsTimeline({ events, focusedEventId, activeEventIds, onEvent
     return () => clearInterval(id)
   }, [range])
 
-  // Auto-scroll to current time or earliest event
+  // Initial positioning: jump (no animation) to the selected event so the
+  // timeline matches the table's initial state, or to the current time /
+  // earliest event when nothing is selected. Later focused-event scrolls
+  // (hover/selection) remain smooth — see the effect below.
   useEffect(() => {
     if (!scrollRef.current || hasScrolled.current || formatGroups.length === 0) return
     const container = scrollRef.current
+
     let target: number
-    if (timeOffset !== null) {
+    const selected = focusedEventId
+      ? events.find(e => e.id === focusedEventId)
+      : null
+    if (selected?._rawStartTime && selected?._rawEndTime) {
+      const pos = eventToPosition(selected, range.start)
+      target = pos.left + pos.width / 2
+    } else if (timeOffset !== null) {
       target = timeOffset
     } else {
       let minLeft = timelineWidth
@@ -293,7 +303,7 @@ export function EventsTimeline({ events, focusedEventId, activeEventIds, onEvent
     }
     container.scrollLeft = Math.max(0, target - container.clientWidth / 3)
     hasScrolled.current = true
-  }, [formatGroups, timeOffset, range, timelineWidth])
+  }, [formatGroups, timeOffset, range, timelineWidth, focusedEventId, events])
 
   // Scroll to focused event when hovering a table row (debounced to avoid animation queue)
   useEffect(() => {
@@ -335,7 +345,7 @@ export function EventsTimeline({ events, focusedEventId, activeEventIds, onEvent
   return (
     <div
       ref={wrapperRef}
-      className={cn("relative", isFullscreen && "flex-1 min-h-0 flex flex-col")}
+      className={cn("relative isolate", isFullscreen && "flex-1 min-h-0 flex flex-col")}
     >
       {/* Left-edge fade for date text */}
       <div

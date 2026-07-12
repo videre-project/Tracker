@@ -639,7 +639,7 @@ export default function EventDetails() {
         <div className="flex-1 min-w-0">
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-3">
             <span className="truncate">{displayEvent.name}</span>
-            <Badge variant={getStatusVariant(displayEvent)} className="shrink-0 text-sm px-3 py-1">
+            <Badge variant={getStatusVariant(displayEvent)} className="shrink-0 rounded-md">
               {getStatusLabel(displayEvent)}
             </Badge>
           </h1>

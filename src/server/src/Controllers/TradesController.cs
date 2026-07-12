@@ -210,11 +210,7 @@ public class TradesController(
       });
     }
 
-    DisableBuffering();
-    SetNdjsonContentType();
-    using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
-      HttpContext.RequestAborted,
-      clientMonitor.Token);
+    using var linkedCts = BeginNDJSONStream(clientMonitor.Token);
     var streamToken = linkedCts.Token;
 
     var updateChannel = System.Threading.Channels.Channel.CreateBounded<DateTime>(

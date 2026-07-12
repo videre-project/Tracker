@@ -85,8 +85,7 @@ public class ClientController : APIController
   public async Task<IActionResult> WatchState()
   {
     // Set up streaming headers
-    DisableBuffering();
-    SetNdjsonContentType();
+    StartNDJSONResponse();
     Response.Headers.Append("Cache-Control", "no-cache");
     // NOTE: Do not set the "Connection" header.
     // It's illegal for HTTP/2 and can cause the response to fail.

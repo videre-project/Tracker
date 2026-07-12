@@ -32,6 +32,7 @@ using Tracker.Services.MTGO;
 using TournamentMatch = MTGOSDK.API.Play.Match;
 
 
+using static Tracker.Services.MTGO.Events.TournamentSerialization;
 namespace Tracker.Controllers;
 
 /// <summary>
@@ -158,7 +159,12 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
     }
 
     GameAPIService.StartLoadedTournamentRefresh();
-    var events = SerializeCachedEventsList().ToList();
+    var events = GameAPIService.DiscoveredTournaments
+      .ToArray()
+      .Select(item => SerializeTournamentForEventsList(item.Value, item.Key))
+      .Where(item => item is not null)
+      .Cast<object>()
+      .ToList();
 
     Response.Headers["X-Events"] = events.Count.ToString();
     Response.Headers["X-Discovered-Tournaments"] =
@@ -199,11 +205,7 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
         new { error = "MTGO client is not ready" });
     }
 
-    DisableBuffering();
-    SetNdjsonContentType();
-    using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
-      HttpContext.RequestAborted,
-      clientMonitor.Token);
+    using var linkedCts = BeginNDJSONStream(clientMonitor.Token);
     var streamToken = linkedCts.Token;
 
     var updateQueue =
@@ -215,7 +217,7 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
 
     void queueTournamentUpdate(Tournament tournament, string source, object detail)
     {
-      int tournamentId = SafeTournamentId(tournament);
+      int tournamentId = tournament.Id;
       if (tournamentId <= 0) return;
 
       updateQueue.Enqueue(tournamentId, (tournament, source, detail));
@@ -223,11 +225,13 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
 
     async Task writeTournamentUpdate(Tournament tournament, string source, object detail)
     {
-      int tournamentId = SafeTournamentId(tournament);
+      int tournamentId = tournament.Id;
       var serialized = SerializeTournamentForEventsList(
         tournament,
         tournamentId,
-        TryGetRoundNumberOverride(source, detail));
+        source == "round" && detail is int roundNumber && roundNumber > 0
+          ? roundNumber
+          : null);
       if (serialized == null) return;
 
       string fingerprint = JsonSerializer.Serialize(serialized);
@@ -243,12 +247,12 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
 
     void onLoadedTournamentDiscovered(object? _, Tournament tournament)
     {
-      queueTournamentUpdate(tournament, "loaded", SafeTournamentId(tournament));
+      queueTournamentUpdate(tournament, "loaded", tournament.Id);
     }
 
     void onRoundUpdated(object? _, (Tournament Tournament, TournamentRound Round) args)
     {
-      queueTournamentUpdate(args.Tournament, "round", SafeRoundNumber(args.Round));
+      queueTournamentUpdate(args.Tournament, "round", args.Round.Number);
     }
 
     void onStateUpdated(object? _, (Tournament Tournament, TournamentState State) args)
@@ -317,7 +321,16 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
   {
     try
     {
-      Tournament tournament = GetTournamentOrDiscovered(id);
+      Tournament tournament;
+      try
+      {
+        tournament = EventManager.GetEvent(id);
+      }
+      catch (KeyNotFoundException) when (
+        GameAPIService.DiscoveredTournaments.TryGetValue(id, out var discoveredTournament))
+      {
+        tournament = discoveredTournament;
+      }
       return Ok(SerializeTournamentState(tournament));
     }
     catch (KeyNotFoundException)
@@ -451,7 +464,16 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
   {
     return Retry<IActionResult>(() =>
     {
-      Tournament tournament = GetTournamentOrDiscovered(id);
+      Tournament tournament;
+      try
+      {
+        tournament = EventManager.GetEvent(id);
+      }
+      catch (KeyNotFoundException) when (
+        GameAPIService.DiscoveredTournaments.TryGetValue(id, out var discoveredTournament))
+      {
+        tournament = discoveredTournament;
+      }
       IList<StandingRecord> standings = tournament.ComputeStandings();
 
       // Use SerializeAs for batch property hydration, then combine
@@ -472,354 +494,6 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
 
   //
   // Event Streaming Endpoints
-  //
-
-  [HttpGet("{id}")] // GET /api/events/watchtournamentupdates/{id}
-  [ProducesResponseType(
-    typeof(IEnumerable<ITournamentStateUpdate>), StatusCodes.Status200OK)]
-  [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
-  [Produces("application/x-ndjson")]
-  public async Task<IActionResult> WatchTournamentUpdates(int id)
-  {
-    if (!clientMonitor.IsClientReady)
-    {
-      return StatusCode(StatusCodes.Status503ServiceUnavailable,
-        new { error = "MTGO client is not ready" });
-    }
-
-    try
-    {
-      Tournament tournament = GetTournamentOrDiscovered(id);
-
-      DisableBuffering();
-      SetNdjsonContentType();
-      using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
-        HttpContext.RequestAborted,
-        clientMonitor.Token);
-      var streamToken = linkedCts.Token;
-
-      string? lastStateFingerprint = null;
-
-      async Task handleTournamentUpdate(
-        Tournament t,
-        bool force = false,
-        int? roundNumberOverride = null,
-        string source = "update")
-      {
-        var stateUpdate = SerializeTournamentState(t, roundNumberOverride);
-        string stateFingerprint = JsonSerializer.Serialize(stateUpdate);
-        if (!force && stateFingerprint == lastStateFingerprint)
-        {
-          return;
-        }
-
-        lastStateFingerprint = stateFingerprint;
-        await StreamResponse([stateUpdate], streamToken);
-      }
-
-      // Phase 1: Stream initial state
-      await handleTournamentUpdate(tournament, force: true);
-
-      // If this only exists in the retained cache, write the current state once.
-      if (!IsLiveFeaturedTournament(id))
-      {
-        return new EmptyResult();
-      }
-
-      // Phase 2: Stream round/state updates via GameAPIService. Standings deltas
-      // are streamed by WatchStandings; standings callbacks can carry stale round
-      // metadata and should not overwrite the tournament header state.
-      var updateQueue =
-        new CoalescingUpdateQueue<int, object>(() => RecordStreamCoalesce());
-
-      void queueUpdate(Tournament updatedTournament, string source, object detail)
-      {
-        int tournamentId = SafeTournamentId(updatedTournament);
-        if (tournamentId != id)
-        {
-          return;
-        }
-
-        object stateUpdate;
-        try
-        {
-          stateUpdate = SerializeTournamentState(
-            updatedTournament,
-            TryGetRoundNumberOverride(source, detail));
-        }
-        catch (Exception ex)
-        {
-          Log.Debug(
-            ex,
-            "Skipped tournament state stream update tournament={TournamentId}",
-            tournamentId);
-          return;
-        }
-
-        updateQueue.Enqueue(tournamentId, stateUpdate);
-      }
-
-      void onRoundUpdated(object? _, (Tournament Tournament, TournamentRound Round) args)
-      {
-        queueUpdate(args.Tournament, "round", SafeRoundNumber(args.Round));
-      }
-
-      void onStateUpdated(object? _, (Tournament Tournament, TournamentState State) args)
-      {
-        queueUpdate(args.Tournament, "state", args.State);
-      }
-
-      GameAPIService.RoundUpdated += onRoundUpdated;
-      GameAPIService.StateUpdated += onStateUpdated;
-
-      using var cancellationRegistration = streamToken.Register(updateQueue.Complete);
-
-      try
-      {
-        await foreach (var update in
-          updateQueue.ReadAllAsync(streamToken))
-        {
-          string stateFingerprint = JsonSerializer.Serialize(update);
-          if (stateFingerprint == lastStateFingerprint)
-          {
-            continue;
-          }
-
-          lastStateFingerprint = stateFingerprint;
-          await StreamResponse([update], streamToken);
-        }
-      }
-      catch (OperationCanceledException) when (streamToken.IsCancellationRequested)
-      {
-        // Stream cancelled gracefully.
-      }
-      finally
-      {
-        GameAPIService.RoundUpdated -= onRoundUpdated;
-        GameAPIService.StateUpdated -= onStateUpdated;
-        updateQueue.Complete();
-      }
-
-      return new EmptyResult();
-    }
-    catch (KeyNotFoundException)
-    {
-      return NotFound(new { error = $"Tournament {id} not found. It may have ended or not yet loaded." });
-    }
-  }
-
-  private static IEnumerable<object> SerializeCachedEventsList()
-  {
-    foreach (var item in GameAPIService.DiscoveredTournaments.ToArray())
-    {
-      var serialized = SerializeTournamentForEventsList(item.Value, item.Key);
-      if (serialized != null) yield return serialized;
-    }
-  }
-
-  private static object SerializeTournamentState(
-    Tournament tournament,
-    int? roundNumberOverride = null)
-  {
-    var dto = tournament.SerializeAs<ITournamentStateCore>();
-    int roundNumber = ResolveRoundNumber(dto.RoundNumber, roundNumberOverride);
-
-    return new
-    {
-      dto.Id,
-      dto.State,
-      RoundNumber = roundNumber,
-      dto.RoundEndTime,
-      dto.InPlayoffs,
-      ActivePlayerNames = GetActivePlayerNames(tournament),
-      PlayerNamesWithMatchesInProgress =
-        GetPlayerNamesWithMatchesInProgress(tournament, roundNumber),
-    };
-  }
-
-  private static string[] GetActivePlayerNames(Tournament tournament)
-  {
-    return tournament.ActivePlayers
-      .Select(player => player.Name)
-      .OrderBy(name => name, StringComparer.Ordinal)
-      .ToArray();
-  }
-
-  private static string[] GetPlayerNamesWithMatchesInProgress(
-    Tournament tournament,
-    int roundNumber)
-  {
-    if (tournament.State != TournamentState.RoundInProgress)
-    {
-      return [];
-    }
-
-    TournamentRound? currentRound = GetCurrentRound(tournament, roundNumber);
-    if (currentRound == null) return [];
-
-    return Try(
-      () => currentRound.PlayerNamesWithMatchesInProgress.ToArray(),
-      () => ComputePlayerNamesWithMatchesInProgress(tournament, roundNumber));
-  }
-
-  private static string[] ComputePlayerNamesWithMatchesInProgress(
-    Tournament tournament,
-    int roundNumber)
-  {
-    if (tournament.State != TournamentState.RoundInProgress ||
-        roundNumber <= 0)
-    {
-      return [];
-    }
-
-    TournamentRound? currentRound = GetCurrentRound(tournament, roundNumber);
-    if (currentRound == null) return [];
-
-    TournamentMatch[] currentRoundMatches = Try(
-      () => ((IEnumerable<TournamentMatch>)((dynamic)currentRound)
-          .MatchesInProgress).ToArray(),
-      () => currentRound.Matches
-        .Where(match => !match.IsComplete)
-        .ToArray(),
-      () => Array.Empty<TournamentMatch>());
-
-    return currentRoundMatches
-      .SelectMany(match => match.Players)
-      .Select(player => player.Name)
-      .Where(name => !string.IsNullOrEmpty(name))
-      .Distinct(StringComparer.Ordinal)
-      .OrderBy(name => name, StringComparer.Ordinal)
-      .ToArray();
-  }
-
-  private static TournamentRound? GetCurrentRound(
-    Tournament tournament,
-    int? roundNumberOverride = null)
-  {
-    int roundNumber = ResolveRoundNumber(
-      tournament.RoundNumber,
-      roundNumberOverride);
-    if (roundNumber <= 0) return null;
-
-    TournamentRound? currentRound = TryGetCurrentRound(tournament);
-    if (currentRound?.Number == roundNumber)
-    {
-      return currentRound;
-    }
-
-    TournamentRound[] rounds = Try(
-      () => tournament.Rounds.ToArray(),
-      () => Array.Empty<TournamentRound>());
-
-    int roundIndex = roundNumber - 1;
-    if (roundIndex >= 0 &&
-        roundIndex < rounds.Length &&
-        rounds[roundIndex].Number == roundNumber)
-    {
-      return rounds[roundIndex];
-    }
-
-    return rounds.FirstOrDefault(round => round.Number == roundNumber);
-  }
-
-  private static TournamentRound? TryGetCurrentRound(Tournament tournament)
-  {
-    try
-    {
-      return tournament.CurrentRound;
-    }
-    catch
-    {
-      return null;
-    }
-  }
-
-  private static object? SerializeTournamentForEventsList(
-    Tournament tournament,
-    int tournamentId,
-    int? roundNumberOverride = null)
-  {
-    try
-    {
-      var dto = tournament.SerializeAs<ITournament>();
-      int roundNumber = ResolveRoundNumber(dto.RoundNumber, roundNumberOverride);
-
-      return new
-      {
-        dto.Id,
-        dto.Description,
-        Format = NormalizeFormatName(dto.Format),
-        dto.MinimumPlayers,
-        dto.TotalPlayers,
-        dto.TotalRounds,
-        dto.EventStructure,
-        dto.StartTime,
-        dto.EndTime,
-        dto.State,
-        RoundNumber = roundNumber,
-        dto.RoundEndTime,
-        dto.InPlayoffs,
-      };
-    }
-    catch (Exception ex)
-    {
-      if (GameAPIService.DiscoveredTournaments.TryGetValue(tournamentId, out var cachedTournament) &&
-          ReferenceEquals(cachedTournament, tournament))
-      {
-        GameAPIService.DiscoveredTournaments.TryRemove(tournamentId, out _);
-      }
-
-      Log.Debug(
-        ex,
-        "Skipped loaded tournament while serializing events list tournament={TournamentId}",
-        tournamentId);
-      return null;
-    }
-  }
-
-  private static string NormalizeFormatName(string format)
-  {
-    if (string.IsNullOrWhiteSpace(format))
-    {
-      return format;
-    }
-
-    string trimmed = format.TrimEnd('\0').Trim();
-    string withoutFalseMultiplierSuffix = Regex.Replace(
-      trimmed,
-      @"(x[36])\s*[0o]$",
-      "$1",
-      RegexOptions.IgnoreCase);
-
-    if (Regex.IsMatch(trimmed, @"^[^\d]*[A-Za-z]0$"))
-    {
-      return trimmed[..^1];
-    }
-
-    return withoutFalseMultiplierSuffix;
-  }
-
-  private static int? TryGetRoundNumberOverride(string source, object detail)
-  {
-    return source == "round" && detail is int roundNumber && roundNumber > 0
-      ? roundNumber
-      : null;
-  }
-
-  private static int ResolveRoundNumber(int serializedRoundNumber, int? roundNumberOverride)
-  {
-    return roundNumberOverride.HasValue
-      ? Math.Max(serializedRoundNumber, roundNumberOverride.Value)
-      : serializedRoundNumber;
-  }
-
-  private static void EnsureTournamentHooksInitialized()
-  {
-    Tournament.StandingsChanged.EnsureInitialize();
-    Tournament.RoundChanged.EnsureInitialize();
-    Tournament.StateChanged.EnsureInitialize();
-  }
-
   private async IAsyncEnumerable<object> StreamEventsList(
     [EnumeratorCancellation] CancellationToken cancellationToken)
   {
@@ -829,7 +503,7 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
 
     void onLoadedTournamentDiscovered(object? _, Tournament tournament)
     {
-      int tournamentId = SafeTournamentId(tournament);
+      int tournamentId = tournament.Id;
       if (tournamentId <= 0) return;
 
       queue.Enqueue(tournamentId, tournament);
@@ -865,7 +539,7 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
 
       await foreach (var tournament in queue.ReadAllAsync(cancellationToken))
       {
-        int tournamentId = SafeTournamentId(tournament);
+        int tournamentId = tournament.Id;
         if (tournamentId <= 0 || !seen.Add(tournamentId)) continue;
 
         var serialized = SerializeTournamentForEventsList(tournament, tournamentId);
@@ -879,325 +553,6 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
     }
   }
 
-  /// <summary>
-  /// Stream real-time player count updates
-  /// </summary>
-  /// <returns>Server-sent events stream of player count changes as NDJSON</returns>
-  [HttpGet] // GET /api/events/watchplayercount
-  [ProducesResponseType(
-    typeof(IEnumerable<ITournamentPlayerUpdate>), StatusCodes.Status200OK)]
-  [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
-  [Produces("application/x-ndjson")]
-  public async Task<IActionResult> WatchPlayerCount()
-  {
-    if (!clientMonitor.IsClientReady)
-    {
-      return StatusCode(StatusCodes.Status503ServiceUnavailable,
-        new { error = "MTGO client is not ready" });
-    }
-
-    DisableBuffering();
-    SetNdjsonContentType();
-    using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
-      HttpContext.RequestAborted,
-      clientMonitor.Token);
-    var streamToken = linkedCts.Token;
-
-    var updateQueue =
-      new CoalescingUpdateQueue<int, Event>(() => RecordStreamCoalesce());
-
-    void onPlayerCountUpdated(object? _, IEnumerable<Event> events)
-    {
-      foreach (var eventObj in events)
-      {
-        int eventId = SafeEventId(eventObj);
-        if (eventId <= 0) continue;
-
-        updateQueue.Enqueue(eventId, eventObj);
-      }
-    }
-
-    GameAPIService.PlayerCountUpdated += onPlayerCountUpdated;
-    using var cancellationRegistration = streamToken.Register(updateQueue.Complete);
-
-    try
-    {
-      await foreach (var eventObj in updateQueue.ReadAllAsync(streamToken))
-      {
-        await StreamResponse(
-          new[] { eventObj }.SerializeAs<ITournamentPlayerUpdate>(),
-          streamToken);
-      }
-    }
-    catch (OperationCanceledException) when (streamToken.IsCancellationRequested)
-    {
-      // Stream cancelled gracefully.
-    }
-    finally
-    {
-      GameAPIService.PlayerCountUpdated -= onPlayerCountUpdated;
-      updateQueue.Complete();
-    }
-
-    return new EmptyResult();
-  }
-
-  /// <summary>
-  /// Stream tournament standings. Emits all current standings first,
-  /// then streams deltas using a (Rank, Points) fingerprint per standing
-  /// to detect and emit only changed records.
-  /// </summary>
-  /// <param name="id">Tournament ID</param>
-  /// <returns>NDJSON stream: initial standings then live deltas</returns>
-  [HttpGet("{id}")] // GET /api/events/watchstandings/{id}
-  [ProducesResponseType(
-    typeof(IEnumerable<IStandingResult>), StatusCodes.Status200OK)]
-  [ProducesResponseType(StatusCodes.Status404NotFound)]
-  [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
-  [Produces("application/x-ndjson")]
-  public async Task<IActionResult> WatchStandings(int id)
-  {
-    if (!clientMonitor.IsClientReady)
-    {
-      return StatusCode(StatusCodes.Status503ServiceUnavailable,
-        new { error = "MTGO client is not ready" });
-    }
-
-    IList<StandingRecord> initial;
-    try
-    {
-      Tournament tournament = GetTournamentOrDiscovered(id);
-      initial = tournament.ComputeStandings();
-
-      DisableBuffering();
-      SetNdjsonContentType();
-      using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
-        HttpContext.RequestAborted,
-        clientMonitor.Token);
-      var streamToken = linkedCts.Token;
-
-      // Phase 1: Emit all current standings
-      await StreamResponse(SerializeStandings(initial), streamToken);
-      IList<StandingRecord>? lastWrittenFullStandings = initial;
-      int? lastRoundHash = tournament.GetRoundHash(includeTournamentId: true);
-
-      // If this only exists in the retained cache, write the current standings once.
-      if (!IsLiveFeaturedTournament(id))
-      {
-        return new EmptyResult();
-      }
-
-      // Phase 2: Subscribe to changes and stream deltas via GameAPIService.
-      // Round/state transitions can change the coherent computed table without
-      // emitting a standings delta, so those stream a fresh computed snapshot.
-      var updateQueue = new CoalescingUpdateQueue<int, (
-        Tournament Tournament,
-        IList<StandingRecord>? Standings,
-        string Source,
-        object Detail)>(() => RecordStreamCoalesce());
-
-      void queueStandingsUpdate(
-        Tournament updatedTournament,
-        IList<StandingRecord>? standings,
-        string source,
-        object detail)
-      {
-        int tournamentId = SafeTournamentId(updatedTournament);
-        if (tournamentId != id)
-        {
-          return;
-        }
-
-        updateQueue.Enqueue(
-          tournamentId,
-          (updatedTournament, standings, source, detail));
-      }
-
-      void onStandingsUpdated(object? _, (Tournament Tournament, IList<StandingRecord> Standings) args)
-      {
-        queueStandingsUpdate(args.Tournament, args.Standings, "standings", args.Standings.Count);
-      }
-
-      void onRoundUpdated(object? _, (Tournament Tournament, TournamentRound Round) args)
-      {
-        queueStandingsUpdate(args.Tournament, null, "round", SafeRoundNumber(args.Round));
-      }
-
-      void onStateUpdated(object? _, (Tournament Tournament, TournamentState State) args)
-      {
-        queueStandingsUpdate(args.Tournament, null, "state", args.State);
-      }
-
-      GameAPIService.StandingsUpdated += onStandingsUpdated;
-      GameAPIService.RoundUpdated += onRoundUpdated;
-      GameAPIService.StateUpdated += onStateUpdated;
-
-      using var cancellationRegistration = streamToken.Register(updateQueue.Complete);
-
-      try
-      {
-        await foreach (var update in updateQueue.ReadAllAsync(streamToken))
-        {
-          if (update.Source == "standings" &&
-              update.Standings is not { Count: > 0 })
-          {
-            int? roundHash = update.Tournament.GetRoundHash(includeTournamentId: true);
-            if (roundHash.HasValue && roundHash == lastRoundHash)
-            {
-              continue;
-            }
-
-            if (roundHash.HasValue)
-            {
-              lastRoundHash = roundHash;
-            }
-          }
-
-          bool isFullSnapshot = update.Standings is not { Count: > 0 };
-          IList<StandingRecord> standings =
-            !isFullSnapshot
-              ? update.Standings!
-              : update.Tournament.ComputeStandings();
-
-          if (isFullSnapshot && update.Source != "standings")
-          {
-            lastRoundHash =
-              update.Tournament.GetRoundHash(includeTournamentId: true) ??
-              lastRoundHash;
-          }
-
-          if (standings.Count == 0)
-          {
-            continue;
-          }
-
-          if (isFullSnapshot &&
-              ReferenceEquals(standings, lastWrittenFullStandings))
-          {
-            continue;
-          }
-
-          try
-          {
-            await StreamResponse(SerializeStandings(standings), streamToken);
-            if (isFullSnapshot)
-            {
-              lastWrittenFullStandings = standings;
-            }
-          }
-          catch (OperationCanceledException) when (streamToken.IsCancellationRequested)
-          {
-          }
-          catch (ObjectDisposedException) when (streamToken.IsCancellationRequested)
-          {
-          }
-          catch (Exception)
-          {
-            throw;
-          }
-        }
-      }
-      catch (OperationCanceledException) when (streamToken.IsCancellationRequested)
-      {
-        // Stream cancelled gracefully.
-      }
-      finally
-      {
-        GameAPIService.StandingsUpdated -= onStandingsUpdated;
-        GameAPIService.RoundUpdated -= onRoundUpdated;
-        GameAPIService.StateUpdated -= onStateUpdated;
-        updateQueue.Complete();
-      }
-
-      return new EmptyResult();
-    }
-    catch (KeyNotFoundException)
-    {
-      return NotFound(new { error = $"Tournament {id} not found. It may have ended or not yet loaded." });
-    }
-  }
-
-  private static IEnumerable<object> SerializeStandings(IList<StandingRecord> standings)
-  {
-    var serialized = standings
-      .SerializeAs<IStandingResult>()
-      .ToList();
-
-    return serialized
-      .Zip(standings, (dto, s) => (object)new
-      {
-        dto.Rank,
-        Player = s.Player.Name,
-        dto.Points,
-        dto.Record,
-        dto.OpponentMatchWinPercentage,
-        dto.GameWinPercentage,
-        dto.OpponentGameWinPercentage,
-      })
-      .ToList();
-  }
-
-  private static Tournament GetTournamentOrDiscovered(int id)
-  {
-    try
-    {
-      return EventManager.GetEvent(id);
-    }
-    catch (KeyNotFoundException) when (GameAPIService.DiscoveredTournaments.TryGetValue(id, out var tournament))
-    {
-      return tournament;
-    }
-  }
-
-  private static bool IsLiveFeaturedTournament(int id)
-  {
-    try
-    {
-      return EventManager.GetEvent(id) != null;
-    }
-    catch (KeyNotFoundException)
-    {
-      return false;
-    }
-  }
-
-  private static int SafeTournamentId(Tournament tournament)
-  {
-    try
-    {
-      return tournament.Id;
-    }
-    catch (Exception)
-    {
-      return -1;
-    }
-  }
-
-  private static int SafeEventId(Event eventObj)
-  {
-    try
-    {
-      return eventObj.Id;
-    }
-    catch (Exception)
-    {
-      return -1;
-    }
-  }
-
-  private static int SafeRoundNumber(TournamentRound round)
-  {
-    try
-    {
-      return round.Number;
-    }
-    catch (Exception)
-    {
-      return -1;
-    }
-  }
-
-  //
   // Action Endpoints
   //
 

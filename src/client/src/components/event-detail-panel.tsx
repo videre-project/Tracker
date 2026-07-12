@@ -26,19 +26,21 @@ function getFormatDot(format: string): string {
   return "bg-orange-500"
 }
 
-function useEventDetails(eventId: string | null) {
+function useEventDetails(eventId: string | null, enabled: boolean) {
   const [entryFee, setEntryFee] = useState<string | null>(null)
   const [prizes, setPrizes] = useState<Record<string, string> | null>(null)
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    if (!eventId) {
+    if (!eventId || !enabled) {
       setEntryFee(null)
       setPrizes(null)
+      setLoading(false)
       return
     }
 
     setLoading(true)
+    let cancelled = false
 
     Promise.all([
       fetch(getApiUrl(`/api/Events/GetEntryFee/${eventId}`))
@@ -48,23 +50,30 @@ function useEventDetails(eventId: string | null) {
         .then(r => r.ok ? r.json() : null)
         .catch(() => null),
     ]).then(([fee, prz]) => {
+      if (cancelled) return
       setEntryFee(fee)
       setPrizes(prz)
       setLoading(false)
     })
-  }, [eventId])
+
+    return () => {
+      cancelled = true
+    }
+  }, [eventId, enabled])
 
   return { entryFee, prizes, loading }
 }
 
 interface EventDetailPanelProps {
   event: ActiveGame | null
+  loadDetails?: boolean
   onClose: () => void
 }
 
-export function EventDetailPanel({ event, onClose }: EventDetailPanelProps) {
+export function EventDetailPanel({ event, loadDetails = true, onClose }: EventDetailPanelProps) {
   const navigate = useNavigate()
-  const { entryFee, prizes, loading } = useEventDetails(event?.id ?? null)
+  const { entryFee, prizes, loading } = useEventDetails(event?.id ?? null, loadDetails)
+  const detailsPending = Boolean(event && !loadDetails)
 
   if (!event) return null
 
@@ -113,7 +122,7 @@ export function EventDetailPanel({ event, onClose }: EventDetailPanelProps) {
 
       {/* Prizes — scrollable with bottom fade */}
       <PrizesScroll>
-          {loading ? (
+          {detailsPending || loading ? (
             <div className="text-xs text-muted-foreground">Loading...</div>
           ) : prizes && Object.keys(prizes).length > 0 ? (
             <div className="space-y-2">
