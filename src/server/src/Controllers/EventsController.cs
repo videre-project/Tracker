@@ -6,30 +6,22 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net.Http;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
-using System.Text.Json.Serialization;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
-using MTGOSDK.API.Users;
 using MTGOSDK.API.Play;
 using MTGOSDK.API.Play.Tournaments;
 using MTGOSDK.Core.Logging;
-using MTGOSDK.Core.Reflection.Serialization;
 using static MTGOSDK.Core.Reflection.DLRWrapper;
-using MTGOSDK.Core.Remoting;
 
 using Tracker.Controllers.Base;
-using Tracker.Database;
+using Tracker.Models.API.Events;
 using Tracker.Services.MTGO;
-using TournamentMatch = MTGOSDK.API.Play.Match;
 
 
 using static Tracker.Services.MTGO.Events.TournamentSerialization;
@@ -42,80 +34,6 @@ namespace Tracker.Controllers;
 [Route("api/[controller]/[action]")]
 public class EventsController(ClientStateMonitor clientMonitor) : APIController
 {
-  //
-  // Serialization Interfaces
-  //
-
-  public interface IEventStructure
-  {
-    string Name { get; }
-
-    bool IsConstructed { get; }
-    bool IsLimited { get; }
-    bool IsDraft { get; }
-    bool IsSealed { get; }
-    bool IsSingleElimination { get; }
-    bool IsSwiss { get; }
-    bool HasPlayoffs { get; }
-  }
-
-  public interface ITournament
-  {
-    int Id { get; }
-    string Description { get; }
-    string Format { get; }
-    int MinimumPlayers { get; }
-    int TotalPlayers { get; }
-    int TotalRounds { get; }
-
-    IEventStructure EventStructure { get; }
-    DateTime StartTime { get; }
-    DateTime EndTime { get; }
-
-    // ITournamentStateUpdate
-    TournamentState State { get; }
-    int RoundNumber { get; }
-    DateTime RoundEndTime { get; }
-    bool InPlayoffs { get; }
-  }
-
-  public interface ITournamentStateCore
-  {
-    int Id { get; }
-    TournamentState State { get; }
-    int RoundNumber { get; }
-    DateTime RoundEndTime { get; }
-    bool InPlayoffs { get; }
-  }
-
-  public interface ITournamentStateUpdate : ITournamentStateCore
-  {
-    IEnumerable<string> ActivePlayerNames { get; }
-    IEnumerable<string> PlayerNamesWithMatchesInProgress { get; }
-  }
-
-  public interface ITournamentPlayerUpdate
-  {
-    int Id { get; }
-    int TotalPlayers { get; }
-    int TotalRounds { get; }
-    DateTime EndTime { get; }
-  }
-
-  public interface IStandingResult
-  {
-    int Rank { get; }
-    int Points { get; }
-    string Record { get; }
-    string OpponentMatchWinPercentage { get; }
-    string GameWinPercentage { get; }
-    string OpponentGameWinPercentage { get; }
-  }
-
-  //
-  // Events API Endpoints
-  //
-
   /// <summary>
   /// Get list of available tournaments/events
   /// </summary>

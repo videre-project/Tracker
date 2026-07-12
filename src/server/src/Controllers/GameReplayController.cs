@@ -3,11 +3,6 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-/** @file
-  Copyright (c) 2026, Cory Bennett. All rights reserved.
-  SPDX-License-Identifier: Apache-2.0
-**/
-
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -18,7 +13,7 @@ using Microsoft.EntityFrameworkCore;
 using Tracker.Controllers.Base;
 using Tracker.Database;
 using Tracker.Database.Models;
-using Tracker.Models.API.Games;
+using Tracker.Models.API.Replays;
 using Tracker.Services.MTGO;
 using Tracker.Services.MTGO.Events;
 

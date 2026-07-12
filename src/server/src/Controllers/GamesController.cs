@@ -6,24 +6,20 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.Json;
 using System.Threading.Tasks;
 
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 
 using MTGOSDK.API.Play;
 using MTGOSDK.API.Play.Games;
 
 using Tracker.Controllers.Base;
 using Tracker.Database;
-using Tracker.Database.Models;
 using Tracker.Models.API.Games;
 using Tracker.Services.MTGO;
-using Tracker.Services.MTGO.Events;
 using static Tracker.Services.Games.MatchHistorySerialization;
+
 
 namespace Tracker.Controllers;
 

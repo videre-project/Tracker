@@ -11,16 +11,13 @@ using Tracker.Database.Models;
 
 namespace Tracker.Models.API.Decks;
 
-public class DeckDTO
+public class DeckDetailDTO
 {
   public required string Hash { get; set; }
   public required int Id { get; set; }
   public required string Name { get; set; }
   public required string Format { get; set; }
   public required DateTime Timestamp { get; set; }
-  public required int MainboardCount { get; set; }
-  public required int SideboardCount { get; set; }
-  public string? Archetype { get; set; }
-  public List<string> Colors { get; set; } = new();
-  public List<CardEntry> FeaturedCards { get; set; } = new();
+  public required List<CardEntry> Mainboard { get; set; }
+  public required List<CardEntry> Sideboard { get; set; }
 }

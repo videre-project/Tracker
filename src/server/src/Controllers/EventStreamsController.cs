@@ -3,11 +3,6 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-/** @file
-  Copyright (c) 2026, Cory Bennett. All rights reserved.
-  SPDX-License-Identifier: Apache-2.0
-**/
-
 using System;
 using System.Collections.Generic;
 using System.Text.Json;
@@ -22,6 +17,7 @@ using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection.Serialization;
 
 using Tracker.Controllers.Base;
+using Tracker.Models.API.Events;
 using Tracker.Services.MTGO;
 
 using static Tracker.Services.MTGO.Events.TournamentSerialization;
@@ -43,7 +39,7 @@ public sealed class EventStreamsController : APIController
 
   [HttpGet("/api/events/watchtournamentupdates/{id}")]
   [ProducesResponseType(
-    typeof(IEnumerable<EventsController.ITournamentStateUpdate>), StatusCodes.Status200OK)]
+    typeof(IEnumerable<ITournamentStateUpdate>), StatusCodes.Status200OK)]
   [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
   [Produces("application/x-ndjson")]
   public async Task<IActionResult> WatchTournamentUpdates(int id)
@@ -198,7 +194,7 @@ public sealed class EventStreamsController : APIController
   /// <returns>Server-sent events stream of player count changes as NDJSON</returns>
   [HttpGet("/api/events/watchplayercount")]
   [ProducesResponseType(
-    typeof(IEnumerable<EventsController.ITournamentPlayerUpdate>), StatusCodes.Status200OK)]
+    typeof(IEnumerable<ITournamentPlayerUpdate>), StatusCodes.Status200OK)]
   [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
   [Produces("application/x-ndjson")]
   public async Task<IActionResult> WatchPlayerCount()
@@ -234,7 +230,7 @@ public sealed class EventStreamsController : APIController
       await foreach (var eventObj in updateQueue.ReadAllAsync(streamToken))
       {
         await StreamResponse(
-          new[] { eventObj }.SerializeAs<EventsController.ITournamentPlayerUpdate>(),
+          new[] { eventObj }.SerializeAs<ITournamentPlayerUpdate>(),
           streamToken);
       }
     }
@@ -260,7 +256,7 @@ public sealed class EventStreamsController : APIController
   /// <returns>NDJSON stream: initial standings then live deltas</returns>
   [HttpGet("/api/events/watchstandings/{id}")]
   [ProducesResponseType(
-    typeof(IEnumerable<EventsController.IStandingResult>), StatusCodes.Status200OK)]
+    typeof(IEnumerable<IStandingResult>), StatusCodes.Status200OK)]
   [ProducesResponseType(StatusCodes.Status404NotFound)]
   [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
   [Produces("application/x-ndjson")]

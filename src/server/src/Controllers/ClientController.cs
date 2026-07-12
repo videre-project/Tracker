@@ -14,6 +14,7 @@ using Microsoft.AspNetCore.Mvc;
 using MTGOSDK.Core.Remoting;
 
 using Tracker.Controllers.Base;
+using Tracker.Models.API.Client;
 using Tracker.Services.MTGO;
 
 
@@ -24,34 +25,8 @@ namespace Tracker.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/[controller]/[action]")]
-public class ClientController : APIController
+public class ClientController(IClientAPIProvider clientProvider) : APIController
 {
-  private readonly IClientAPIProvider _clientProvider;
-
-  public ClientController(IClientAPIProvider clientProvider)
-  {
-    _clientProvider = clientProvider;
-  }
-
-  //
-  // Client State Interfaces
-  //
-
-  public interface IClientState
-  {
-    bool IsConnected { get; }
-    bool IsInitialized { get; }
-    ushort? ProcessId { get; }
-    string Status { get; }
-    long? MemoryUsage { get; }
-    long? WorkingSet { get; }
-    long? VirtualMemory { get; }
-  }
-
-  //
-  // Client State Endpoints
-  //
-
   /// <summary>
   /// Get current client connection state
   /// </summary>
@@ -60,14 +35,14 @@ public class ClientController : APIController
   [ProducesResponseType(typeof(IClientState), StatusCodes.Status200OK)]
   public IActionResult GetState()
   {
-    var isReady = _clientProvider.IsReady;
+    var isReady = clientProvider.IsReady;
     var memory = GetMemoryUsage(isReady);
 
     return Ok(new
     {
       IsConnected = isReady,
       IsInitialized = isReady,
-      ProcessId = _clientProvider.Pid,
+      ProcessId = clientProvider.Pid,
       Status = isReady ? "ready" : "disconnected",
       MemoryUsage = memory?.PrivateMemory,
       WorkingSet = memory?.WorkingSet,
@@ -110,7 +85,7 @@ public class ClientController : APIController
       }
 
       // Subscribe to state change events
-      _clientProvider.ClientStateChanged += OnStateChanged;
+      clientProvider.ClientStateChanged += OnStateChanged;
 
       try
       {
@@ -142,7 +117,7 @@ public class ClientController : APIController
       finally
       {
         // Unsubscribe from events
-        _clientProvider.ClientStateChanged -= OnStateChanged;
+        clientProvider.ClientStateChanged -= OnStateChanged;
         channel.Writer.Complete();
       }
 
@@ -160,7 +135,7 @@ public class ClientController : APIController
 
   private async Task SendCurrentState()
   {
-    var isReady = _clientProvider.IsReady;
+    var isReady = clientProvider.IsReady;
     var memory = GetMemoryUsage(isReady);
 
     await StreamResponse(new[]
@@ -169,7 +144,7 @@ public class ClientController : APIController
       {
         IsConnected = isReady,
         IsInitialized = isReady,
-        ProcessId = _clientProvider.Pid,
+        ProcessId = clientProvider.Pid,
         Status = isReady ? "ready" : "disconnected",
         MemoryUsage = memory?.PrivateMemory,
         WorkingSet = memory?.WorkingSet,
