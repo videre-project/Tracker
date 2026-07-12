@@ -6,9 +6,13 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Threading;
 using System.Threading.Tasks;
 
 using Microsoft.AspNetCore.Http;
@@ -25,7 +29,9 @@ using MTGOSDK.Core.Reflection.Serialization;
 using Tracker.Controllers.Base;
 using Tracker.Database;
 using Tracker.Database.Models;
+using Tracker.Models.API.Decks;
 using Tracker.Services.MTGO;
+using Tracker.Services.Videre;
 
 
 namespace Tracker.Controllers;
@@ -35,13 +41,25 @@ namespace Tracker.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
-public class DecksController(
-  EventContext context,
-  IHttpClientFactory httpClientFactory,
-  IServiceScopeFactory scopeFactory,
-  ApplicationOptions appOptions,
-  IClientAPIProvider clientProvider) : APIController
+public class DecksController : APIController
 {
+  private readonly EventContext context;
+  private readonly IServiceScopeFactory scopeFactory;
+  private readonly INBACArchetypeClient nbacArchetypeClient;
+  private readonly IClientAPIProvider clientProvider;
+
+  public DecksController(
+    EventContext context,
+    IServiceScopeFactory scopeFactory,
+    INBACArchetypeClient nbacArchetypeClient,
+    IClientAPIProvider clientProvider)
+  {
+    this.context = context;
+    this.scopeFactory = scopeFactory;
+    this.nbacArchetypeClient = nbacArchetypeClient;
+    this.clientProvider = clientProvider;
+  }
+
   //
   // Serialization Interfaces
   //
@@ -73,12 +91,6 @@ public class DecksController(
     string Rarity
   ) : ICardData;
 
-  private static readonly JsonSerializerOptions s_jsonOptions = new()
-  {
-    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-    WriteIndented = true
-  };
-
   /// <summary>
   /// Get all decks grouped by format
   /// </summary>
@@ -105,7 +117,11 @@ public class DecksController(
           MainboardCount = d.Mainboard.Sum(c => c.quantity),
           SideboardCount = d.Sideboard.Sum(c => c.quantity),
           Archetype = d.Archetype,
-          Colors = d.Colors
+          Colors = d.Colors,
+          FeaturedCards = d.Mainboard
+            .OrderByDescending(c => c.quantity)
+            .Take(5)
+            .ToList()
         }).ToList()
       );
 
@@ -162,10 +178,9 @@ public class DecksController(
     });
   }
 
-  private record CachedDeck(Deck Deck, List<CardQuantityPair> Mainboard, List<CardQuantityPair> Sideboard);
+  private record CachedDeck(List<CardEntry> Mainboard, List<CardEntry> Sideboard);
 
   private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, CachedDeck> s_deckCache = new();
-
   /// <summary>
   /// Render a deck as a streaming NDJSON sequence of framed card images.
   ///
@@ -186,7 +201,7 @@ public class DecksController(
   {
     int[] catalogIds;
 
-    // Prioritize ID/Hash lookup (DB -> Cache -> SDK)
+    // Prioritize ID/Hash lookup (DB -> Cache)
     if (!string.IsNullOrEmpty(id))
     {
       var cached = await GetOrLoadDeck(id);
@@ -197,7 +212,7 @@ public class DecksController(
       // Deduped in DB order — must match the ordering used by GetSortableCards.
       catalogIds = cached.Mainboard
         .Concat(cached.Sideboard)
-        .Select(c => c.Id)
+        .Select(c => c.catalogId)
         .Distinct()
         .ToArray();
     }
@@ -225,21 +240,12 @@ public class DecksController(
     int cardWidth = (int)Math.Ceiling(cardHeight * (5.0 / 7.0));
     int total     = catalogIds.Length;
 
-    DisableBuffering();
-    SetNdjsonContentType();
-
-    var opts    = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
-    var newline = new byte[] { (byte)'\n' };
-
-    async Task WriteLineAsync<T>(T obj)
-    {
-      await JsonSerializer.SerializeAsync(Response.Body, obj, opts, HttpContext.RequestAborted);
-      await Response.Body.WriteAsync(newline, HttpContext.RequestAborted);
-      await Response.Body.FlushAsync(HttpContext.RequestAborted);
-    }
+    StartNDJSONResponse();
 
     // Line 1 — metadata: client pre-sizes the canvas and hides the overlay.
-    await WriteLineAsync(new { type = "meta", columns, cardWidth, cardHeight, total });
+    await WriteCompactNDJSONLine(
+      new { type = "meta", columns, cardWidth, cardHeight, total },
+      HttpContext.RequestAborted);
 
     // Stream one row at a time. RenderCardsRowByRow does a single WPF render
     // pass for all cards, then yields each row as soon as its parallel
@@ -248,7 +254,9 @@ public class DecksController(
     foreach (var rowCards in CardRenderer.RenderCardsRowByRow(catalogIds, columns, cardHeight))
     {
       if (HttpContext.RequestAborted.IsCancellationRequested) break;
-      await WriteLineAsync(new { type = "cards", startIndex, cards = rowCards });
+      await WriteCompactNDJSONLine(
+        new { type = "cards", startIndex, cards = rowCards },
+        HttpContext.RequestAborted);
       startIndex += rowCards.Length;
     }
 
@@ -257,7 +265,7 @@ public class DecksController(
 
   /// <summary>
   /// Get sortable card metadata for a deck.
-  /// Uses fast parallel serialization that matches MTGO's NonPileByName order.
+  /// Uses persisted deck entries for deck hashes and live MTGO serialization for deck names.
   /// </summary>
   /// <param name="name">Deck name (looks up from MTGO client)</param>
   /// <param name="id">Deck hash/ID (looks up from DB and caches)</param>
@@ -269,18 +277,17 @@ public class DecksController(
     [FromQuery] string? name = null,
     [FromQuery] string? id = null)
   {
-    CachedDeck? cachedDeck = null;
     Deck? deck = null;
 
-    // Prioritize ID/Hash lookup (DB -> Cache -> SDK)
+    // Prioritize ID/Hash lookup (DB -> Cache)
     if (!string.IsNullOrEmpty(id))
     {
-      cachedDeck = await GetOrLoadDeck(id);
+      var cachedDeck = await GetOrLoadDeck(id);
       if (cachedDeck == null)
       {
         return NotFound(new { error = $"Deck with hash {id} not found in database" });
       }
-      deck = cachedDeck.Deck;
+      return Ok(BuildCachedSortableCards(cachedDeck));
     }
     // Fallback to Name lookup (Client)
     else if (!string.IsNullOrEmpty(name)) 
@@ -304,105 +311,138 @@ public class DecksController(
     var cardDataList = await deck.SerializeItemsAsAsync<ICardData>();
     Log.Trace($"Serialized deck.");
 
-    // Create lookup for card metadata by CatalogId
-    // Group by ID because identical cards (same printing) have same ID
-    var metadataMap = cardDataList
-      .GroupBy(c => c.Id)
-      .ToDictionary(g => g.Key, g => g.First());
-
     var resultList = new List<SortableCardEntry>();
-
-    if (cachedDeck != null)
+    var sorted = cardDataList.OrderBy(c => GetSortableName(c.Name)).ThenBy(c => c.Id).ToList();
+    for (int i = 0; i < sorted.Count; i++)
     {
-      var sortedSDKCards = cardDataList
-        .OrderBy(c => GetSortableName(c.Name))
-        .ThenBy(c => c.Id)
-        .ToList();
-
-      // Build a lookup: catalogId → sheet slot index, matching GetDeckSheet's
-      // catalogIds ordering (mainboard ∪ sideboard deduped in DB order).
-      var sheetIndexById = cachedDeck.Mainboard
-        .Concat(cachedDeck.Sideboard)
-        .Select(c => c.Id)
-        .Distinct()
-        .Select((id, i) => (id, i))
-        .ToDictionary(t => t.id, t => t.i);
-
-      for (int idx = 0; idx < sortedSDKCards.Count; idx++)
+      var c = sorted[i];
+      resultList.Add(new SortableCardEntry
       {
-        var card = sortedSDKCards[idx];
-        int totalQty = card.Quantity;
-        int mainQty = 0;
-        int sideQty = 0;
-
-        // Count in Main/Sideboards
-        mainQty = cachedDeck.Mainboard.Where(x => x.Id == card.Id).Sum(x => x.Quantity);
-        sideQty = cachedDeck.Sideboard.Where(x => x.Id == card.Id).Sum(x => x.Quantity);
-        
-        // Safety: If mismatch (e.g. strict version mismatch in SDK vs DB), dump undefined into Main?
-        if (mainQty + sideQty == 0) mainQty = totalQty; 
-
-        if (mainQty > 0)
-        {
-          resultList.Add(new SortableCardEntry
-          {
-            Index = -1,
-            OriginalIndex = sheetIndexById.TryGetValue(card.Id, out var msi) ? msi : idx,
-            CatalogId = card.Id,
-            Name = card.Name,
-            Quantity = mainQty,
-            Zone = "Mainboard",
-            Cmc = card.ConvertedManaCost,
-            Colors = card.Colors?.ToCharArray().Select(ch => ch.ToString()).ToList() ?? new List<string>(),
-            Types = card.Types?.ToList() ?? new List<string>(),
-            Rarity = card.Rarity
-          });
-        }
-        if (sideQty > 0)
-        {
-          resultList.Add(new SortableCardEntry
-          {
-            Index = -1, // Assigned later
-            OriginalIndex = sheetIndexById.TryGetValue(card.Id, out var ssi) ? ssi : idx,
-            CatalogId = card.Id,
-            Name = card.Name,
-            Quantity = sideQty,
-            Zone = "Sideboard",
-            Cmc = card.ConvertedManaCost,
-            Colors = card.Colors?.ToCharArray().Select(ch => ch.ToString()).ToList() ?? new List<string>(),
-            Types = card.Types?.ToList() ?? new List<string>(),
-            Rarity = card.Rarity
-          });
-        }
-      }
+        Index = i,
+        OriginalIndex = i,
+        CatalogId = c.Id,
+        Name = c.Name,
+        Quantity = c.Quantity,
+        Zone = "Mainboard",
+        Cmc = c.ConvertedManaCost,
+        Colors = c.Colors?.ToCharArray().Select(ch => ch.ToString()).ToList() ?? new List<string>(),
+        Types = c.Types?.ToList() ?? new List<string>(),
+        Rarity = c.Rarity
+      });
     }
-    else
-    {
-       // Old logic for non-cached
-       var sorted = cardDataList.OrderBy(c => GetSortableName(c.Name)).ThenBy(c => c.Id).ToList();
-       for (int i = 0; i < sorted.Count; i++)
-       {
-         var c = sorted[i];
-         resultList.Add(new SortableCardEntry
-         {
-            Index = -1,
-            OriginalIndex = i,
-            CatalogId = c.Id,
-            Name = c.Name,
-            Quantity = c.Quantity,
-            Zone = "Mainboard", // Default
-            Cmc = c.ConvertedManaCost,
-            Colors = c.Colors?.ToCharArray().Select(ch => ch.ToString()).ToList() ?? new List<string>(),
-            Types = c.Types?.ToList() ?? new List<string>(),
-            Rarity = c.Rarity
-         });
-       }
-    }
-
-    // Assign sequential indices
-    for(int i=0; i<resultList.Count; i++) resultList[i].Index = i;
 
     return Ok(resultList);
+  }
+
+  private static List<SortableCardEntry> BuildCachedSortableCards(CachedDeck cachedDeck)
+  {
+    var sheetIndexById = cachedDeck.Mainboard
+      .Concat(cachedDeck.Sideboard)
+      .Select(c => c.catalogId)
+      .Distinct()
+      .Select((id, i) => (id, i))
+      .ToDictionary(t => t.id, t => t.i);
+
+    var sortedCards = MergeCardEntries(cachedDeck.Mainboard)
+      .Select(entry => (Entry: entry, Zone: "Mainboard", Card: GetCardData(entry)))
+      .Concat(MergeCardEntries(cachedDeck.Sideboard)
+        .Select(entry => (Entry: entry, Zone: "Sideboard", Card: GetCardData(entry))))
+      .OrderBy(c => GetSortableName(c.Card.Name))
+      .ThenBy(c => c.Entry.catalogId)
+      .ThenBy(c => c.Zone == "Mainboard" ? 0 : 1)
+      .ToList();
+
+    var resultList = new List<SortableCardEntry>();
+    for (var idx = 0; idx < sortedCards.Count; idx++)
+    {
+      var (entry, zone, card) = sortedCards[idx];
+      if (entry.quantity <= 0) continue;
+
+      resultList.Add(new SortableCardEntry
+      {
+        Index = resultList.Count,
+        OriginalIndex = sheetIndexById.TryGetValue(entry.catalogId, out var originalIndex) ? originalIndex : idx,
+        CatalogId = entry.catalogId,
+        Name = card.Name,
+        Quantity = entry.quantity,
+        Zone = zone,
+        Cmc = card.ConvertedManaCost,
+        Colors = card.Colors?.ToCharArray().Select(ch => ch.ToString()).ToList() ?? new List<string>(),
+        Types = card.Types?.ToList() ?? new List<string>(),
+        Rarity = card.Rarity
+      });
+    }
+
+    return resultList;
+  }
+
+  private static List<CardEntry> MergeCardEntries(IEnumerable<CardEntry> entries)
+  {
+    return entries
+      .GroupBy(c => c.catalogId)
+      .Select(g => new CardEntry(g.Key, g.First().name, g.Sum(c => c.quantity)))
+      .ToList();
+  }
+
+  private static ICardData GetCardData(CardEntry entry)
+  {
+    var fallbackName = string.IsNullOrWhiteSpace(entry.name)
+      ? entry.catalogId.ToString()
+      : entry.name;
+
+    try
+    {
+      var card = CollectionManager.GetCard(entry.catalogId);
+      if (card == null)
+      {
+        return new CardDataRecord(entry.catalogId, fallbackName, entry.quantity, 0, "", new List<string>(), "");
+      }
+
+      try
+      {
+        var data = card.SerializeAs<ICardData>();
+        return new CardDataRecord(
+          entry.catalogId,
+          string.IsNullOrWhiteSpace(data.Name) ? fallbackName : data.Name,
+          entry.quantity,
+          data.ConvertedManaCost,
+          data.Colors ?? "",
+          data.Types?.ToList() ?? new List<string>(),
+          data.Rarity ?? ""
+        );
+      }
+      catch (Exception ex)
+      {
+        Log.Trace($"Failed to serialize card metadata for catalog ID {entry.catalogId}: {ex.Message}");
+      }
+
+      try
+      {
+        return new CardDataRecord(
+          entry.catalogId,
+          string.IsNullOrWhiteSpace(card.Name) ? fallbackName : card.Name,
+          entry.quantity,
+          0,
+          card.Colors ?? "",
+          new List<string>(),
+          ""
+        );
+      }
+      catch (Exception ex)
+      {
+        Log.Trace($"Failed to read card fallback metadata for catalog ID {entry.catalogId}: {ex.Message}");
+      }
+    }
+    catch (KeyNotFoundException)
+    {
+      Log.Trace($"Catalog ID {entry.catalogId} was not found while building sortable deck cards.");
+    }
+    catch (Exception ex)
+    {
+      Log.Trace($"Failed to resolve card metadata for catalog ID {entry.catalogId}: {ex.Message}");
+    }
+
+    return new CardDataRecord(entry.catalogId, fallbackName, entry.quantity, 0, "", new List<string>(), "");
   }
 
   private async Task<CachedDeck?> GetOrLoadDeck(string hash)
@@ -418,14 +458,10 @@ public class DecksController(
 
     try
     {
-      var mainboard = deckModel.Mainboard.Select(c => new CardQuantityPair(c.catalogId, c.quantity)).ToList();
-      var sideboard = deckModel.Sideboard.Select(c => new CardQuantityPair(c.catalogId, c.quantity)).ToList();
+      var mainboard = deckModel.Mainboard.ToList();
+      var sideboard = deckModel.Sideboard.ToList();
 
-      // Deck constructor makes synchronous IPC calls (CreateInstance,
-      // CreateArray, ReconcileCards). Run on the request thread — not
-      // Task.Run — to avoid ThreadPool starvation deadlocks.
-      var deck = new Deck(mainboard, sideboard, deckModel.Name);
-      var result = new CachedDeck(deck, mainboard, sideboard);
+      var result = new CachedDeck(mainboard, sideboard);
       s_deckCache.TryAdd(hash, result);
       return result;
     }
@@ -459,16 +495,18 @@ public class DecksController(
     return sb.ToString();
   }
 
-  /// <summary>
+/// <summary>
   /// Get archetype information for a deck from the NBAC API
   /// </summary>
   /// <param name="hash">Deck hash</param>
   /// <returns>Raw NBAC API response</returns>
-  [HttpGet("{hash}/archetype")] // GET /api/decks/{hash}/archetype
+  [HttpGet("/api/decks/{hash}/archetype")] // GET /api/decks/{hash}/archetype
   [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
   [ProducesResponseType(StatusCodes.Status404NotFound)]
   [ProducesResponseType(StatusCodes.Status502BadGateway)]
-  public async Task<ActionResult<object>> GetArchetype(string hash)
+  public async Task<ActionResult<object>> GetArchetype(
+    string hash,
+    CancellationToken cancellationToken)
   {
     var deck = await context.Decks.FindAsync(hash);
     if (deck == null)
@@ -478,7 +516,7 @@ public class DecksController(
 
     // Build request body with card names and quantities
     var cards = deck.Mainboard
-      .Select(c => new { name = c.name, quantity = c.quantity })
+      .Select(card => new NBACDeckCard(card.name, card.quantity))
       .ToList();
 
     if (cards.Count < 2)
@@ -488,34 +526,24 @@ public class DecksController(
 
     try
     {
-      var client = httpClientFactory.CreateClient();
-      var requestBody = JsonSerializer.Serialize(cards, s_jsonOptions);
-      var content = new StringContent(requestBody, Encoding.UTF8, "application/json");
-
-      // Call NBAC API with explain=1 for testing
-      var response = await client.PostAsync(
-        $"{appOptions.NbacApiUrl}?format={Uri.EscapeDataString(deck.Format.ToLower())}&explain=1",
-        content
-      );
-
-      var responseContent = await response.Content.ReadAsStringAsync();
-
-      if (!response.IsSuccessStatusCode)
+      var nbacResponse = await nbacArchetypeClient.DetectArchetypeAsync(
+        cards,
+        deck.Format,
+        cancellationToken);
+      return Ok(nbacResponse);
+    }
+    catch (NBACAPIException ex)
+    {
+      if (ex.StatusCode.HasValue)
       {
         return StatusCode(StatusCodes.Status502BadGateway, new
         {
           error = "NBAC API request failed",
-          statusCode = (int)response.StatusCode,
-          response = responseContent
+          statusCode = ex.StatusCode.Value,
+          response = ex.Response
         });
       }
 
-      // Parse and return raw JSON response
-      var nbacResponse = JsonSerializer.Deserialize<JsonElement>(responseContent);
-      return Ok(nbacResponse);
-    }
-    catch (HttpRequestException ex)
-    {
       return StatusCode(StatusCodes.Status502BadGateway, new
       {
         error = "Failed to connect to NBAC API",
@@ -529,7 +557,7 @@ public class DecksController(
   /// </summary>
   /// <param name="hash">Deck hash</param>
   /// <returns>List of color characters (W, U, B, R, G)</returns>
-  [HttpGet("{hash}/colors")] // GET /api/decks/{hash}/colors
+  [HttpGet("/api/decks/{hash}/colors")] // GET /api/decks/{hash}/colors
   [ProducesResponseType(typeof(DeckColorsDTO), StatusCodes.Status200OK)]
   [ProducesResponseType(StatusCodes.Status404NotFound)]
   public async Task<ActionResult<DeckColorsDTO>> GetDeckColors(string hash)
@@ -592,7 +620,7 @@ public class DecksController(
   /// <param name="maxDate">Maximum event start date</param>
   /// <param name="format">Format filter</param>
   /// <returns>List of archetypes with their top card, winrate, and match count</returns>
-  [HttpGet("archetypes/aggregated")] // GET /api/decks/archetypes/aggregated
+  [HttpGet("/api/decks/archetypes/aggregated")] // GET /api/decks/archetypes/aggregated
   [ProducesResponseType(typeof(List<AggregatedArchetypeDTO>), StatusCodes.Status200OK)]
   public async Task<ActionResult<List<AggregatedArchetypeDTO>>> GetAggregatedArchetypes(
     [FromQuery] DateTime? minDate,
@@ -721,73 +749,5 @@ public class DecksController(
     // Sort by matches descending
     return Ok(result.OrderByDescending(a => a.Matches).ToList());
   }
-}
 
-public class DeckDTO
-{
-  public required string Hash { get; set; }
-  public required int Id { get; set; }
-  public required string Name { get; set; }
-  public required string Format { get; set; }
-  public required DateTime Timestamp { get; set; }
-  public required int MainboardCount { get; set; }
-  public required int SideboardCount { get; set; }
-  public string? Archetype { get; set; }
-  public List<string> Colors { get; set; } = new();
-}
-
-public class DeckDetailDTO
-{
-  public required string Hash { get; set; }
-  public required int Id { get; set; }
-  public required string Name { get; set; }
-  public required string Format { get; set; }
-  public required DateTime Timestamp { get; set; }
-  public required List<CardEntry> Mainboard { get; set; }
-  public required List<CardEntry> Sideboard { get; set; }
-}
-
-public class AggregatedArchetypeDTO
-{
-  public required string Archetype { get; set; }
-  public required List<string> Colors { get; set; }
-  public required int Matches { get; set; }
-  public required int Wins { get; set; }
-  public required int Losses { get; set; }
-  public required double Winrate { get; set; }
-  public required string TopCard { get; set; }
-  public required double TopCardAvgScore { get; set; }
-  public required double TopCardAvgQuantity { get; set; }
-}
-
-public class DeckColorsDTO
-{
-  public required string Hash { get; set; }
-  public required List<string> Colors { get; set; }
-  public required string ColorString { get; set; }
-}
-
-/// <summary>
-/// Card entry with sortable metadata (CMC, Colors, Types)
-/// </summary>
-public class SortableCardEntry
-{
-  public int Index { get; set; }
-  public int OriginalIndex { get; set; }
-  public required int CatalogId { get; set; }
-  public required string Name { get; set; }
-  public int Quantity { get; set; }
-  public int Cmc { get; set; }
-  public List<string> Colors { get; set; } = new();
-  public List<string> Types { get; set; } = new();
-  public required string Rarity { get; set; }
-  public string Zone { get; set; } = "Mainboard";
-}
-
-public class DeckIdentifierDTO
-{
-  public required string Hash { get; set; }
-  public required int Id { get; set; }
-  public required string Name { get; set; }
-  public required string Format { get; set; }
 }

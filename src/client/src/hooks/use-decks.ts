@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { useClientState } from "./use-client-state"
 import { getApiUrl } from "../utils/api-config"
 
@@ -18,6 +18,7 @@ export interface DeckSummary {
   sideboardCount: number
   archetype?: string
   colors: string[]
+  featuredCards?: CardEntry[]
 }
 
 export interface DeckDetail {
@@ -80,20 +81,34 @@ export function useDeckDetail(hash: string | null) {
   useEffect(() => {
     if (!hash) {
       setDetail(null)
+      setLoading(false)
+      setError(null)
       return
     }
 
+    const abortController = new AbortController()
+
+    setDetail(null)
     setLoading(true)
     setError(null)
 
-    fetch(getApiUrl(`/api/decks/${hash}`))
+    fetch(getApiUrl(`/api/decks/${hash}`), { signal: abortController.signal })
       .then(res => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         return res.json()
       })
       .then(data => setDetail(data))
-      .catch(err => setError(err.message))
-      .finally(() => setLoading(false))
+      .catch(err => {
+        if (err instanceof Error && err.name === "AbortError") return
+        setError(err instanceof Error ? err.message : "Unknown error")
+      })
+      .finally(() => {
+        if (!abortController.signal.aborted) {
+          setLoading(false)
+        }
+      })
+
+    return () => abortController.abort()
   }, [hash])
 
   return { detail, loading, error }
@@ -103,10 +118,22 @@ export function useDeckArchetype(hash: string | null) {
   const [archetype, setArchetype] = useState<NBACResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const loadingRef = useRef(false)
+  const requestedHashRef = useRef<string | null>(null)
 
-  const fetchArchetype = useCallback(async () => {
+  useEffect(() => {
+    setArchetype(null)
+    setError(null)
+    requestedHashRef.current = null
+  }, [hash])
+
+  const fetchArchetype = useCallback(async (force = false) => {
     if (!hash) return
+    if (loadingRef.current) return
+    if (!force && requestedHashRef.current === hash) return
 
+    loadingRef.current = true
+    requestedHashRef.current = hash
     setLoading(true)
     setError(null)
 
@@ -118,6 +145,7 @@ export function useDeckArchetype(hash: string | null) {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error")
     } finally {
+      loadingRef.current = false
       setLoading(false)
     }
   }, [hash])

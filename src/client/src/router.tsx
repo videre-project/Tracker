@@ -20,6 +20,7 @@ import Home from "@/pages/home";
 import SettingsPage from "@/pages/settings";
 import Diagnostics from "@/pages/diagnostics";
 import Decks from "@/pages/decks";
+import DeckEditor from "@/pages/deck-editor";
 import Collection from "@/pages/collection";
 import History from "@/pages/history";
 import MatchDetails from "@/pages/match-details";
@@ -90,6 +91,12 @@ export const routes: RouteEntry[] = [
         icon: BookCopy,
         type: NavType.Primary,
         element: <Decks />
+      },
+      {
+        path: "/decks/:deckHash",
+        name: "Deck",
+        type: NavType.Secondary,
+        element: <DeckEditor />
       },
       {
         path: "/events",
