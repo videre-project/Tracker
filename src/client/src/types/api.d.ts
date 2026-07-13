@@ -2748,6 +2748,7 @@ export interface components {
             result: string | null;
             duration: string | null;
             playDraw: string | null;
+            sideboardChanges?: SideboardChangeDTO[] | null;
             logs?: GameLogDTO[] | null;
         };
         "Tracker.Controllers.Models.Games.GameLogDTO": {
@@ -2832,6 +2833,13 @@ export interface components {
             ci95?: number[] | null;
             ci80?: number[] | null;
             ci50?: number[] | null;
+        };
+        "Tracker.Controllers.Models.Games.SideboardChangeDTO": {
+            /** Format: int32 */
+            catalogId?: number;
+            name: string | null;
+            /** Format: int32 */
+            quantity?: number;
         };
         "Tracker.Controllers.Models.Replays.ReplayActionDTO": {
             actionType: string | null;
@@ -3068,6 +3076,7 @@ export type TrackerControllersModelsGamesMatchDetailsDto = MatchDetailsDTO;
 export type TrackerControllersModelsGamesMatchHistoryDto = MatchHistoryDTO;
 export type TrackerControllersModelsGamesPaginatedMatchesDto = PaginatedMatchesDTO;
 export type TrackerControllersModelsGamesPerformanceTrendDto = PerformanceTrendDTO;
+export type TrackerControllersModelsGamesSideboardChangeDto = SideboardChangeDTO;
 export type TrackerControllersModelsReplaysReplayActionDto = ReplayActionDTO;
 export type TrackerControllersModelsReplaysReplayCardDto = ReplayCardDTO;
 export type TrackerControllersModelsReplaysReplayDataDto = ReplayDataDTO;
@@ -3137,6 +3146,7 @@ export type MatchDetailsDTO = components['schemas']['Tracker.Controllers.Models.
 export type MatchHistoryDTO = components['schemas']['Tracker.Controllers.Models.Games.MatchHistoryDTO'];
 export type PaginatedMatchesDTO = components['schemas']['Tracker.Controllers.Models.Games.PaginatedMatchesDTO'];
 export type PerformanceTrendDTO = components['schemas']['Tracker.Controllers.Models.Games.PerformanceTrendDTO'];
+export type SideboardChangeDTO = components['schemas']['Tracker.Controllers.Models.Games.SideboardChangeDTO'];
 export type ReplayActionDTO = components['schemas']['Tracker.Controllers.Models.Replays.ReplayActionDTO'];
 export type ReplayCardDTO = components['schemas']['Tracker.Controllers.Models.Replays.ReplayCardDTO'];
 export type ReplayDataDTO = components['schemas']['Tracker.Controllers.Models.Replays.ReplayDataDTO'];

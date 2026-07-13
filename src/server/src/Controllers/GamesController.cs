@@ -408,6 +408,15 @@ public class GamesController : APIController
         Result = gameResult?.Result.ToString() ?? "Unknown",
         Duration = gameResult != null ? FormatDuration(gameResult.Clock) : "0m 0s",
         PlayDraw = gameResult?.PlayDraw.ToString() ?? "Unknown",
+        SideboardChanges = match.SideboardChanges
+          .GetValueOrDefault(game.Id, [])
+          .Select(change => new SideboardChangeDTO
+          {
+            CatalogId = change.catalogId,
+            Name = change.name,
+            Quantity = change.quantity
+          })
+          .ToList(),
         Logs = BuildGameLogs(game)
       };
       gameDetails.Add(gameDTO);

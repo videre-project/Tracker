@@ -15,5 +15,6 @@ public class GameDetailsDTO
   public required string Result { get; set; }
   public required string Duration { get; set; }
   public required string PlayDraw { get; set; }
+  public List<SideboardChangeDTO> SideboardChanges { get; set; } = new();
   public List<GameLogDTO> Logs { get; set; } = new();
 }

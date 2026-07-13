@@ -294,7 +294,7 @@ export default function MatchDetails() {
   const deckPreviewCards = getDeckPreviewCards(deckDetail)
   const catalogIdByCardId = getCatalogIdByCardId(selectedGameReplay)
   const selectedOpeningHandCards = getOpeningHandCards(selectedGame?.logs ?? [], catalogIdByCardId)
-  const selectedSideboardingDiff = getSideboardingDiff()
+  const selectedSideboardingDiff = getSideboardingDiff(selectedGame?.sideboardChanges)
   const headerEndHost = typeof document === "undefined"
     ? null
     : document.getElementById("page-header-end")
