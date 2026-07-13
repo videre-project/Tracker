@@ -13,6 +13,8 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
+using MTGOSDK.API.Chat;
+using MTGOSDK.API.Collection;
 using MTGOSDK.API.Trade;
 using MTGOSDK.API.Trade.Enums;
 using MTGOSDK.Core.Logging;
@@ -71,7 +73,9 @@ public class TradesController(
     {
       return Ok(new TradeSnapshotDTO
       {
-        MyPost = TradeManager.MyPost,
+        MyPost = TradeManager.MyPost is { } myPost
+          ? ToTradePostDTO(myPost)
+          : null,
         TradePartners = TradeManager.TradePartners?
           .ToList()
           ?? new List<TradePartner>(),
@@ -147,7 +151,7 @@ public class TradesController(
       page = Math.Min(page, totalPages);
       cacheKey = cacheKey with { Page = page };
       var start = (page - 1) * pageSize;
-      List<TradePost> pagePosts;
+      List<TradePostDTO> pagePosts;
       var posts = GetTradePosts(
         start + pageSize,
         postFormat,
@@ -158,6 +162,7 @@ public class TradesController(
         pagePosts = posts
           .Skip(start)
           .Take(pageSize)
+          .Select(ToTradePostDTO)
           .ToList();
       }
       finally
@@ -441,6 +446,15 @@ public class TradesController(
       messageSearch);
   }
 
+  private static TradePostDTO ToTradePostDTO(TradePost post) => new()
+    {
+      PosterName = post.PosterName,
+      Format = post.Format,
+      Message = ChatTextNormalizer.Normalize(post.Message),
+      Wanted = post.Wanted.ToList(),
+      Offered = post.Offered.ToList()
+    };
+
   private static bool TryParsePostFormat(
     string? value,
     out TradePostFormat? format)
@@ -470,7 +484,7 @@ public class TradesController(
 
   public class TradeSnapshotDTO
   {
-    public TradePost? MyPost { get; set; }
+    public TradePostDTO? MyPost { get; set; }
     public IList<TradePartner> TradePartners { get; set; } =
       new List<TradePartner>();
     public TradeEscrow? CurrentTrade { get; set; }
@@ -484,7 +498,16 @@ public class TradesController(
     public required int TotalPages { get; set; }
     public required bool HasNextPage { get; set; }
     public required bool HasPreviousPage { get; set; }
-    public IList<TradePost> Posts { get; set; } = new List<TradePost>();
+    public IList<TradePostDTO> Posts { get; set; } = new List<TradePostDTO>();
+  }
+
+  public class TradePostDTO
+  {
+    public required string PosterName { get; set; }
+    public required TradePostFormat Format { get; set; }
+    public required string Message { get; set; }
+    public required IList<CardQuantityPair> Wanted { get; set; }
+    public required IList<CardQuantityPair> Offered { get; set; }
   }
 
   public class TradeMarketplaceUpdateDTO

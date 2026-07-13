@@ -16,6 +16,8 @@ import { Button } from "@/components/ui/button"
 import { Trophy, Clock, Dices } from "lucide-react"
 import { CardArt, useCardArtContext } from "@/components/card-art"
 import { Skeleton } from "@/components/ui/skeleton"
+import { compareFormats, isLimitedFormat } from "@/utils/formats"
+import { getManaSymbolSvgPath } from "@/utils/mana-symbols"
 
 
 import { DateRange } from "react-day-picker"
@@ -41,35 +43,13 @@ export default function Home() {
   const filteredFormats = useMemo(() => {
     // Filter first
     let result = formats
-    const isLimited = (f: string) => /draft|sealed|limited/i.test(f)
-
     if (gameType === 'Limited') {
-      result = formats.filter(isLimited)
+      result = formats.filter(isLimitedFormat)
     } else if (gameType === 'Constructed') {
-      result = formats.filter(f => !isLimited(f))
+      result = formats.filter(format => !isLimitedFormat(format))
     }
 
-    // Then sort
-    const constructedOrder = [
-      "Standard",
-      "Modern",
-      "Pioneer",
-      "Vintage",
-      "Legacy",
-      "Pauper",
-      "Premodern"
-    ]
-
-    return [...result].sort((a, b) => {
-      const indexA = constructedOrder.indexOf(a)
-      const indexB = constructedOrder.indexOf(b)
-
-      if (indexA !== -1 && indexB !== -1) return indexA - indexB
-      if (indexA !== -1) return -1
-      if (indexB !== -1) return 1
-
-      return a.localeCompare(b)
-    })
+    return [...result].sort(compareFormats)
   }, [formats, gameType])
 
   // Clear selected format if it's no longer in the filtered list
@@ -931,7 +911,7 @@ export default function Home() {
                             arch.colors.map((color) => (
                               <img
                                 key={color}
-                                src={`/mana-symbols/${color}.svg`}
+                                src={getManaSymbolSvgPath(color) ?? undefined}
                                 alt={color}
                                 className="h-3.5 w-3.5"
                               />

@@ -2,7 +2,14 @@ import * as React from "react"
 import { useNavigate, useLocation } from "react-router-dom"
 import { Play, Pause, Clock, Square, Trophy, Target, Calendar } from "lucide-react"
 import { getApiUrl } from "@/utils/api-config"
-import { normalizeFormatName, useEvents } from "@/hooks/use-events"
+import {
+  normalizeFormatName,
+  useEvents,
+  type ActiveGame,
+  type EventType,
+  type GameStatus,
+  type TournamentState,
+} from "@/hooks/use-events"
 
 import {
   SidebarContent,
@@ -11,51 +18,6 @@ import {
   SidebarGroupLabel,
   useSidebar,
 } from "@/components/ui/sidebar"
-
-// Tournament state type (stand-in due to ASP.NET OpenAPI generation issues).
-type TournamentState =
-  | "NotSet"
-  | "Fired"
-  | "WaitingToStart"
-  | "Drafting"
-  | "Deckbuilding"
-  | "DeckbuildingDeckSubmitted"
-  | "WaitingForFirstRoundToStart"
-  | "RoundInProgress"
-  | "BetweenRounds"
-  | "Finished"
-
-type EventType = "league" | "swiss" | "elimination" | "draft" | "unknown"
-type GameStatus = "active" | "paused" | "scheduled" | "completed"
-
-export interface ActiveGame {
-  id: string
-  name: string
-  type: EventType
-  status: GameStatus
-  format: string
-  url: string
-  deck?: string
-  // League-specific
-  wins?: number
-  losses?: number
-  totalRounds?: number
-  // Prelim-specific
-  roundNumber?: number
-  totalSwissRounds?: number
-  // Draft-specific
-  pod?: string
-  // Timing
-  startTime?: string
-  endTime?: string
-  timeRemaining?: string
-  totalPlayers?: number
-  minimumPlayers?: number
-  // Live round info (from ITournamentStateUpdate)
-  inPlayoffs?: boolean
-  roundEndTime?: string
-  state?: TournamentState
-}
 
 // Hook to calculate live countdown from a target time
 function useCountdown(targetTime?: string) {

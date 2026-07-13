@@ -27,32 +27,11 @@ import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
 import { getApiUrl } from "@/utils/api-config"
+import { compareFormats, getFormatDotColor } from "@/utils/formats"
+import { getManaSymbolSvgPath } from "@/utils/mana-symbols"
+import { getDisplayCardColors } from "@/utils/card-colors"
 
 const ALL_FORMATS = "All"
-
-const FORMAT_ORDER = [
-  "Standard",
-  "Pioneer",
-  "Modern",
-  "Legacy",
-  "Vintage",
-  "Pauper",
-  "Commander",
-  "Alchemy",
-  "Explorer",
-  "Limited",
-]
-
-const FORMAT_DOT_COLORS: [string, string][] = [
-  ["modern", "bg-red-500"],
-  ["legacy", "bg-blue-500"],
-  ["duel commander", "bg-green-500"],
-  ["standard", "bg-purple-500"],
-  ["vintage", "bg-amber-500"],
-  ["pauper", "bg-teal-500"],
-  ["pioneer", "bg-pink-500"],
-  ["premodern", "bg-red-400"],
-]
 
 const DECK_TILE_GRID_CLASS = "grid grid-cols-1 gap-4 pt-3 pr-1 lg:grid-cols-2 2xl:grid-cols-3"
 
@@ -75,24 +54,6 @@ function formatFormatName(format?: string) {
     return trimmed.charAt(0).toUpperCase() + trimmed.slice(1)
   }
   return trimmed
-}
-
-function sortFormats(a: string, b: string) {
-  const aIndex = FORMAT_ORDER.indexOf(a)
-  const bIndex = FORMAT_ORDER.indexOf(b)
-
-  if (aIndex >= 0 && bIndex >= 0) return aIndex - bIndex
-  if (aIndex >= 0) return -1
-  if (bIndex >= 0) return 1
-  return a.localeCompare(b)
-}
-
-function getFormatDot(format: string): string {
-  const lower = format.toLowerCase()
-  for (const [key, dot] of FORMAT_DOT_COLORS) {
-    if (lower.includes(key)) return dot
-  }
-  return "bg-orange-500"
 }
 
 function hashSeed(value: string) {
@@ -149,7 +110,7 @@ function FormatLabel({
 }) {
   return (
     <span className={cn("inline-flex min-w-0 items-center gap-1.5", className)}>
-      <span className={cn("h-2 w-2 shrink-0 rounded-full", getFormatDot(format))} />
+      <span className={cn("h-2 w-2 shrink-0 rounded-full", getFormatDotColor(format))} />
       <span className="truncate">{formatFormatName(format)}</span>
     </span>
   )
@@ -165,7 +126,7 @@ function getFeaturedCards(detail: DeckDetail | null) {
 }
 
 function getDeckColors(deck: DeckSummary) {
-  const colors = deck.colors?.length ? deck.colors : ["C"]
+  const colors = getDisplayCardColors(deck.colors)
   return colors.filter((color, index) => colors.indexOf(color) === index)
 }
 
@@ -176,14 +137,14 @@ function ManaSymbols({
   colors: string[]
   className?: string
 }) {
-  const visibleColors = colors.length > 0 ? colors : ["C"]
+  const visibleColors = getDisplayCardColors(colors)
 
   return (
     <div className={cn("flex items-center gap-1", className)}>
       {visibleColors.map((color, index) => (
         <img
           key={`${color}-${index}`}
-          src={`/mana-symbols/${color}.svg`}
+          src={getManaSymbolSvgPath(color) ?? undefined}
           alt={color}
           className="h-5 w-5 rounded-full bg-background shadow-sm ring-1 ring-background"
         />
@@ -546,7 +507,7 @@ export default function Decks() {
   const [query, setQuery] = useState("")
 
   const formats = useMemo(
-    () => Object.keys(decks).filter(Boolean).sort(sortFormats),
+    () => Object.keys(decks).filter(Boolean).sort(compareFormats),
     [decks]
   )
 

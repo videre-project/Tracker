@@ -5,10 +5,13 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Reflection;
+using System.Runtime.Serialization;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -16,13 +19,27 @@ using System.Threading.Tasks;
 
 using Tracker.Controllers.Models.Decks;
 
+using Generated = Tracker.Services.Videre.Generated;
+
 
 namespace Tracker.Services.Videre;
 
-public sealed class VidereAPIClient(
-  HttpClient httpClient,
-  ApplicationOptions appOptions)
+public sealed class VidereAPIClient
 {
+  private readonly Generated.VidereOpenAPIClient videreOpenAPIClient;
+  private readonly HttpClient httpClient;
+  private readonly ApplicationOptions appOptions;
+
+  internal VidereAPIClient(
+    Generated.VidereOpenAPIClient videreOpenAPIClient,
+    HttpClient httpClient,
+    ApplicationOptions appOptions)
+  {
+    this.videreOpenAPIClient = videreOpenAPIClient;
+    this.httpClient = httpClient;
+    this.appOptions = appOptions;
+  }
+
   internal async Task<List<CardSearchResultDTO>> SearchCardsAsync(
     string query,
     int limit,
@@ -30,44 +47,30 @@ public sealed class VidereAPIClient(
   {
     var boundedLimit = Math.Clamp(limit, 1, 50);
     var apiLimit = Math.Min(boundedLimit * 2, 100);
-    var requestUri = BuildUri(
-      $"cards?q={Uri.EscapeDataString(query.Trim())}" +
-      $"&unique=cards&order=rank&limit={apiLimit}");
-
-    using var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
-    request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-    request.Headers.UserAgent.ParseAdd($"VidereTracker/{ProductInfo.Version}");
-
     try
     {
-      using var response = await httpClient.SendAsync(request, cancellationToken);
-      var content = await response.Content.ReadAsStringAsync(cancellationToken);
-      if (!response.IsSuccessStatusCode)
-      {
-        if (response.StatusCode == HttpStatusCode.BadRequest && IsNoResults(content))
-        {
-          return [];
-        }
-
-        throw new VidereAPIException(
-          "Videre cards API request failed",
-          (int)response.StatusCode,
-          content);
-      }
-
-      var payload = DeserializeResponse<VidereListResponse<VidereCardDetail>>(content);
-      return MapCards(payload?.Data, boundedLimit);
+      var response = await videreOpenAPIClient.SearchCardsAsync(
+        q: query.Trim(),
+        unique: Generated.Unique.Cards,
+        order: Generated.Order.Rank,
+        limit: apiLimit,
+        cancellationToken: cancellationToken);
+      return MapCards(response.Data, boundedLimit);
     }
     catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
     {
       throw;
     }
-    catch (VidereAPIException)
+    catch (Generated.VidereOpenAPIException<Generated.Error> ex) when (IsNoResults(ex.Result))
     {
-      throw;
+      return [];
+    }
+    catch (Generated.VidereOpenAPIException ex)
+    {
+      throw ToTrackerException("Videre cards API request failed", ex);
     }
     catch (Exception ex) when (
-      ex is HttpRequestException or TaskCanceledException or UriFormatException or JsonException)
+      ex is HttpRequestException or TaskCanceledException)
     {
       throw new VidereAPIException("Videre cards API request failed", innerException: ex);
     }
@@ -81,10 +84,10 @@ public sealed class VidereAPIClient(
     var products = new Dictionary<int, VidereProductResult>();
     if (collectionIds.Count == 0) return products;
 
-    var requestBody = JsonSerializer.Serialize(new VidereCardsSearchRequest
+    var requestBody = JsonSerializer.Serialize(new Generated.CardSearchRequest
     {
       Collection = CreateCollection(collectionIds)
-    });
+    }, JsonSerializerOptions.Web);
     var offset = 0;
 
     while (true)
@@ -93,17 +96,17 @@ public sealed class VidereAPIClient(
       var responseContent = await SendAsync(HttpMethod.Post, uri, requestBody, cancellationToken);
       if (responseContent is null) break;
 
-      var response = DeserializeResponse<ViderePaginatedResponse<VidereProduct>>(responseContent);
+      var response = DeserializeResponse<VidereProductSearchResponse>(responseContent);
       var page = response?.Data ?? [];
       foreach (var product in page.Where(product => product.Id > 0))
       {
         products[product.Id] = new VidereProductResult(
-          product.Id, product.SetCode, product.SetName, product.Name, product.Description,
-          product.ObjectType, product.ImageUrl, product.IsTradable);
+          product.Id, product.Set_code, product.Set_name, product.Name, product.Description,
+          product.Object_type, product.Image_url?.ToString(), product.Is_tradable);
       }
 
-      if (response?.Meta?.HasMore != true || page.Count == 0 || response.Meta.NextOffset is null) break;
-      offset = response.Meta.NextOffset.Value;
+      if (response?.Meta?.Has_more != true || page.Count == 0 || response.Meta.Next_offset is null) break;
+      offset = response.Meta.Next_offset.Value;
     }
 
     return products;
@@ -118,24 +121,46 @@ public sealed class VidereAPIClient(
     var ids = new HashSet<int>();
     if (collectionIds.Count == 0) return ids;
 
-    var requestBody = JsonSerializer.Serialize(new VidereCardsSearchRequest
+    var requestBody = new Generated.CardSearchRequest
     {
       Collection = CreateCollection(collectionIds)
-    });
+    };
     var offset = 0;
 
     while (true)
     {
-      var uri = BuildUri($"cards/search?q={Uri.EscapeDataString(query)}&limit={pageSize}&offset={offset}");
-      var responseContent = await SendAsync(HttpMethod.Post, uri, requestBody, cancellationToken);
-      if (responseContent is null) break;
+      Generated.Response2 response;
+      try
+      {
+        response = await videreOpenAPIClient.SearchCardsWithCollectionAsync(
+          q: query,
+          limit: pageSize,
+          offset: offset,
+          body: requestBody,
+          cancellationToken: cancellationToken);
+      }
+      catch (Generated.VidereOpenAPIException<Generated.Error> ex) when (IsNoResults(ex.Result))
+      {
+        break;
+      }
+      catch (Generated.VidereOpenAPIException ex)
+      {
+        throw ToTrackerException("Videre collection search request failed", ex);
+      }
+      catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+      {
+        throw;
+      }
+      catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+      {
+        throw new VidereAPIException("Videre collection search request failed", innerException: ex);
+      }
 
-      var response = DeserializeResponse<ViderePaginatedResponse<VidereCollectionSearchResult>>(responseContent);
-      var page = response?.Data ?? [];
+      var page = response.Data ?? [];
       foreach (var result in page.Where(result => result.Id > 0)) ids.Add(result.Id);
 
-      if (response?.Meta?.HasMore != true || page.Count == 0 || response.Meta.NextOffset is null) break;
-      offset = response.Meta.NextOffset.Value;
+      if (!response.Meta.Has_more || page.Count == 0 || response.Meta.Next_offset is null) break;
+      offset = response.Meta.Next_offset.Value;
     }
 
     return ids;
@@ -150,25 +175,43 @@ public sealed class VidereAPIClient(
       return new ViderePricesResult(new Dictionary<int, ViderePriceResult>(), []);
     }
 
-    var requestBody = JsonSerializer.Serialize(new ViderePricesRequest
+    try
     {
-      Collection = new ViderePricesCollection { Ids = collectionIds.ToArray() },
-      Date = "latest"
-    });
-    var responseContent = await SendAsync(HttpMethod.Post, BuildUri("prices"), requestBody, cancellationToken);
-    if (responseContent is null)
+      var response = await videreOpenAPIClient.GetPricesAsync(
+        new Generated.PriceRequest
+        {
+          Collection = new Generated.Collection { Ids = collectionIds.ToArray() },
+          Date = Generated.Date.Latest
+        },
+        cancellationToken);
+      var prices = (response.Data ?? [])
+        .Where(price => price.Id > 0)
+        .ToDictionary(
+          price => price.Id,
+          price => new ViderePriceResult(
+            price.Id,
+            price.Price_date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            Convert.ToDecimal(price.Sell_price, CultureInfo.InvariantCulture),
+            price.Source));
+      var missing = response.Meta?.Missing_ids?.ToArray() ?? collectionIds.Where(id => !prices.ContainsKey(id)).ToArray();
+      return new ViderePricesResult(prices, missing);
+    }
+    catch (Generated.VidereOpenAPIException<Generated.Error> ex) when (IsNoResults(ex.Result))
     {
       return new ViderePricesResult(new Dictionary<int, ViderePriceResult>(), collectionIds);
     }
-
-    var response = DeserializeResponse<ViderePricesResponse>(responseContent);
-    var prices = (response?.Data ?? [])
-      .Where(price => price.Id > 0)
-      .ToDictionary(
-        price => price.Id,
-        price => new ViderePriceResult(price.Id, price.PriceDate, price.SellPrice, price.Source));
-    var missing = response?.Meta?.MissingIds ?? collectionIds.Where(id => !prices.ContainsKey(id)).ToArray();
-    return new ViderePricesResult(prices, missing);
+    catch (Generated.VidereOpenAPIException ex)
+    {
+      throw ToTrackerException("Videre prices API request failed", ex);
+    }
+    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+    {
+      throw;
+    }
+    catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+    {
+      throw new VidereAPIException("Videre prices API request failed", innerException: ex);
+    }
   }
 
   internal async Task<IReadOnlyList<ViderePriceResult>> GetPriceHistoryAsync(
@@ -179,65 +222,97 @@ public sealed class VidereAPIClient(
     int offset,
     CancellationToken cancellationToken = default)
   {
-    var query = new List<string> { $"limit={limit}", $"offset={offset}" };
-    if (!string.IsNullOrWhiteSpace(from)) query.Add($"from={Uri.EscapeDataString(from.Trim())}");
-    if (!string.IsNullOrWhiteSpace(to)) query.Add($"to={Uri.EscapeDataString(to.Trim())}");
-
-    var responseContent = await SendAsync(
-      HttpMethod.Get,
-      BuildUri($"prices/{catalogId}/history?{string.Join("&", query)}"),
-      null,
-      cancellationToken);
-    if (responseContent is null) return [];
-
-    var response = DeserializeResponse<ViderePricesResponse>(responseContent);
-    return (response?.Data ?? [])
-      .Where(price => price.Id == catalogId)
-      .OrderBy(price => price.PriceDate, StringComparer.Ordinal)
-      .Select(price => new ViderePriceResult(price.Id, price.PriceDate, price.SellPrice, price.Source))
-      .ToArray();
+    try
+    {
+      var response = await videreOpenAPIClient.GetPriceHistoryAsync(
+        catalogId,
+        ParseDate(from),
+        ParseDate(to),
+        limit,
+        offset,
+        cancellationToken);
+      return (response.Data ?? [])
+        .Where(price => price.Id == catalogId)
+        .OrderBy(price => price.Price_date)
+        .Select(price => new ViderePriceResult(
+          price.Id,
+          price.Price_date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+          Convert.ToDecimal(price.Sell_price, CultureInfo.InvariantCulture),
+          price.Source))
+        .ToArray();
+    }
+    catch (Generated.VidereOpenAPIException<Generated.Error> ex) when (IsNoResults(ex.Result))
+    {
+      return [];
+    }
+    catch (Generated.VidereOpenAPIException ex)
+    {
+      throw ToTrackerException("Videre price history request failed", ex);
+    }
+    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+    {
+      throw;
+    }
+    catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+    {
+      throw new VidereAPIException("Videre price history request failed", innerException: ex);
+    }
   }
 
   internal async Task<VidereCardDetailResult?> GetCardDetailsAsync(
     int catalogId,
     CancellationToken cancellationToken = default)
   {
-    var responseContent = await SendAsync(HttpMethod.Get, BuildUri($"cards/{catalogId}"), null, cancellationToken);
-    if (responseContent is null) return null;
-
-    var response = DeserializeResponse<VidereListResponse<VidereCardDetail>>(responseContent);
-    var card = response?.Data?.FirstOrDefault(row => row.Id == catalogId) ?? response?.Data?.FirstOrDefault();
-    return card is null || card.Id <= 0
-      ? null
-      : new VidereCardDetailResult(
+    try
+    {
+      var response = await videreOpenAPIClient.GetCardAsync(catalogId, cancellationToken);
+      var card = response.Data?.FirstOrDefault(row => row.Id == catalogId) ?? response.Data?.FirstOrDefault();
+      return card is null || card.Id <= 0 ? null : new VidereCardDetailResult(
         card.Id,
         card.Name,
-        card.PrintedName,
-        card.DisplayName,
-        NormalizeOptionalText(card.SetCode)?.ToUpperInvariant(),
-        card.SetName,
-        card.CollectorNumber,
-        NormalizeOptionalText(card.Rarity),
-        NormalizeOptionalText(card.ManaCost),
-        card.ManaValue,
-        NormalizeOptionalText(card.TypeLine),
-        NormalizeCardText(card.OracleText ?? card.FlavorText),
-        NormalizeCardText(card.FlavorText),
+        card.Printed_name,
+        card.Display_name,
+        NormalizeOptionalText(card.Set_code)?.ToUpperInvariant(),
+        card.Set_name,
+        card.Collector_number,
+        card.Rarity is null ? null : GetEnumWireValue(card.Rarity.Value),
+        NormalizeOptionalText(card.Mana_cost),
+        card.Mana_value,
+        NormalizeOptionalText(card.Type_line),
+        NormalizeCardText(card.Oracle_text ?? card.Flavor_text),
+        NormalizeCardText(card.Flavor_text),
         NormalizeColors(card.Colors),
-        card.ImageUrl,
+        card.Image_url?.ToString(),
         NormalizeOptionalText(card.Power),
         NormalizeOptionalText(card.Toughness),
         NormalizeOptionalText(card.Loyalty),
         NormalizeOptionalText(card.Defense),
         NormalizeOptionalText(card.Artist),
-        NormalizeOptionalText(card.PromoLabel));
+        NormalizeOptionalText(card.Promo_label));
+    }
+    catch (Generated.VidereOpenAPIException<Generated.Error> ex) when (IsNoResults(ex.Result))
+    {
+      return null;
+    }
+    catch (Generated.VidereOpenAPIException ex)
+    {
+      throw ToTrackerException("Videre card details request failed", ex);
+    }
+    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+    {
+      throw;
+    }
+    catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+    {
+      throw new VidereAPIException("Videre card details request failed", innerException: ex);
+    }
   }
 
-  private VidereCardsSearchCollection CreateCollection(IReadOnlyCollection<int> ids) => new()
+  private static Generated.CardCollection CreateCollection(IReadOnlyCollection<int> ids) => new()
   {
     Ids = ids.ToArray(),
-    Mode = "only",
-    Match = "prints"
+    Mode = Generated.CardCollectionMode.Only,
+    Match = Generated.CardCollectionMatch.Prints
   };
 
   private Uri BuildUri(string path)
@@ -313,8 +388,20 @@ public sealed class VidereAPIClient(
     }
   }
 
+  private static bool IsNoResults(Generated.Error error) =>
+    error.Object == Generated.ErrorObject.Error &&
+    string.Equals(error.Message, "No results found.", StringComparison.OrdinalIgnoreCase);
+
+  private static VidereAPIException ToTrackerException(
+    string message,
+    Generated.VidereOpenAPIException exception) => new(
+      message,
+      exception.StatusCode,
+      exception.Response,
+      exception.InnerException ?? exception);
+
   private static List<CardSearchResultDTO> MapCards(
-    IReadOnlyList<VidereCardDetail>? cards,
+    ICollection<Generated.Card>? cards,
     int limit)
   {
     if (cards is null || cards.Count == 0) return [];
@@ -332,10 +419,10 @@ public sealed class VidereAPIClient(
       {
         Id = $"CARD_{card.Id}",
         MtgoId = card.Id,
-        SetCode = NormalizeOptionalText(card.SetCode)?.ToUpperInvariant() ?? "",
+        SetCode = NormalizeOptionalText(card.Set_code)?.ToUpperInvariant() ?? "",
         Name = card.Name,
-        Type = string.IsNullOrWhiteSpace(card.TypeLine) ? "Card" : card.TypeLine,
-        Text = NormalizeCardText(card.OracleText ?? card.FlavorText),
+        Type = string.IsNullOrWhiteSpace(card.Type_line) ? "Card" : card.Type_line,
+        Text = NormalizeCardText(card.Oracle_text ?? card.Flavor_text),
         Power = NormalizeOptionalText(card.Power),
         Toughness = NormalizeOptionalText(card.Toughness),
         Defense = NormalizeOptionalText(card.Defense),
@@ -361,15 +448,43 @@ public sealed class VidereAPIClient(
   private static string? NormalizeOptionalText(string? value) =>
     string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
-  private static List<string> NormalizeColors(IReadOnlyList<string>? colors) => colors is null
+  private static List<string> NormalizeColors(
+    ICollection<Generated.Colors2>? colors) => colors is null
     ? []
-    : colors
-      .Where(color => !string.IsNullOrWhiteSpace(color))
-      .Select(color => color.Trim().ToUpperInvariant())
-      .Where(color => color is "W" or "U" or "B" or "R" or "G" or "C")
-      .Distinct()
-      .OrderBy(color => "WUBRGC".IndexOf(color, StringComparison.Ordinal))
-      .ToList();
+    : VidereCardColors.Normalize(colors.Select(GetEnumWireValue)).ToList();
+
+  internal static string GetEnumWireValue<T>(T value) where T : struct, Enum
+  {
+    var member = typeof(T).GetMember(value.ToString()).Single();
+    return member.GetCustomAttribute<EnumMemberAttribute>()?.Value ?? value.ToString();
+  }
+
+  private static DateTimeOffset? ParseDate(string? value)
+  {
+    if (string.IsNullOrWhiteSpace(value)) return null;
+    if (DateTimeOffset.TryParseExact(
+      value.Trim(),
+      "yyyy-MM-dd",
+      CultureInfo.InvariantCulture,
+      DateTimeStyles.AssumeUniversal,
+      out var parsed))
+    {
+      return parsed;
+    }
+
+    throw new VidereAPIException($"Invalid Videre API date '{value}'. Expected yyyy-MM-dd.");
+  }
+
+  // Product-filtered card searches return Product rows, although the upstream
+  // operation currently documents Card rows for every search query.
+  private sealed class VidereProductSearchResponse
+  {
+    [System.Text.Json.Serialization.JsonPropertyName("data")]
+    public List<Generated.Product>? Data { get; set; }
+
+    [System.Text.Json.Serialization.JsonPropertyName("meta")]
+    public Generated.ListMeta? Meta { get; set; }
+  }
 
   internal static DateTimeOffset GetPriceCacheExpiration(DateTimeOffset now)
   {

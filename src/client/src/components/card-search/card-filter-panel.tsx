@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
+import { getManaSymbolSvgPath } from "@/utils/mana-symbols"
 import {
   CARD_COLORS,
   CARD_COLOR_MODES,
@@ -147,7 +148,7 @@ export function CardFilterPanel({
                           : "border-sidebar-border/60 bg-background/45 text-muted-foreground hover:border-sidebar-border hover:text-foreground"
                       )}
                     >
-                      <img src={`/mana-symbols/${color}.svg`} alt={color} className="h-4 w-4 rounded-full bg-background ring-1 ring-background" />
+                      <img src={getManaSymbolSvgPath(color) ?? undefined} alt={color} className="h-4 w-4 rounded-full bg-background ring-1 ring-background" />
                     </button>
                   )
                 })}

@@ -2434,13 +2434,6 @@ export interface components {
             /** Format: date-time */
             readonly lastTradeTime?: string;
         };
-        "MTGOSDK.API.Trade.TradePost": {
-            readonly posterName?: string | null;
-            format?: TradePostFormat;
-            readonly message?: string | null;
-            readonly wanted?: CardQuantityPair[] | null;
-            readonly offered?: CardQuantityPair[] | null;
-        };
         "MTGOSDK.API.Users.Avatar": {
             /** Format: int32 */
             readonly id?: number;
@@ -2935,6 +2928,13 @@ export interface components {
             /** Format: date-time */
             timestamp: string;
         };
+        "Tracker.Controllers.TradesController.TradePostDTO": {
+            posterName: string | null;
+            format: TradePostFormat;
+            message: string | null;
+            wanted: CardQuantityPair[] | null;
+            offered: CardQuantityPair[] | null;
+        };
         "Tracker.Controllers.TradesController.TradePostsPageDTO": {
             /** Format: int32 */
             page: number;
@@ -2946,10 +2946,10 @@ export interface components {
             totalPages: number;
             hasNextPage: boolean;
             hasPreviousPage: boolean;
-            posts?: TradePost[] | null;
+            posts?: TradePostDTO[] | null;
         };
         "Tracker.Controllers.TradesController.TradeSnapshotDTO": {
-            myPost?: TradePost;
+            myPost?: TradePostDTO;
             tradePartners?: TradePartner[] | null;
             currentTrade?: TradeEscrow;
         };
@@ -3037,7 +3037,6 @@ export type MtgosdkApiTradeEnumsTradePostFormat = TradePostFormat;
 export type MtgosdkApiTradeEnumsTradeState = TradeState;
 export type MtgosdkApiTradeTradeEscrow = TradeEscrow;
 export type MtgosdkApiTradeTradePartner = TradePartner;
-export type MtgosdkApiTradeTradePost = TradePost;
 export type MtgosdkApiUsersAvatar = Avatar;
 export type MtgosdkApiUsersUser = User;
 export type MicrosoftAspNetCoreMvcProblemDetails = ProblemDetails;
@@ -3076,6 +3075,7 @@ export type TrackerControllersModelsReplaysReplayLogDto = ReplayLogDTO;
 export type TrackerControllersModelsReplaysReplayPlayerDto = ReplayPlayerDTO;
 export type TrackerControllersModelsReplaysReplaySnapshotDto = ReplaySnapshotDTO;
 export type TrackerControllersTradesControllerTradeMarketplaceUpdateDto = TradeMarketplaceUpdateDTO;
+export type TrackerControllersTradesControllerTradePostDto = TradePostDTO;
 export type TrackerControllersTradesControllerTradePostsPageDto = TradePostsPageDTO;
 export type TrackerControllersTradesControllerTradeSnapshotDto = TradeSnapshotDTO;
 export type TrackerDatabaseModelsCardEntry = CardEntry;
@@ -3106,7 +3106,6 @@ export type TradePostFormat = components['schemas']['MTGOSDK.API.Trade.Enums.Tra
 export type TradeState = components['schemas']['MTGOSDK.API.Trade.Enums.TradeState'];
 export type TradeEscrow = components['schemas']['MTGOSDK.API.Trade.TradeEscrow'];
 export type TradePartner = components['schemas']['MTGOSDK.API.Trade.TradePartner'];
-export type TradePost = components['schemas']['MTGOSDK.API.Trade.TradePost'];
 export type Avatar = components['schemas']['MTGOSDK.API.Users.Avatar'];
 export type User = components['schemas']['MTGOSDK.API.Users.User'];
 export type ProblemDetails = components['schemas']['Microsoft.AspNetCore.Mvc.ProblemDetails'];
@@ -3145,6 +3144,7 @@ export type ReplayLogDTO = components['schemas']['Tracker.Controllers.Models.Rep
 export type ReplayPlayerDTO = components['schemas']['Tracker.Controllers.Models.Replays.ReplayPlayerDTO'];
 export type ReplaySnapshotDTO = components['schemas']['Tracker.Controllers.Models.Replays.ReplaySnapshotDTO'];
 export type TradeMarketplaceUpdateDTO = components['schemas']['Tracker.Controllers.TradesController.TradeMarketplaceUpdateDTO'];
+export type TradePostDTO = components['schemas']['Tracker.Controllers.TradesController.TradePostDTO'];
 export type TradePostsPageDTO = components['schemas']['Tracker.Controllers.TradesController.TradePostsPageDTO'];
 export type TradeSnapshotDTO = components['schemas']['Tracker.Controllers.TradesController.TradeSnapshotDTO'];
 export type CardEntry = components['schemas']['Tracker.Database.Models.CardEntry'];

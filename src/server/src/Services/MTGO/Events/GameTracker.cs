@@ -11,6 +11,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
+using MTGOSDK.API.Chat;
 using MTGOSDK.API.Play.Games;
 using MTGOSDK.API.Play.Games.Processors;
 using MTGOSDK.API.Play.Games.Processors.EventArgs;
@@ -706,22 +707,23 @@ public class GameTracker : IDisposable
       // at its true chronological position instead of inheriting the
       // (potentially wrong) correlated snapshot's time.
       var timestamp = e.MessageClientTimestamp;
+      var messageText = ChatTextNormalizer.Normalize(e.Message.Text);
 
       _pendingLogs.Add(new GameLogModel
       {
         Timestamp = timestamp,
         GameLogType = "LogMessage",
-        Data = e.Message.Text
+        Data = messageText
       });
       Log.Trace("[Game {Id}] Log: {Text} (nonce {Nonce})",
-        _game.Id, e.Message.Text, e.Nonce);
+        _game.Id, messageText, e.Nonce);
 
       // Notify SSE stream
       _eventLog.Add(new GameLogEntry(
         _game.Id,
         timestamp,
         GameLogType.LogMessage,
-        e.Message.Text,
+        messageText,
         e.Nonce));
     }
     catch (Exception ex)

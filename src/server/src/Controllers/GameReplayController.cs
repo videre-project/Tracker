@@ -10,6 +10,8 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
+using MTGOSDK.API.Chat;
+
 using Tracker.Controllers.Base;
 using Tracker.Database;
 using Tracker.Database.Models;
@@ -150,7 +152,7 @@ public sealed class GameReplayController(EventContext context) : APIController
         Logs = state.Logs.Select(l => new ReplayLogDTO
         {
           Timestamp = l.Timestamp,
-          Data = l.Data
+          Data = ChatTextNormalizer.Normalize(l.Data)
         }).ToList()
       });
 

@@ -27,6 +27,7 @@ using MTGOSDK.Core.Reflection.Serialization;
 using Tracker.Services.Base;
 using Tracker.Services.MTGO.Events;
 using Tracker.Services.Videre;
+using Tracker.Services.Videre.Generated;
 
 
 namespace Tracker.Services;
@@ -89,7 +90,12 @@ public static class WebAPIService
     // Register HttpClient factory for external API calls
     builder.Services.AddHttpClient();
     builder.Services.AddHttpClient<INBACArchetypeClient, NBACArchetypeClient>();
-    builder.Services.AddHttpClient<VidereAPIClient>();
+    builder.Services.AddHttpClient<VidereOpenAPIClient>(ConfigureVidereAPIClient);
+    builder.Services.AddHttpClient("VidereAPI", ConfigureVidereAPIClient);
+    builder.Services.AddTransient(services => new VidereAPIClient(
+      services.GetRequiredService<VidereOpenAPIClient>(),
+      services.GetRequiredService<System.Net.Http.IHttpClientFactory>().CreateClient("VidereAPI"),
+      services.GetRequiredService<ApplicationOptions>()));
 
     // Enable CORS for frontend development
     builder.Services.AddCors(options =>
@@ -339,6 +345,15 @@ public static class WebAPIService
 
   private static string NormalizeOpenApiSchemaId(string schemaId) =>
     schemaId.Replace("+", ".");
+
+  private static void ConfigureVidereAPIClient(
+    IServiceProvider services,
+    System.Net.Http.HttpClient client)
+  {
+    var options = services.GetRequiredService<ApplicationOptions>();
+    client.BaseAddress = new Uri($"{options.VidereAPIUrl.TrimEnd('/')}/");
+    client.DefaultRequestHeaders.UserAgent.ParseAdd($"VidereTracker/{ProductInfo.Version}");
+  }
 
   private static bool HasOnlyObjectGenericArguments(Type[] genericArguments)
   {

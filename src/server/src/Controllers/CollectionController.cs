@@ -120,6 +120,10 @@ public class CollectionController(
         s_collectionSnapshotCacheLock.Release();
       }
     }
+    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+    {
+      throw;
+    }
     catch (Exception ex)
     {
       Log.Error(ex, "Failed to serialize MTGO collection");

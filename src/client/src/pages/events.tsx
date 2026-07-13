@@ -8,6 +8,7 @@ import { EventsTimeline } from "@/components/events-timeline"
 import { EventDetailPanel } from "@/components/event-detail-panel"
 import { useEvents, ActiveGame } from "@/hooks/use-events"
 import { getApiUrl } from "@/utils/api-config"
+import { getFormatDotColor } from "@/utils/formats"
 import { cn } from "@/lib/utils"
 
 function formatTime(dateString?: string) {
@@ -26,27 +27,6 @@ function formatSchedule(start?: string, end?: string) {
   const startTime = formatTime(start)
   const endTime = formatTime(end)
   return `${date}, ${startTime} – ${endTime}`
-}
-
-// --- Format color dots (matches timeline) ---
-
-const FORMAT_DOT_COLORS: [string, string][] = [
-  ["modern",         "bg-red-500"    ],
-  ["legacy",         "bg-blue-500"   ],
-  ["duel commander", "bg-green-500"  ],
-  ["standard",       "bg-purple-500" ],
-  ["vintage",        "bg-amber-500"  ],
-  ["pauper",         "bg-teal-500"   ],
-  ["pioneer",        "bg-pink-500"   ],
-  ["premodern",      "bg-red-400"    ],
-]
-
-function getFormatDot(format: string): string {
-  const lower = format.toLowerCase()
-  for (const [key, dot] of FORMAT_DOT_COLORS) {
-    if (lower.includes(key)) return dot
-  }
-  return "bg-orange-500"
 }
 
 const entryFeeCache = new Map<string, string>()
@@ -208,7 +188,7 @@ export default function Events() {
       size: 112,
       cell: ({ row }) => (
         <span className="inline-flex items-center gap-1.5">
-          <span className={cn("w-2 h-2 rounded-full shrink-0 translate-y-px", getFormatDot(row.original.format))} />
+          <span className={cn("w-2 h-2 rounded-full shrink-0 translate-y-px", getFormatDotColor(row.original.format))} />
           {row.original.format}
         </span>
       ),

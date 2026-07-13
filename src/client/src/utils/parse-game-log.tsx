@@ -18,6 +18,34 @@ interface ParsedPart {
   textureId?: number
 }
 
+function InlineSymbolImage({
+  src,
+  alt,
+  fallback,
+  className,
+}: {
+  src: string
+  alt: string
+  fallback: string
+  className: string
+}) {
+  const [failed, setFailed] = React.useState(false)
+
+  React.useEffect(() => setFailed(false), [src])
+
+  return failed ? (
+    <>{fallback}</>
+  ) : (
+    <img
+      src={src}
+      alt={alt}
+      title={alt}
+      className={className}
+      onError={() => setFailed(true)}
+    />
+  )
+}
+
 function renderTextWithInlineMana(
   text: string,
   keyPrefix: string,
@@ -46,10 +74,11 @@ function renderTextWithInlineMana(
     const symbolPath = getManaSymbolSvgPath(symbol)
     if (symbolPath) {
       nodes.push(
-        <img
+        <InlineSymbolImage
           key={`${keyPrefix}-m-${idx++}`}
           src={symbolPath}
           alt={symbol}
+          fallback={match[0]}
           className={symbolClassName}
         />
       )
@@ -287,10 +316,11 @@ export function GameLogText({
             const symbolPath = getManaSymbolSvgPath(part.value)
             if (symbolPath) {
               return (
-                <img
+                <InlineSymbolImage
                   key={i}
                   src={symbolPath}
                   alt={part.value}
+                  fallback={`{${part.value}}`}
                   className={symbolClassName}
                 />
               )
@@ -302,11 +332,11 @@ export function GameLogText({
             const symbolPath = getMtgoChatSymbolImagePath(part.value)
             if (symbolPath) {
               return (
-                <img
+                <InlineSymbolImage
                   key={i}
                   src={symbolPath}
                   alt={part.value}
-                  title={part.value}
+                  fallback={`[${part.value}]`}
                   className={symbolClassName}
                 />
               )

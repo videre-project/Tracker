@@ -4,6 +4,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "inspect:mtgo-cdn": "node scripts/inspectMtgoCdnManifest.cjs",
     "lint": "eslint .",
     "preview": "vite preview"
   },

@@ -10,6 +10,7 @@ import { useEvents, ActiveGame } from "@/hooks/use-events"
 import { useClientState } from "@/hooks/use-client-state"
 import { useNDJSONStream } from "@/hooks/use-ndjson-stream"
 import { getApiUrl } from "@/utils/api-config"
+import { getFormatDotColor } from "@/utils/formats"
 import { cn } from "@/lib/utils"
 import type { ITournamentStateUpdate } from "@/types/api"
 
@@ -22,27 +23,6 @@ interface StandingEntry {
   opponentMatchWinPercentage: string
   gameWinPercentage: string
   opponentGameWinPercentage: string
-}
-
-// --- Format color dots ---
-
-const FORMAT_DOT_COLORS: [string, string][] = [
-  ["modern",         "bg-red-500"    ],
-  ["legacy",         "bg-blue-500"   ],
-  ["duel commander", "bg-green-500"  ],
-  ["standard",       "bg-purple-500" ],
-  ["vintage",        "bg-amber-500"  ],
-  ["pauper",         "bg-teal-500"   ],
-  ["pioneer",        "bg-pink-500"   ],
-  ["premodern",      "bg-red-400"    ],
-]
-
-function getFormatDot(format: string): string {
-  const lower = format.toLowerCase()
-  for (const [key, dot] of FORMAT_DOT_COLORS) {
-    if (lower.includes(key)) return dot
-  }
-  return "bg-orange-500"
 }
 
 // --- Status helpers ---
@@ -645,7 +625,7 @@ export default function EventDetails() {
           </h1>
           <div className="flex items-center gap-4 mt-1 text-muted-foreground text-sm">
             <span className="flex items-center gap-1.5">
-              <span className={cn("w-2 h-2 rounded-full shrink-0", getFormatDot(displayEvent.format))} />
+              <span className={cn("w-2 h-2 rounded-full shrink-0", getFormatDotColor(displayEvent.format))} />
               {displayEvent.format}
             </span>
             <span className="flex items-center gap-1.5">

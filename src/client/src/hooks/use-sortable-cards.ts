@@ -1,5 +1,23 @@
 import { useState, useCallback, useRef } from "react"
+import {
+  COLORLESS_CARD_COLOR,
+  getDisplayCardColors,
+  VIDERE_CARD_COLORS,
+} from "@/utils/card-colors"
+import {
+  CARD_RARITIES_BY_DISPLAY_ORDER,
+  formatCardRarity,
+  normalizeCardRarity,
+} from "@/utils/card-rarity"
 import { getApiUrl } from "../utils/api-config"
+
+const UNKNOWN_GROUP = "Unknown"
+const RARITY_COLUMNS = CARD_RARITIES_BY_DISPLAY_ORDER.map(formatCardRarity)
+
+function getRarityGroup(rarity: string): string {
+  const normalizedRarity = normalizeCardRarity(rarity)
+  return normalizedRarity ? formatCardRarity(normalizedRarity) : UNKNOWN_GROUP
+}
 
 export interface SortableCardEntry {
   index: number
@@ -77,7 +95,7 @@ export function groupCardsBySortMode(
         break
       case 'colors':
         // Group by each color (card can be in multiple groups)
-        keys = card.colors.length > 0 ? card.colors : ['C'] // Colorless
+        keys = [...getDisplayCardColors(card.colors)]
         break
       case 'types':
         // Group by primary type (first type in list)
@@ -85,7 +103,7 @@ export function groupCardsBySortMode(
         break
       case 'rarity':
         // Group by rarity
-        keys = [card.rarity || 'Common']
+        keys = [getRarityGroup(card.rarity)]
         break
     }
 
@@ -101,16 +119,28 @@ export function groupCardsBySortMode(
 }
 
 // Get column order for each sort mode
-export function getSortModeColumns(mode: SortMode): string[] {
+export function getSortModeColumns(
+  mode: SortMode,
+  cards: SortableCardEntry[] = []
+): string[] {
   switch (mode) {
     case 'cmc':
       return ['0', '1', '2', '3', '4', '5', '6+']
     case 'colors':
-      return ['W', 'U', 'B', 'R', 'G', 'C']
-    case 'types':
-      return ['Creature', 'Instant', 'Sorcery', 'Artifact', 'Enchantment', 'Land', 'Planeswalker']
+      return [...VIDERE_CARD_COLORS, COLORLESS_CARD_COLOR]
+    case 'types': {
+      const types = new Set(cards
+        .map(card => card.types[0]?.trim())
+        .filter((type): type is string => Boolean(type)))
+      const columns = [...types].sort((left, right) => left.localeCompare(right))
+      return cards.some(card => !card.types[0]?.trim())
+        ? [...columns, UNKNOWN_GROUP]
+        : columns
+    }
     case 'rarity':
-      return ['Common', 'Uncommon', 'Rare', 'Mythic', 'Land']
+      return cards.some(card => normalizeCardRarity(card.rarity) === null)
+        ? [...RARITY_COLUMNS, UNKNOWN_GROUP]
+        : RARITY_COLUMNS
   }
 }
 

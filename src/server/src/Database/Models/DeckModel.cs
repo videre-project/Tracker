@@ -81,7 +81,7 @@ public class DeckModel
         {
           foreach (char color in colors)
           {
-            if ("WUBRG".Contains(color))
+            if (VidereCardColors.IsCanonical(color))
             {
               colorSet.Add(color);
             }
@@ -99,11 +99,7 @@ public class DeckModel
       model.Sideboard.Add(new CardEntry(card.Id, card.Card, card.Quantity));
     }
 
-    // Sort colors in WUBRG order
-    model.Colors = colorSet
-      .OrderBy(c => "WUBRG".IndexOf(c))
-      .Select(c => c.ToString())
-      .ToList();
+    model.Colors = VidereCardColors.Normalize(colorSet).ToList();
 
     return model;
   }
@@ -124,7 +120,7 @@ public class DeckModel
         {
           foreach (char color in card.Colors)
           {
-            if ("WUBRG".Contains(color))
+            if (VidereCardColors.IsCanonical(color))
             {
               colorSet.Add(color);
             }
@@ -137,11 +133,7 @@ public class DeckModel
       }
     }
 
-    // Sort colors in WUBRG order
-    Colors = colorSet
-      .OrderBy(c => "WUBRG".IndexOf(c))
-      .Select(c => c.ToString())
-      .ToList();
+    Colors = VidereCardColors.Normalize(colorSet).ToList();
   }
 
   /// <summary>

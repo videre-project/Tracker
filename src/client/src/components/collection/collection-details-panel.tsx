@@ -18,6 +18,8 @@ import { Button } from "@/components/ui/button"
 import type { CollectionProductEntry } from "@/hooks/use-collection"
 import { cn } from "@/lib/utils"
 import { getApiUrl } from "@/utils/api-config"
+import { CARD_RARITY_CLASSES, normalizeCardRarity } from "@/utils/card-rarity"
+import { getCardStatText } from "@/utils/card-stats"
 import { GameLogText } from "@/utils/parse-game-log"
 import { CollectionCardImage, CollectionProductImage } from "./collection-grid"
 import type {
@@ -156,43 +158,11 @@ function normalizeCollectionCardText(text?: string | null) {
     .trim()
 }
 
-function getCollectionCardStatText(card: CollectionCardDetail | null) {
-  if (!card) return null
-  const normalizedType = card.typeLine.toLowerCase()
-
-  if (normalizedType.includes("creature")) {
-    const power = card.power?.trim()
-    const toughness = card.toughness?.trim()
-    return power && toughness ? `${power}/${toughness}` : null
-  }
-
-  if (normalizedType.includes("planeswalker")) {
-    const loyalty = card.loyalty?.trim()
-    return loyalty ? `Loyalty ${loyalty}` : null
-  }
-
-  if (normalizedType.includes("battle")) {
-    const defense = card.defense?.trim()
-    return defense ? `Defense ${defense}` : null
-  }
-
-  return null
-}
-
 function getCollectionRarityClass(rarity?: string | null) {
-  switch (rarity?.toLowerCase()) {
-    case "mythic":
-    case "mythic rare":
-      return "border-orange-400/45 bg-orange-500/10 text-orange-300"
-    case "rare":
-      return "border-amber-300/45 bg-amber-500/10 text-amber-200"
-    case "uncommon":
-      return "border-slate-300/45 bg-slate-300/10 text-slate-200"
-    case "common":
-      return "border-neutral-400/35 bg-neutral-400/10 text-neutral-200"
-    default:
-      return "border-sidebar-border/70 bg-background/70 text-muted-foreground"
-  }
+  const normalizedRarity = normalizeCardRarity(rarity)
+  return normalizedRarity
+    ? CARD_RARITY_CLASSES[normalizedRarity]
+    : "border-sidebar-border/70 bg-background/70 text-muted-foreground"
 }
 
 export function CollectionPriceHistoryPanel({
@@ -333,7 +303,7 @@ export function CollectionPriceHistoryPanel({
     ? normalizeCollectionCardText(productItem.description)
     : ""
   const productSetName = productItem?.setName?.trim() || productItem?.setCode?.trim() || ""
-  const cardStatText = getCollectionCardStatText(cardDetail)
+  const cardStatText = getCardStatText(cardDetail ? { ...cardDetail, type: cardDetail.typeLine } : null)
   const cardSetLabel = cardDetail?.setCode
     ? [cardDetail.setCode, cardDetail.collectorNumber ? `#${cardDetail.collectorNumber}` : null]
         .filter(Boolean)

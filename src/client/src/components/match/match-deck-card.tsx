@@ -9,6 +9,8 @@ import { SquarePen } from "lucide-react"
 import { useCardArtContext } from "@/components/card-art"
 import type { CardEntry, DeckDetail } from "@/hooks/use-decks"
 import { cn } from "@/lib/utils"
+import { getManaSymbolSvgPath } from "@/utils/mana-symbols"
+import { getDisplayCardColors } from "@/utils/card-colors"
 export function getDeckPreviewCards(detail?: DeckDetail | null) {
   if (!detail) return []
 
@@ -24,14 +26,14 @@ function getCardImageUrl(card: CardEntry) {
 export function DeckManaSymbols({ colors }: { colors?: string[] | null }) {
   if (!colors) return null
 
-  const visibleColors = colors.length > 0 ? colors : ["C"]
+  const visibleColors = getDisplayCardColors(colors)
 
   return (
     <span className="inline-flex h-4 items-center gap-0.5 leading-none">
       {visibleColors.map((color, index) => (
         <img
           key={`${color}-${index}`}
-          src={`/mana-symbols/${color}.svg`}
+          src={getManaSymbolSvgPath(color) ?? undefined}
           alt={color}
           className="block h-3.5 w-3.5 rounded-full bg-background shadow-sm ring-1 ring-background"
         />

@@ -3,7 +3,16 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-export const CARD_COLORS = ["W", "U", "B", "R", "G", "C"] as const
+import { VIDERE_OPENAPI_ENUMS } from "@/types/videre.g"
+import { COLORLESS_CARD_COLOR, VIDERE_CARD_COLORS } from "@/utils/card-colors"
+import { CARD_RARITIES_BY_DISPLAY_ORDER } from "@/utils/card-rarity"
+import { CARD_FORMATS, type CardSearchFormat } from "@/utils/formats"
+
+export { CARD_FORMATS }
+
+export const CARD_COLORS = [...VIDERE_CARD_COLORS, COLORLESS_CARD_COLOR] as const
+const VIDERE_CARD_LEGALITIES =
+  VIDERE_OPENAPI_ENUMS.components.schemas.Card.properties.legalities.additionalProperties
 
 export const CARD_SEARCH_TEXT_MODES = [
   { value: "smart", label: "Names and rules" },
@@ -32,23 +41,8 @@ export const CARD_TYPE_FILTERS = [
   "battle",
 ] as const
 
-export const CARD_RARITIES = ["common", "uncommon", "rare", "mythic"] as const
-export const CARD_FORMATS = [
-  "standard",
-  "pioneer",
-  "modern",
-  "legacy",
-  "vintage",
-  "pauper",
-  "premodern",
-] as const
-export const CARD_LEGALITIES = [
-  "legal",
-  "not_legal",
-  "banned",
-  "restricted",
-  "suspended",
-] as const
+export const CARD_RARITIES = CARD_RARITIES_BY_DISPLAY_ORDER
+export const CARD_LEGALITIES = VIDERE_CARD_LEGALITIES
 
 export type CardColor = (typeof CARD_COLORS)[number]
 export type CardSearchTextMode = (typeof CARD_SEARCH_TEXT_MODES)[number]["value"]
@@ -57,7 +51,7 @@ export type CardTypeFilter = (typeof CARD_TYPE_FILTERS)[number]
 export type CardTypeFilterState = "off" | "include" | "exclude"
 export type CardComparisonOperator = "any" | "<" | "<=" | "=" | ">" | ">="
 export type CardRarityFilter = "any" | (typeof CARD_RARITIES)[number]
-export type CardFormatFilter = "any" | (typeof CARD_FORMATS)[number]
+export type CardFormatFilter = "any" | CardSearchFormat
 export type CardLegalityFilter = (typeof CARD_LEGALITIES)[number]
 export type CardBooleanMode = "any" | "only" | "exclude"
 export type CardTokenFilterMode = "default" | "only"
@@ -164,9 +158,10 @@ export function buildCardSearchQuery(baseQuery: string, filters: CardFilterState
   if (manaCost) terms.push(manaCost)
 
   if (filters.rarity !== "any") {
+    const rarity = quoteSearchValue(filters.rarity)
     terms.push(filters.rarityOperator === "any" || filters.rarityOperator === "="
-      ? `r:${filters.rarity}`
-      : `r${filters.rarityOperator}${filters.rarity}`)
+      ? `r:${rarity}`
+      : `r${filters.rarityOperator}${rarity}`)
   }
 
   if (filters.format !== "any") {

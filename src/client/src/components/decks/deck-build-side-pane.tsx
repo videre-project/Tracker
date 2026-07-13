@@ -19,35 +19,13 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { type CardSearchResult, useDeckCardSearch } from "@/hooks/use-deck-card-search"
 import { cn } from "@/lib/utils"
 import { GameLogText } from "@/utils/parse-game-log"
+import { getCardStatText } from "@/utils/card-stats"
+import { getManaSymbolSvgPath } from "@/utils/mana-symbols"
+import { getDisplayCardColors } from "@/utils/card-colors"
 
 const RESULTS_SCROLLBAR_GUTTER_WIDTH = 12
 
 export type SidePanelView = "cards" | "stats" | "rental"
-function getCardPowerToughnessText(card: CardSearchResult) {
-  const normalizedType = card.type.toLowerCase()
-
-  if (normalizedType.includes("creature")) {
-    const power = card.power?.trim()
-    const toughness = card.toughness?.trim()
-    if (!power || !toughness) return null
-    return `${power}/${toughness}`
-  }
-
-  if (normalizedType.includes("planeswalker")) {
-    const loyalty = card.loyalty?.trim()
-    if (!loyalty) return null
-    return `Loyalty ${loyalty}`
-  }
-
-  if (normalizedType.includes("battle")) {
-    const defense = card.defense?.trim()
-    if (!defense) return null
-    return `Defense ${defense}`
-  }
-
-  return null
-}
-
 export function DeckBuildSidePane({
   view,
   onViewChange,
@@ -289,7 +267,7 @@ export function DeckBuildSidePane({
                         const normalizedText = card.text
                           ? card.text.replace(/\r\n/g, "\n").replace(/\\n/g, "\n")
                           : ""
-                        const powerText = getCardPowerToughnessText(card)
+                        const powerText = getCardStatText(card)
 
                         return (
                           <button
@@ -305,10 +283,10 @@ export function DeckBuildSidePane({
                             )}
                           >
                             <div className="absolute right-2.5 top-2 flex shrink-0 items-center gap-0.5">
-                              {(card.colors.length > 0 ? card.colors : ["C"]).map(color => (
+                              {getDisplayCardColors(card.colors).map(color => (
                                 <img
                                   key={`${card.name}-${color}`}
-                                  src={`/mana-symbols/${color}.svg`}
+                                  src={getManaSymbolSvgPath(color) ?? undefined}
                                   alt={color}
                                   className="h-4 w-4 rounded-full bg-background ring-1 ring-background"
                                 />

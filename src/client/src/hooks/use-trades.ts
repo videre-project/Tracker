@@ -5,12 +5,13 @@ import { getApiUrl } from "../utils/api-config"
 import type {
   TradeMarketplaceUpdateDTO,
   TradePartner,
-  TradePost,
+  TradePostDTO,
   TradePostsPageDTO,
   TradeSnapshotDTO,
 } from "@/types/api"
 
-export type { TradePartner, TradePost }
+export type { TradePartner }
+export type TradePost = TradePostDTO
 export type CurrentTrade = NonNullable<TradeSnapshotDTO["currentTrade"]>
 export type TradeSnapshot = TradeSnapshotDTO
 export type TradePostsPage = TradePostsPageDTO

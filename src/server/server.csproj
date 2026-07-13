@@ -10,7 +10,28 @@
     <IsPackable>false</IsPackable>
     <OutputType>WinExe</OutputType>
     <UseWindowsForms>true</UseWindowsForms>
+    <VidereGeneratedDirectory>$(MSBuildProjectDirectory)\obj\Videre</VidereGeneratedDirectory>
+    <VidereOpenApiSpecPath>$(VidereGeneratedDirectory)\openapi.json</VidereOpenApiSpecPath>
+    <VidereGeneratedClientPath>$(VidereGeneratedDirectory)\VidereOpenAPIClient.g.cs</VidereGeneratedClientPath>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="$(VidereGeneratedClientPath)" Visible="false" />
+  </ItemGroup>
+
+  <Target Name="GenerateVidereOpenApiClient"
+          BeforeTargets="CoreCompile"
+          Condition="'$(SkipOpenApiGeneration)' != 'true'">
+    <Exec Command="dotnet tool restore"
+          WorkingDirectory="$(SolutionDir)" />
+    <MakeDir Directories="$(VidereGeneratedDirectory)" />
+    <Exec Command="node src/server/scripts/prepareVidereOpenAPI.cjs &quot;$(VidereOpenApiSpecPath)&quot;"
+          WorkingDirectory="$(SolutionDir)" />
+    <Exec Command="dotnet nswag openapi2csclient /Input:&quot;$(VidereOpenApiSpecPath)&quot; /Output:&quot;$(VidereGeneratedClientPath)&quot; /ClassName:VidereOpenAPIClient /Namespace:Tracker.Services.Videre.Generated /OperationGenerationMode:SingleClientFromOperationId /InjectHttpClient:true /DisposeHttpClient:false /UseBaseUrl:false /GenerateClientInterfaces:false /GenerateExceptionClasses:true /ExceptionClass:VidereOpenAPIException /GenerateOptionalParameters:true /JsonLibrary:SystemTextJson /JsonLibraryVersion:10.0 /GenerateNullableReferenceTypes:true /GenerateOptionalPropertiesAsNullable:true /TypeAccessModifier:internal /ClientClassAccessModifier:internal /GenerateJsonMethods:false /GenerateDataAnnotations:false /NewLineBehavior:LF"
+          WorkingDirectory="$(ProjectDir)" />
+    <Exec Command="node src/client/scripts/generateVidereOpenAPIEnums.cjs &quot;$(VidereOpenApiSpecPath)&quot; src/client/src/types/videre.g.ts"
+          WorkingDirectory="$(SolutionDir)" />
+  </Target>
 
   <!-- Runtime Properties -->
   <Target Name="GenerateProductInfo" BeforeTargets="BeforeBuild">

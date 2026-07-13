@@ -43,6 +43,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
+import { getManaSymbolSvgPath } from "@/utils/mana-symbols"
+import { getDisplayCardColors } from "@/utils/card-colors"
 import { cn } from "@/lib/utils"
 import { buildDeckListText, getDeckFileName } from "@/utils/deck-list"
 import type {
@@ -86,15 +88,15 @@ function getDeckCounts(summary?: DeckSummary, detail?: DeckDetail | null) {
   }
 }
 
-function BreadcrumbManaSymbols({ colors }: { colors: string[] }) {
-  const visibleColors = colors.length > 0 ? colors : ["C"]
+function BreadcrumbManaSymbols({ colors }: { colors: readonly string[] }) {
+  const visibleColors = getDisplayCardColors(colors)
 
   return (
     <span className="inline-flex h-4 items-center gap-0.5 translate-y-[2px] leading-none">
       {visibleColors.map((color, index) => (
         <img
           key={`${color}-${index}`}
-          src={`/mana-symbols/${color}.svg`}
+          src={getManaSymbolSvgPath(color) ?? undefined}
           alt={color}
           className="block h-3.5 w-3.5 rounded-full bg-background shadow-sm ring-1 ring-background"
         />
@@ -151,11 +153,9 @@ export default function DeckEditor() {
 
   const deckName = summary?.name ?? detail?.name ?? routeState?.deckName ?? "Deck"
   const archetype = summary?.archetype || "Unclassified deck"
-  const colors = summary?.colors?.length
-    ? summary.colors
-    : routeState?.deckColors?.length
-      ? routeState.deckColors
-      : ["C"]
+  const colors = getDisplayCardColors(
+    summary?.colors?.length ? summary.colors : routeState?.deckColors,
+  )
   const timestamp = summary?.timestamp ?? detail?.timestamp
   const counts = getDeckCounts(summary, detail)
   const deckListText = useMemo(() => buildDeckListText(detail), [detail])

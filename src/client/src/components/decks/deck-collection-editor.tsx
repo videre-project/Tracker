@@ -28,7 +28,9 @@ import {
   useSortableCards,
 } from "@/hooks/use-sortable-cards"
 import { cn } from "@/lib/utils"
+import { COLORLESS_CARD_COLOR, VIDERE_CARD_COLORS } from "@/utils/card-colors"
 import { getStackPeekOffset } from "@/utils/card-layout"
+import { getManaSymbolSvgPath } from "@/utils/mana-symbols"
 const GAP = 16
 const COLUMNS = 5
 const COLUMN_HEADER_HEIGHT = 40
@@ -278,7 +280,7 @@ function DeckGrid({
            newSlots.set(card.index, { col: 0, row: rowIndex })
          })
       } else {
-        const columns = getSortModeColumns(sortMode)
+        const columns = getSortModeColumns(sortMode, unrolledCards)
         const groups = groupCardsBySortMode(unrolledCards, sortMode)
 
         columns.forEach((colKey, colIndex) => {
@@ -474,8 +476,7 @@ function DeckGrid({
              }}
           >
              {cardSlots.size > 0 && (() => {
-                const labels = getSortModeColumns(sortMode)
-                const manaColors = ['W', 'U', 'B', 'R', 'G']
+                const labels = getSortModeColumns(sortMode, unrolledCards)
                 return (
                   <div
                     className="absolute top-0 left-0 flex origin-top-left"
@@ -493,13 +494,13 @@ function DeckGrid({
                        }
 
                        const label = labels[col] || ''
-                       const isMana = sortMode === 'colors' && manaColors.includes(label)
-                       const isColorless = sortMode === 'colors' && label === 'C'
+                       const isMana = sortMode === 'colors' && VIDERE_CARD_COLORS.some(color => color === label)
+                       const isColorless = sortMode === 'colors' && label === COLORLESS_CARD_COLOR
                        return (
                          <div key={col} className="flex flex-col items-center justify-center text-xs font-medium text-muted-foreground bg-muted/50 rounded-md px-1"
                               style={{ width: cardWidth, height: COLUMN_HEADER_HEIGHT - GAP / 2 }}>
                              <span className="truncate max-w-full flex items-center gap-1" title={label}>
-                                {isMana ? <img src={`/mana-symbols/${label}.svg`} alt={label} className="h-4 w-4"/> : isColorless ? <span className="text-sm">â—‡</span> : label}
+                                {isMana ? <img src={getManaSymbolSvgPath(label) ?? undefined} alt={label} className="h-4 w-4"/> : isColorless ? <span className="text-sm">â—‡</span> : label}
                              </span>
                              <span className="text-[10px] opacity-60">{count}</span>
                          </div>

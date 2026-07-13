@@ -3,6 +3,7 @@ import { format as fnsFormat } from "date-fns"
 import { Maximize2, Minimize2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { getFormatBackgroundColor } from "@/utils/formats"
 import type { ActiveGame } from "@/hooks/use-events"
 
 // --- Constants ---
@@ -13,29 +14,6 @@ const LANE_GAP = 2
 const ROW_PAD = 4
 const MIN_BAR_WIDTH = 60
 const MAX_SCROLL_HEIGHT = 300
-
-// --- Format colors ---
-
-const FORMAT_COLORS: [string, string][] = [
-  ["modern",         "bg-red-700"    ],
-  ["legacy",         "bg-blue-700"   ],
-  ["duel commander", "bg-green-700"  ],
-  ["standard",       "bg-purple-700" ],
-  ["vintage",        "bg-amber-700"  ],
-  ["pauper",         "bg-teal-700"   ],
-  ["pioneer",        "bg-pink-700"   ],
-  ["premodern",      "bg-red-900"    ],
-]
-
-const DEFAULT_BG = "bg-orange-700"
-
-function getFormatBg(format: string): string {
-  const lower = format.toLowerCase()
-  for (const [key, bg] of FORMAT_COLORS) {
-    if (lower.includes(key)) return bg
-  }
-  return DEFAULT_BG
-}
 
 // --- Timeline range ---
 
@@ -424,7 +402,7 @@ export function EventsTimeline({ events, focusedEventId, activeEventIds, onEvent
         <div className="relative">
           {formatGroups.map(({ format, lanes, laneCount }) => {
             const height = formatRowHeight(laneCount)
-            const bg = getFormatBg(format)
+            const bg = getFormatBackgroundColor(format)
             return (
               <div
                 key={format}

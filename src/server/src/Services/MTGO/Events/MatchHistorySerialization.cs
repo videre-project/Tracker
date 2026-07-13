@@ -8,6 +8,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 
+using MTGOSDK.API.Chat;
+
 using Tracker.Database.Models;
 using Tracker.Controllers.Models.Games;
 
@@ -196,7 +198,7 @@ internal static class MatchHistorySerialization
           Timestamp = log.Timestamp.ToLocalTime(),
           GameLogType = Enum.Parse<GameLogType>(log.GameLogType),
           Nonce = state.Nonce,
-          Data = log.Data
+          Data = ChatTextNormalizer.Normalize(log.Data)
         });
       }
 

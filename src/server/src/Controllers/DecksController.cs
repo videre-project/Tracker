@@ -580,7 +580,7 @@ public class DecksController : APIController
         {
           foreach (char color in card.Colors)
           {
-            if ("WUBRG".Contains(color))
+            if (VidereCardColors.IsCanonical(color))
             {
               colors.Add(color);
             }
@@ -599,11 +599,7 @@ public class DecksController : APIController
       }
     }
 
-    // Sort colors in WUBRG order
-    var sortedColors = colors
-      .OrderBy(c => "WUBRG".IndexOf(c))
-      .Select(c => c.ToString())
-      .ToList();
+    var sortedColors = VidereCardColors.Normalize(colors).ToList();
 
     return Ok(new DeckColorsDTO
     {
@@ -727,10 +723,7 @@ public class DecksController : APIController
         ? featuredCardVotes.OrderByDescending(kv => kv.Value).First().Key
         : "";
 
-      // Sort colors in WUBRG order
-      var sortedColors = colors
-        .OrderBy(c => "WUBRG".IndexOf(c))
-        .ToList();
+      var sortedColors = VidereCardColors.Normalize(colors).ToList();
 
       result.Add(new AggregatedArchetypeDTO
       {

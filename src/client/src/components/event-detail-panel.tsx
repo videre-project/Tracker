@@ -4,27 +4,8 @@ import { X, ArrowRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { getApiUrl } from "@/utils/api-config"
+import { getFormatDotColor } from "@/utils/formats"
 import type { ActiveGame } from "@/hooks/use-events"
-
-// Format color dots (matches timeline)
-const FORMAT_DOT_COLORS: [string, string][] = [
-  ["modern",         "bg-red-500"    ],
-  ["legacy",         "bg-blue-500"   ],
-  ["duel commander", "bg-green-500"  ],
-  ["standard",       "bg-purple-500" ],
-  ["vintage",        "bg-amber-500"  ],
-  ["pauper",         "bg-teal-500"   ],
-  ["pioneer",        "bg-pink-500"   ],
-  ["premodern",      "bg-red-400"    ],
-]
-
-function getFormatDot(format: string): string {
-  const lower = format.toLowerCase()
-  for (const [key, dot] of FORMAT_DOT_COLORS) {
-    if (lower.includes(key)) return dot
-  }
-  return "bg-orange-500"
-}
 
 function useEventDetails(eventId: string | null, enabled: boolean) {
   const [entryFee, setEntryFee] = useState<string | null>(null)
@@ -84,7 +65,7 @@ export function EventDetailPanel({ event, loadDetails = true, onClose }: EventDe
         <div className="min-w-0">
           <h3 className="text-sm font-semibold truncate">{event.name}</h3>
           <div className="flex items-center gap-1.5 mt-1">
-            <span className={cn("w-2 h-2 rounded-full shrink-0", getFormatDot(event.format))} />
+            <span className={cn("w-2 h-2 rounded-full shrink-0", getFormatDotColor(event.format))} />
             <span className="text-xs text-muted-foreground">{event.format}</span>
           </div>
         </div>

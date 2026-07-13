@@ -15,7 +15,7 @@ import type { ITournament, IEventStructure, ITournamentPlayerUpdate } from "@/ty
 
 
 // Tournament state type (will be replaced when OpenAPI types are regenerated)
-type TournamentState =
+export type TournamentState =
   | "NotSet"
   | "Fired"
   | "WaitingToStart"
