@@ -148,6 +148,36 @@ export function getSortModeColumns(
   }
 }
 
+/**
+ * Flatten the selected sort groups into a single ordered list. Cards that
+ * belong to more than one group, such as multicolored cards, remain a single
+ * entry in the collapsed view and use their first matching group.
+ */
+export function sortCardsBySortMode(
+  cards: SortableCardEntry[],
+  mode: SortMode,
+): SortableCardEntry[] {
+  const groups = groupCardsBySortMode(cards, mode)
+  const ordered: SortableCardEntry[] = []
+  const seen = new Set<number>()
+
+  const appendGroup = (group: SortableCardEntry[] | undefined) => {
+    group?.forEach(card => {
+      if (!seen.has(card.index)) {
+        seen.add(card.index)
+        ordered.push(card)
+      }
+    })
+  }
+
+  getSortModeColumns(mode, cards).forEach(column => appendGroup(groups.get(column)))
+  groups.forEach((group, key) => {
+    if (!getSortModeColumns(mode, cards).includes(key)) appendGroup(group)
+  })
+
+  return ordered
+}
+
 // Unroll cards based on quantity and assign sequential indices
 // Preserves originalIndex to map back to the sheet image slot
 export function unrollCards(cards: SortableCardEntry[]): SortableCardEntry[] {

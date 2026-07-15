@@ -23,6 +23,7 @@ import { useDeckIdentifiers } from "@/hooks/use-decks"
 import {
   getSortModeColumns,
   groupCardsBySortMode,
+  sortCardsBySortMode,
   type SortableCardEntry,
   type SortMode,
   unrollCards,
@@ -278,7 +279,7 @@ function DeckGrid({
       const newSlots = new Map<number, GridSlot>()
 
       if (collapsed) {
-         unrolledCards.forEach((card, rowIndex) => {
+         sortCardsBySortMode(unrolledCards, sortMode).forEach((card, rowIndex) => {
            newSlots.set(card.index, { col: 0, row: rowIndex })
          })
       } else {
