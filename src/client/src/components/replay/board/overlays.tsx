@@ -124,11 +124,10 @@ export function StackOverlay({
 }) {
   const hasStack = cards.length > 0
 
-  // FILO: leftmost = bottom of stack (entered first, resolves last)
-  //       rightmost = top of stack (entered last, resolves next)
-  const ordered = [...cards] // already oldest→newest from engine
-
-  const count = ordered.length
+  // The engine keeps the stack in MTGO order, bottom-to-top by ThingID.
+  // Render that order left-to-right so the top/resolving item is on the right.
+  const orderedForDisplay = [...cards].sort((a, b) => a.cardId - b.cardId)
+  const count = orderedForDisplay.length
   const maxW = 480
   const naturalW = count * STACK_CARD_W + (count - 1) * 4
   const offset = naturalW > maxW
@@ -155,10 +154,10 @@ export function StackOverlay({
           <span className="ml-auto text-[9px] text-muted-foreground/40 italic">← resolves last · resolves next →</span>
         </div>
 
-        {/* Cards laid out left-to-right, oldest on left */}
+        {/* Cards laid out left-to-right, resolving card on the right */}
         <div className="relative" style={{ height: STACK_CARD_H, width: containerW }}>
           <AnimatePresence>
-          {ordered.map((card, i) => {
+          {orderedForDisplay.map((card, i) => {
             const isTop = i === count - 1 // rightmost = resolves next
             const targets = card.associations?.ActionTarget
             const hasTargets = !!targets && targets.length > 0

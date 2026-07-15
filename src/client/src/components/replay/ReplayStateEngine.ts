@@ -228,6 +228,10 @@ export class ReplayStateEngine {
       this.applyZoneTransfer(zt)
     }
 
+    // MTGO resolves the Stack item with the highest ThingID first. Keep the
+    // UI's bottom-to-top ordering as ascending ThingID.
+    this.orderStackByThingId()
+
     // Apply card changes
     for (const cc of snapshot.cardChanges) {
       this.applyCardChange(cc, true)
@@ -267,6 +271,8 @@ export class ReplayStateEngine {
         }
       }
     }
+
+    this.orderStackByThingId()
 
     this._currentIndex = snapshotIndex - 1
   }
@@ -595,6 +601,13 @@ export class ReplayStateEngine {
     const list = this.zones.get(zone) ?? []
     list.push(card)
     this.zones.set(zone, list)
+  }
+
+  private orderStackByThingId(): void {
+    const stack = this.zones.get("Stack")
+    if (!stack || stack.length < 2) return
+
+    this.zones.set("Stack", [...stack].sort((a, b) => a.cardId - b.cardId))
   }
 
   private removeFromZone(zone: string, cardId: number): void {
