@@ -150,7 +150,7 @@ function isPregameState(log: GameLogDTO) {
   }
 }
 
-function markBottomedCards(
+function updateBottomedCards(
   hand: Map<string, OpeningHandCard>,
   log: GameLogDTO,
 ) {
@@ -159,11 +159,13 @@ function markBottomedCards(
   try {
     const transfers = JSON.parse(log.data ?? "[]") as ZoneTransferData[]
     for (const transfer of transfers) {
-      if (transfer.fromZone !== "Hand" || transfer.toZone != null) continue
+      const leftHand = transfer.fromZone === "Hand" && transfer.toZone == null
+      const returnedToHand = transfer.toZone === "Hand"
+      if (!leftHand && !returnedToHand) continue
 
       for (const key of transferKeys(transfer)) {
         const card = hand.get(key)
-        if (card) card.bottomed = true
+        if (card) card.bottomed = leftHand
       }
     }
   } catch {
@@ -193,7 +195,7 @@ export function getOpeningHandCards(logs: GameLogDTO[], catalogIdByCardId: Map<n
   for (let index = keepIndex + 1; index < sorted.length; index++) {
     const log = sorted[index].log
     if (!isPregameState(log)) break
-    markBottomedCards(hand, log)
+    updateBottomedCards(hand, log)
   }
 
   return Array.from(hand.values())
