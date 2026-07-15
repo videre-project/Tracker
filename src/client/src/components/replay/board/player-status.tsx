@@ -7,7 +7,7 @@ import React, { useState, useEffect } from "react"
 import type { PlayerState } from "@/types/replay-types"
 import { getApiUrl } from "@/utils/api-config"
 import { getManaSymbolSvgPath } from "@/utils/mana-symbols"
-const MAX_CLOCK_SECONDS = 7200 // MTGO uses larger values as a no-limit sentinel.
+import { getPlayerCounterUrl } from "@/utils/videre-cdn"
 
 function formatClock(totalSeconds: number): string {
   const mins = Math.floor(totalSeconds / 60)
@@ -50,17 +50,19 @@ function parseManaPoolRows(manaPool: string | null): ManaPoolRow[] {
     if (!Array.isArray(parsed)) return []
 
     const rows: ManaPoolRow[] = []
-    for (const entry of parsed as any[]) {
-      const amountRaw = entry?.amount ?? entry?.Amount
+    for (const entry of parsed as unknown[]) {
+      if (!entry || typeof entry !== "object") continue
+      const mana = entry as Record<string, unknown>
+      const amountRaw = mana.amount ?? mana.Amount
       const amount = typeof amountRaw === "number"
         ? amountRaw
         : Number.parseInt(String(amountRaw ?? "0"), 10)
       if (!Number.isFinite(amount) || amount <= 0) continue
 
-      const symbolRaw = entry?.symbol ?? entry?.Symbol
+      const symbolRaw = mana.symbol ?? mana.Symbol
       const symbol = typeof symbolRaw === "string" && symbolRaw.length > 0
         ? symbolRaw
-        : colorIdToSymbol(Number(entry?.color ?? entry?.Color ?? 0))
+        : colorIdToSymbol(Number(mana.color ?? mana.Color ?? 0))
 
       rows.push({ symbol, amount })
     }
@@ -157,12 +159,13 @@ export function PlayerAvatar({
   }, [player.avatarId])
 
   const showClock = clockSeconds != null && clockSeconds > 0
-  const displayClockSeconds = clockSeconds != null && clockSeconds >= MAX_CLOCK_SECONDS ? 0 : (clockSeconds ?? 0)
+  const counters = Object.entries(player.counters)
+    .filter(([, count]) => count > 0)
 
   return (
     <div className={[
-      "flex items-center gap-2 bg-black/70 rounded pl-0.5 pr-2.5 py-0.5",
-      player.hasPriority ? "border border-white/80" : "",
+      "flex items-center gap-2 bg-black/70 rounded pl-0.5 pr-2.5 py-0.5 border",
+      player.hasPriority ? "border-white/80" : "border-transparent",
     ].filter(Boolean).join(" ")}>
       <div className="relative w-8 h-8 rounded overflow-hidden shrink-0 bg-muted/40">
         {artUrl ? (
@@ -187,10 +190,28 @@ export function PlayerAvatar({
         <span className="text-xs font-semibold text-foreground/90 whitespace-nowrap">
           {player.name}
         </span>
-        {showClock && (
-          <span className="text-[10px] font-mono font-bold text-foreground/60 tabular-nums">
-            {formatClock(displayClockSeconds)}
-          </span>
+        {(showClock || counters.length > 0) && (
+          <div className="flex items-center gap-1.5">
+            {showClock && (
+              <span className="text-[10px] font-mono font-bold text-foreground/60 tabular-nums">
+                {formatClock(clockSeconds)}
+              </span>
+            )}
+            {counters.map(([name, count]) => (
+              <span
+                key={name}
+                className="inline-flex items-center gap-0.5 text-[10px] font-mono font-bold text-foreground/80 tabular-nums"
+                title={`${name}: ${count}`}
+              >
+                <img
+                  src={getPlayerCounterUrl(name) ?? undefined}
+                  alt=""
+                  className="h-3 w-3 object-contain"
+                />
+                {count}
+              </span>
+            ))}
+          </div>
         )}
       </div>
     </div>

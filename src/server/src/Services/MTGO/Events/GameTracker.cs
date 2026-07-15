@@ -622,7 +622,8 @@ public class GameTracker : IDisposable
       EnsureGameState(e);
 
       // Track new player (PropertyChangeTracker emits prev==curr for new players)
-      if (_seenPlayerIndices.Add(e.PlayerIndex))
+      bool isNewPlayer = _seenPlayerIndices.Add(e.PlayerIndex);
+      if (isNewPlayer)
       {
         _pendingPlayers.Add(
           EventDatabaseWriter.BuildGamePlayerModel(
@@ -631,27 +632,25 @@ public class GameTracker : IDisposable
           _game.Id, e.Current.Name, e.PlayerIndex);
       }
 
-      // Diff player properties (skip if prev and curr are the same object = new player)
-      if (!ReferenceEquals(e.Previous, e.Current))
+      var changes = isNewPlayer
+        ? BuildInitialPlayerChanges(e.Current, e.PlayerIndex)
+        : DiffPlayer(e.Previous, e.Current, e.PlayerIndex);
+      if (changes.Count > 0)
       {
-        var changes = DiffPlayer(e.Previous, e.Current, e.PlayerIndex);
-        if (changes.Count > 0)
-        {
-          _pendingPlayerChanges.AddRange(changes);
+        _pendingPlayerChanges.AddRange(changes);
 
-          // Emit SSE immediately (don't wait for next nonce)
-          _eventLog.Add(new GameLogEntry(_game.Id,
-            e.Snapshot.ClientTimestamp, GameLogType.PlayerChange,
-            JsonSerializer.Serialize(changes.Select(pc => new PlayerChangeData
-            {
-              PlayerIndex = pc.PlayerIndex, PlayerName = pc.PlayerName,
-              Property = pc.Property, OldValue = pc.OldValue,
-              NewValue = pc.NewValue
-            }), JsonSerializerOptions.Web), e.Nonce));
+        // Emit SSE immediately (don't wait for next nonce)
+        _eventLog.Add(new GameLogEntry(_game.Id,
+          e.Snapshot.ClientTimestamp, GameLogType.PlayerChange,
+          JsonSerializer.Serialize(changes.Select(pc => new PlayerChangeData
+          {
+            PlayerIndex = pc.PlayerIndex, PlayerName = pc.PlayerName,
+            Property = pc.Property, OldValue = pc.OldValue,
+            NewValue = pc.NewValue
+          }), JsonSerializerOptions.Web), e.Nonce));
 
-          Log.Trace("[Game {Id}] {Count} player changes for {Name} (nonce {Nonce})",
-            _game.Id, changes.Count, e.Current.Name, e.Nonce);
-        }
+        Log.Trace("[Game {Id}] {Count} player changes for {Name} (nonce {Nonce})",
+          _game.Id, changes.Count, e.Current.Name, e.Nonce);
       }
     }
     catch (Exception ex)
@@ -1219,26 +1218,46 @@ public class GameTracker : IDisposable
   /// <summary>
   /// Diffs player properties between two snapshots and produces change rows.
   /// </summary>
-  private static List<PlayerStateChangeModel> DiffPlayer(
-    GamePlayer prev, GamePlayer curr, int playerIndex)
+  private static List<PlayerStateChangeModel> BuildInitialPlayerChanges(
+    GamePlayer player,
+    int playerIndex)
   {
     var changes = new List<PlayerStateChangeModel>();
-    string name = curr.Name;
 
-    AddPlayerIntIfChanged(changes, playerIndex, name, "Life",
+    if (player.HasPriority)
+    {
+      AddPlayerBoolIfChanged(changes, playerIndex, player.Name, "HasPriority",
+        false, true);
+    }
+
+    AddPlayerCountersIfChanged(changes, playerIndex, player.Name,
+      new Dictionary<string, int>(), player.Counters);
+    return changes;
+  }
+
+  private static List<PlayerStateChangeModel> DiffPlayer(
+    GamePlayer prev,
+    GamePlayer curr,
+    int playerIndex)
+  {
+    var changes = new List<PlayerStateChangeModel>();
+    string playerName = curr.Name;
+
+    AddPlayerIntIfChanged(changes, playerIndex, playerName, "Life",
       prev.Life, curr.Life);
-    AddPlayerIntIfChanged(changes, playerIndex, name, "HandCount",
+    AddPlayerIntIfChanged(changes, playerIndex, playerName, "HandCount",
       prev.HandCount, curr.HandCount);
-    AddPlayerIntIfChanged(changes, playerIndex, name, "LibraryCount",
+    AddPlayerIntIfChanged(changes, playerIndex, playerName, "LibraryCount",
       prev.LibraryCount, curr.LibraryCount);
-    AddPlayerIntIfChanged(changes, playerIndex, name, "GraveyardCount",
+    AddPlayerIntIfChanged(changes, playerIndex, playerName, "GraveyardCount",
       prev.GraveyardCount, curr.GraveyardCount);
-    AddPlayerBoolIfChanged(changes, playerIndex, name, "IsActivePlayer",
+    AddPlayerBoolIfChanged(changes, playerIndex, playerName, "IsActivePlayer",
       prev.IsActivePlayer, curr.IsActivePlayer);
-    AddPlayerBoolIfChanged(changes, playerIndex, name, "HasPriority",
+    AddPlayerBoolIfChanged(changes, playerIndex, playerName, "HasPriority",
       prev.HasPriority, curr.HasPriority);
+    AddPlayerCountersIfChanged(changes, playerIndex, playerName,
+      prev.Counters, curr.Counters);
 
-    // Clock remaining (total seconds)
     double prevClock = prev.ChessClock.TotalSeconds;
     double currClock = curr.ChessClock.TotalSeconds;
     if (Math.Abs(prevClock - currClock) >= 0.5)
@@ -1246,7 +1265,7 @@ public class GameTracker : IDisposable
       changes.Add(new PlayerStateChangeModel
       {
         PlayerIndex = playerIndex,
-        PlayerName = name,
+        PlayerName = playerName,
         Property = "ClockRemaining",
         OldValue = prevClock.ToString("F1"),
         NewValue = currClock.ToString("F1")
@@ -1266,7 +1285,7 @@ public class GameTracker : IDisposable
         changes.Add(new PlayerStateChangeModel
         {
           PlayerIndex = playerIndex,
-          PlayerName = name,
+          PlayerName = playerName,
           Property = "ManaPool",
           OldValue = SerializeManaPool(prevManaByColor),
           NewValue = SerializeManaPool(currManaByColor)
@@ -1276,6 +1295,28 @@ public class GameTracker : IDisposable
     catch { }
 
     return changes;
+  }
+
+  private static void AddPlayerCountersIfChanged(
+    List<PlayerStateChangeModel> changes,
+    int playerIndex,
+    string playerName,
+    IReadOnlyDictionary<string, int> oldValue,
+    IReadOnlyDictionary<string, int> newValue)
+  {
+    string oldJson = JsonSerializer.Serialize(oldValue, JsonSerializerOptions.Web);
+    string newJson = JsonSerializer.Serialize(newValue, JsonSerializerOptions.Web);
+    if (oldJson == newJson)
+      return;
+
+    changes.Add(new PlayerStateChangeModel
+    {
+      PlayerIndex = playerIndex,
+      PlayerName = playerName,
+      Property = "Counters",
+      OldValue = oldJson,
+      NewValue = newJson
+    });
   }
 
   private static List<Mana> GetManaPool(GamePlayer player)

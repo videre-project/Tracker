@@ -2880,6 +2880,8 @@ export interface components {
         "Tracker.Controllers.Models.Replays.ReplayDataDTO": {
             /** Format: int32 */
             gameId?: number;
+            /** Format: int32 */
+            perspectivePlayerIndex?: number | null;
             players?: ReplayPlayerDTO[] | null;
             cards?: ReplayCardDTO[] | null;
             snapshots?: ReplaySnapshotDTO[] | null;

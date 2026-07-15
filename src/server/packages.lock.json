@@ -59,12 +59,12 @@
       },
       "MTGOSDK": {
         "type": "Direct",
-        "requested": "[1.5.3.20260708, )",
-        "resolved": "1.5.3.20260708",
-        "contentHash": "Jy1f3SKgpzjxUqixAoUO8zFiqxa6YKjF2rv3yhXeS3GS0IJ7FFM8gpp11fSlB8zpZCaVdEylEvO0nB28d4K8/g==",
+        "requested": "[1.5.4.20260715, )",
+        "resolved": "1.5.4.20260715",
+        "contentHash": "3DYabF7vPJmLDiDrc1bwI4kQg6N2qqC4iUwJ2r/+npVimBeuumGxjg02cVXZ1CYoIQxbXw/LVYZIGHu6UuropA==",
         "dependencies": {
           "ImpromptuInterface": "8.0.6",
-          "MTGOSDK.Win32": "1.5.3.20260708",
+          "MTGOSDK.Win32": "1.5.4.20260715",
           "MessagePack": "3.1.7",
           "MessagePack.Annotations": "3.1.7",
           "Microsoft.Bcl.AsyncInterfaces": "10.0.1",
@@ -73,9 +73,9 @@
       },
       "MTGOSDK.Win32": {
         "type": "Direct",
-        "requested": "[1.5.3.20260708, )",
-        "resolved": "1.5.3.20260708",
-        "contentHash": "H5Tv00/gDBgUmBR/6pzZD45gmY70Y0TibgR9KPFEeyvr5H/zlMY/x6Ryf7srPloCiHTfd5QrgbAOlhFfP5qtnA==",
+        "requested": "[1.5.4.20260715, )",
+        "resolved": "1.5.4.20260715",
+        "contentHash": "CILBV9ahEnD3zBdfkEmzK4+D9JonUEQrRQLQmFztR02VehdHNjxhSEx2r0lRJivyRIsApt9/Le4HhI62SwEjlw==",
         "dependencies": {
           "Iced": "1.21.0"
         }

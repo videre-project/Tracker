@@ -209,6 +209,7 @@ export function BoardView({
       {/* Top zone bar: opponent Hand | Lib/GY/Exile — absolutely positioned behind */}
       <TopZoneBar
         hand={topHand}
+        handCount={topPlayer?.handCount ?? topHand.length}
         zones={[
           { label: "Library", count: topPlayer?.libraryCount ?? 0, isLibrary: true },
           { label: "Graveyard", count: topGraveyard.length, topCard: topGraveyard.at(-1), cards: topGraveyard },

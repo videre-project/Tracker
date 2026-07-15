@@ -217,6 +217,7 @@ export class ReplayStateEngine {
           isActivePlayer: player.isActivePlayer,
           hasPriority: false,
           clockRemaining: player.clockRemaining ?? null,
+          counters: {},
           avatarId: player.avatarId ?? 0,
         })
       }
@@ -580,6 +581,13 @@ export class ReplayStateEngine {
       case "ClockRemaining":
         player.clockRemaining = value ? parseFloat(value) : null
         break
+      case "Counters":
+        try {
+          player.counters = value ? JSON.parse(value) : {}
+        } catch {
+          player.counters = {}
+        }
+        break
     }
   }
 
@@ -643,6 +651,7 @@ export class ReplayStateEngine {
       isActivePlayer: p.isActivePlayer,
       hasPriority: p.hasPriority,
       clockRemaining: p.clockRemaining,
+      counters: { ...p.counters },
       avatarId: p.avatarId,
     }
   }

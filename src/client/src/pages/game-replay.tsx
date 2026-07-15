@@ -276,6 +276,7 @@ export default function GameReplay() {
           <BoardView
             board={board}
             transition={transition}
+            perspectivePlayer={replayData.perspectivePlayerIndex ?? undefined}
             promptText={snapshot?.promptText}
             promptOptions={snapshot?.promptOptions}
             headerContent={headerContent}

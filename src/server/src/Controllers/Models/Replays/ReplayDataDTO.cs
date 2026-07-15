@@ -11,6 +11,7 @@ namespace Tracker.Controllers.Models.Replays;
 public class ReplayDataDTO
 {
   public int GameId { get; set; }
+  public int? PerspectivePlayerIndex { get; set; }
   public List<ReplayPlayerDTO> Players { get; set; } = new();
   public List<ReplayCardDTO> Cards { get; set; } = new();
   public List<ReplaySnapshotDTO> Snapshots { get; set; } = new();

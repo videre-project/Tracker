@@ -282,12 +282,14 @@ export function BottomZoneBar({
 
 export function TopZoneBar({
   hand,
+  handCount,
   zones,
   transition,
   headerContent,
   idPrefix = "card",
 }: {
   hand: CardState[]
+  handCount: number
   zones: ZonePileEntry[]
   transition: BoardTransition
   headerContent?: React.ReactNode
@@ -298,7 +300,9 @@ export function TopZoneBar({
   const [isExpanded, setIsExpanded] = useState(false)
   const handAreaRef = useRef<HTMLDivElement>(null)
   const handAreaWidth = useElementWidth(handAreaRef, DEFAULT_HAND_WIDTH)
-  const handOffset = getHandOffset(hand.length, ZONE_CARD_W, handAreaWidth)
+  const totalHandCount = Math.max(hand.length, handCount)
+  const hiddenHandCount = Math.max(0, totalHandCount - hand.length)
+  const handOffset = getHandOffset(totalHandCount, ZONE_CARD_W, handAreaWidth)
 
   return (
     <div
@@ -315,9 +319,9 @@ export function TopZoneBar({
           <div ref={handAreaRef} className="flex-1 min-w-0 overflow-clip px-4 py-2.5">
             <div className="flex items-center gap-1.5 mb-1.5">
               <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Hand</span>
-              <span className="text-[10px] text-muted-foreground/60">({hand.length})</span>
+              <span className="text-[10px] text-muted-foreground/60">({totalHandCount})</span>
             </div>
-            {hand.length > 0 && (
+            {totalHandCount > 0 && (
               <div className="relative" style={{ height: ZONE_CARD_H }}>
                 <AnimatePresence>
                   {hand.map((card, i) => (
@@ -327,7 +331,7 @@ export function TopZoneBar({
                       layout
                       transition={CARD_TRANSITION}
                       className="absolute top-0 rounded-md overflow-hidden border border-sidebar-border/60"
-                      style={{ left: i * handOffset, width: ZONE_CARD_W, height: ZONE_CARD_H, zIndex: hand.length - i }}
+                      style={{ left: i * handOffset, width: ZONE_CARD_W, height: ZONE_CARD_H, zIndex: totalHandCount - i }}
                     >
                       <TooltipProvider delayDuration={200}>
                         <Tooltip>
@@ -347,6 +351,27 @@ export function TopZoneBar({
                       </TooltipProvider>
                     </motion.div>
                   ))}
+                  {Array.from({ length: hiddenHandCount }, (_, i) => {
+                    const position = hand.length + i
+                    return (
+                      <motion.div
+                        key={`hidden-hand-${i}`}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={CARD_TRANSITION}
+                        className="absolute top-0 rounded-md overflow-hidden border border-sidebar-border/60"
+                        style={{
+                          left: position * handOffset,
+                          width: ZONE_CARD_W,
+                          height: ZONE_CARD_H,
+                          zIndex: totalHandCount - position,
+                        }}
+                      >
+                        <img src="/backface.png" alt="Hidden card" className="w-full h-full object-cover" />
+                      </motion.div>
+                    )
+                  })}
                 </AnimatePresence>
               </div>
             )}

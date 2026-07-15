@@ -2,6 +2,7 @@
 
 export interface ReplayData {
   gameId: number
+  perspectivePlayerIndex?: number | null
   players: ReplayPlayer[]
   cards: ReplayCard[]
   snapshots: ReplaySnapshot[]
@@ -121,6 +122,7 @@ export interface PlayerState {
   isActivePlayer: boolean
   hasPriority: boolean
   clockRemaining: number | null  // seconds
+  counters: Record<string, number>
   avatarId: number
 }
 

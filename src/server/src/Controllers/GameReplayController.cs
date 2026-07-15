@@ -3,6 +3,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -19,12 +20,14 @@ using Tracker.Controllers.Models.Replays;
 using Tracker.Services.MTGO;
 using Tracker.Services.MTGO.Events;
 
-
 namespace Tracker.Controllers;
 
 [ApiController]
-public sealed class GameReplayController(EventContext context) : APIController
-{  [HttpGet("/api/games/game/{gameId}/replay")]
+public sealed class GameReplayController(
+  EventContext context,
+  IClientAPIProvider clientProvider) : APIController
+{
+  [HttpGet("/api/games/game/{gameId}/replay")]
   public async Task<ActionResult<ReplayDataDTO>> GetReplayData(int gameId)
   {
     // Flush any pending data for active games
@@ -49,10 +52,11 @@ public sealed class GameReplayController(EventContext context) : APIController
 
     if (game == null) return NotFound();
 
-    return Ok(BuildReplayData(game));
+    clientProvider.TryGetCurrentUsername(out var currentUser, requireReady: false);
+    return Ok(BuildReplayData(game, currentUser));
   }
 
-  private static ReplayDataDTO BuildReplayData(GameModel game)
+  private static ReplayDataDTO BuildReplayData(GameModel game, string? currentUser)
   {
     var statesOrdered = game.States.OrderBy(s => s.Timestamp).ToList();
 
@@ -81,6 +85,13 @@ public sealed class GameReplayController(EventContext context) : APIController
       FirstSeenSnapshotIndex = stateIdToIndex.GetValueOrDefault(
         c.FirstSeenStateId, 0)
     }).ToList();
+
+    int? perspectivePlayerIndex = string.IsNullOrWhiteSpace(currentUser)
+      ? null
+      : game.Players.FirstOrDefault(player => string.Equals(
+          player.Name,
+          currentUser,
+          StringComparison.OrdinalIgnoreCase))?.PlayerIndex;
 
     var players = game.Players.Select(p => new ReplayPlayerDTO
     {
@@ -162,6 +173,7 @@ public sealed class GameReplayController(EventContext context) : APIController
     return new ReplayDataDTO
     {
       GameId = game.Id,
+      PerspectivePlayerIndex = perspectivePlayerIndex,
       Players = players,
       Cards = cards,
       Snapshots = snapshots
