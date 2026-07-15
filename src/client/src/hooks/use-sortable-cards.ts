@@ -123,11 +123,15 @@ export function getSortModeColumns(
   mode: SortMode,
   cards: SortableCardEntry[] = []
 ): string[] {
+  const groups = groupCardsBySortMode(cards, mode)
+
   switch (mode) {
     case 'cmc':
       return ['0', '1', '2', '3', '4', '5', '6+']
+        .filter(column => groups.has(column))
     case 'colors':
       return [...VIDERE_CARD_COLORS, COLORLESS_CARD_COLOR]
+        .filter(column => groups.has(column))
     case 'types': {
       const types = new Set(cards
         .map(card => card.types[0]?.trim())

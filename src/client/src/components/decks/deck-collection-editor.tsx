@@ -496,13 +496,12 @@ function DeckGrid({
                        }
 
                        const label = labels[col] || ''
-                       const isMana = sortMode === 'colors' && VIDERE_CARD_COLORS.some(color => color === label)
-                       const isColorless = sortMode === 'colors' && label === COLORLESS_CARD_COLOR
+                       const isMana = sortMode === 'colors' && [...VIDERE_CARD_COLORS, COLORLESS_CARD_COLOR].some(color => color === label)
                        return (
                          <div key={col} className="flex flex-col items-center justify-center text-xs font-medium text-muted-foreground bg-muted/50 rounded-md px-1"
                               style={{ width: cardWidth, height: COLUMN_HEADER_HEIGHT - GAP / 2 }}>
                              <span className="truncate max-w-full flex items-center gap-1" title={label}>
-                                {isMana ? <img src={getManaSymbolSvgPath(label) ?? undefined} alt={label} className="h-4 w-4"/> : isColorless ? <span className="text-sm">â—‡</span> : label}
+                                {isMana ? <img src={getManaSymbolSvgPath(label) ?? undefined} alt={label} className="h-4 w-4"/> : label}
                              </span>
                              <span className="text-[10px] opacity-60">{count}</span>
                          </div>
