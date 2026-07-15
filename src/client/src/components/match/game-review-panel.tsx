@@ -45,9 +45,12 @@ function ReviewStripHeader({
 function OpeningHandCardTile({ card }: { card: OpeningHandCard }) {
   return (
     <div
-      className="relative h-full shrink-0 overflow-hidden rounded-sm border border-sidebar-border/60 bg-muted/30 shadow-sm"
+      className={cn(
+        "relative h-full shrink-0 overflow-hidden rounded-sm border border-sidebar-border/60 bg-muted/30 shadow-sm",
+        card.bottomed && "opacity-35 grayscale",
+      )}
       style={{ aspectRatio: "5 / 7" }}
-      title={card.name}
+      title={card.bottomed ? `${card.name} (put on bottom)` : card.name}
     >
       <div className="absolute inset-0 flex items-center justify-center px-1.5 text-center text-[10px] font-semibold leading-tight text-muted-foreground">
         {card.name}
@@ -175,12 +178,13 @@ export function GameReviewPanel({
 }) {
   const addedCount = sideboardingDiff.in.reduce((total, card) => total + card.quantity, 0)
   const removedCount = sideboardingDiff.out.reduce((total, card) => total + card.quantity, 0)
+  const keptCount = openingHandCards.filter(card => !card.bottomed).length
   const hasSideboarding = addedCount > 0 || removedCount > 0
 
   if (!hasSideboarding) {
     return (
       <div className="grid h-full min-h-0 grid-rows-[auto_minmax(7rem,1fr)_auto_minmax(14rem,2fr)] overflow-y-auto overflow-x-hidden bg-muted/10">
-        <ReviewStripHeader label="Opening hand" badge={openingHandCards.length} endContent={endContent} />
+        <ReviewStripHeader label="Opening hand" badge={keptCount} endContent={endContent} />
         <OpeningHandPreview cards={openingHandCards} />
         <ReviewStripHeader label="Sideboarding" badge="None" />
         <SideboardingEmptyState message={sideboardingDiff.emptyMessage} />
@@ -190,7 +194,7 @@ export function GameReviewPanel({
 
   return (
     <div className="grid h-full min-h-0 grid-rows-[auto_minmax(7rem,1fr)_auto_minmax(7rem,1fr)_minmax(7rem,1fr)] overflow-y-auto overflow-x-hidden bg-muted/10">
-      <ReviewStripHeader label="Opening hand" badge={openingHandCards.length} endContent={endContent} />
+      <ReviewStripHeader label="Opening hand" badge={keptCount} endContent={endContent} />
       <OpeningHandPreview cards={openingHandCards} />
       <ReviewStripHeader label="Sideboarding" badge={`+${addedCount} / -${removedCount}`} />
       <SideboardingGroup

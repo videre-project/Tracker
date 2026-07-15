@@ -7,7 +7,14 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, ArrowDown, Filter, Copy, Check } from "lucide-react"
 import type { GameLogDTO, GameLogType, GameStateData } from "@/types/api"
-import { TYPE_CONFIG, ALL_TYPES, TYPE_ORDER, renderData, formatDataAsText } from "@/utils/game-log-rendering"
+import {
+  ALL_TYPES,
+  GameLogDataHeader,
+  TYPE_CONFIG,
+  TYPE_ORDER,
+  formatDataAsText,
+  renderData,
+} from "@/utils/game-log-rendering"
 import { useMatchDetails } from "@/hooks/use-match-details"
 
 // -- Types --
@@ -93,10 +100,12 @@ function TypeFilterBar({
           <button
             key={type}
             onClick={() => onToggle(type)}
-            className={`px-2 py-0.5 rounded text-xs font-mono transition-all ${
+            aria-pressed={active}
+            title={cfg.label}
+            className={`rounded-sm border px-2 py-0.5 text-xs font-mono transition-colors ${
               active
-                ? `${cfg.bg} ${cfg.color} ring-1 ring-current/30`
-                : "bg-muted/50 text-muted-foreground/50 hover:text-muted-foreground"
+                ? cfg.tone
+                : "border-sidebar-border/40 bg-background/20 text-muted-foreground/45 hover:border-sidebar-border/60 hover:bg-muted/30 hover:text-muted-foreground/75"
             }`}
           >
             {cfg.short}
@@ -203,7 +212,7 @@ function LogRow({ entry, expanded, onToggle }: { entry: LogEntry; expanded: bool
       </td>
       {/* Type badge */}
       <td className="w-[70px] shrink-0 px-2 py-1.5 align-top">
-        <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold ${cfg.color} ${cfg.bg}`}>
+        <span className={`inline-block rounded-sm border px-1.5 py-0.5 text-[10px] font-mono font-semibold ${cfg.tone}`}>
           {cfg.short}
         </span>
       </td>
@@ -224,7 +233,7 @@ function LogRow({ entry, expanded, onToggle }: { entry: LogEntry; expanded: bool
 
 // -- Page --
 
-export default function GameWatch() {
+export default function GameLog() {
   const { matchId } = useParams<{ matchId: string }>()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -462,7 +471,7 @@ export default function GameWatch() {
         <div
           ref={scrollRef}
           onScroll={handleScroll}
-          className="flex-1 overflow-y-auto overflow-x-hidden bg-background"
+          className="flex-1 overflow-auto bg-background"
         >
           {filtered.length === 0 ? (
             <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
@@ -471,13 +480,15 @@ export default function GameWatch() {
                 : "No events match the current filters."}
             </div>
           ) : (
-            <table className="w-full font-mono">
+            <table className="w-full min-w-[860px] font-mono">
               <thead className="sticky top-0 z-10">
                 <tr className="bg-muted/50 border-b border-sidebar-border/60 text-[10px] text-muted-foreground font-semibold tracking-wider uppercase">
                   <th className="w-[110px] px-3 py-1.5 text-left">Time</th>
                   <th className="w-[70px] px-2 py-1.5 text-right">Delta</th>
                   <th className="w-[70px] px-2 py-1.5 text-left">Type</th>
-                  <th className="px-3 py-1.5 text-left">Data</th>
+                  <th className="px-3 py-1.5 text-left">
+                    <GameLogDataHeader />
+                  </th>
                 </tr>
               </thead>
               <tbody>

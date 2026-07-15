@@ -1,208 +1,275 @@
+/** @file
+  Copyright (c) 2026, Cory Bennett. All rights reserved.
+  SPDX-License-Identifier: Apache-2.0
+**/
+
 import React from "react"
-import type { GameLogType, GameStateData, ZoneTransferData, CardChangeData, PlayerChangeData } from "@/types/api"
+import { ArrowRight } from "lucide-react"
+
+import type {
+  CardChangeData,
+  GameLogType,
+  GameStateData,
+  PlayerChangeData,
+  ZoneTransferData,
+} from "@/types/api"
 import type { GameAction } from "@/types/game-types"
-import { parseCardName, isCardAction } from "@/types/game-types"
+import { isCardAction, parseCardName } from "@/types/game-types"
 import { GameLogText } from "@/utils/parse-game-log"
 
-export const TYPE_CONFIG: Record<GameLogType, { label: string; short: string; color: string; bg: string }> = {
-  GameState:    { label: "Game State",    short: "STATE",  color: "text-blue-400",    bg: "bg-blue-500/15" },
-  GameAction:   { label: "Game Action",   short: "ACTION", color: "text-amber-400",   bg: "bg-amber-500/15" },
-  ZoneChange:   { label: "Zone Change",   short: "ZONE",   color: "text-cyan-400",    bg: "bg-cyan-500/15" },
-  CardChange:   { label: "Card Change",   short: "CARD",   color: "text-purple-400",  bg: "bg-purple-500/15" },
-  PlayerChange: { label: "Player Change", short: "PLAYER", color: "text-emerald-400", bg: "bg-emerald-500/15" },
-  LogMessage:   { label: "Log Message",   short: "LOG",    color: "text-muted-foreground", bg: "bg-muted/30" },
-  DamageAssignment: { label: "Damage", short: "DAMAGE", color: "text-red-400", bg: "bg-red-500/15" },
-  Reveal:           { label: "Reveal",  short: "REVEAL", color: "text-yellow-400", bg: "bg-yellow-500/15" },
+export const TYPE_CONFIG: Record<
+  GameLogType,
+  { label: string; short: string; tone: string }
+> = {
+  GameState: {
+    label: "Game State",
+    short: "STATE",
+    tone: "border-sky-400/20 bg-sky-500/[0.08] text-sky-700 dark:text-sky-200/75",
+  },
+  GameAction: {
+    label: "Game Action",
+    short: "ACTION",
+    tone: "border-amber-400/20 bg-amber-500/[0.08] text-amber-700 dark:text-amber-200/75",
+  },
+  ZoneChange: {
+    label: "Zone Change",
+    short: "ZONE",
+    tone: "border-teal-400/20 bg-teal-500/[0.08] text-teal-700 dark:text-teal-200/75",
+  },
+  CardChange: {
+    label: "Card Change",
+    short: "CARD",
+    tone: "border-violet-400/20 bg-violet-500/[0.08] text-violet-700 dark:text-violet-200/75",
+  },
+  PlayerChange: {
+    label: "Player Change",
+    short: "PLAYER",
+    tone: "border-emerald-400/20 bg-emerald-500/[0.08] text-emerald-700 dark:text-emerald-200/75",
+  },
+  LogMessage: {
+    label: "Log Message",
+    short: "LOG",
+    tone: "border-sidebar-border/60 bg-muted/30 text-muted-foreground",
+  },
+  DamageAssignment: {
+    label: "Damage",
+    short: "DAMAGE",
+    tone: "border-rose-400/20 bg-rose-500/[0.08] text-rose-700 dark:text-rose-200/75",
+  },
+  Reveal: {
+    label: "Reveal",
+    short: "REVEAL",
+    tone: "border-orange-400/20 bg-orange-500/[0.08] text-orange-700 dark:text-orange-200/75",
+  },
 }
 
 export const ALL_TYPES: GameLogType[] = Object.keys(TYPE_CONFIG) as GameLogType[]
 
 export const TYPE_ORDER: Record<string, number> = {
-  GameState: 0, GameAction: 1, ZoneChange: 2, Reveal: 2, CardChange: 3,
-  PlayerChange: 4, LogMessage: 5, DamageAssignment: 6,
+  GameState: 0,
+  GameAction: 1,
+  ZoneChange: 2,
+  Reveal: 2,
+  CardChange: 3,
+  PlayerChange: 4,
+  LogMessage: 5,
+  DamageAssignment: 6,
 }
 
-/** Render a finalized game action from its ToJSON() output */
-export function renderAction(action: GameAction): React.ReactNode {
-  const name = action.name ?? ""
+type DamageAssignment = {
+  sourceName?: string
+  sourceId: number
+  totalDamage: number
+  targets: Array<{
+    targetName?: string
+    targetId: number
+    amount: number
+  }>
+}
 
-  // CardAction variants: show card name and targets
+type DataRow = {
+  subject?: React.ReactNode
+  event?: React.ReactNode
+  details?: React.ReactNode
+  fullWidth?: boolean
+}
+
+const DATA_GRID_CLASS =
+  "grid grid-cols-[minmax(8rem,0.8fr)_minmax(8rem,0.8fr)_minmax(14rem,2fr)] gap-x-4 gap-y-1"
+
+function DataRows({ rows }: { rows: DataRow[] }) {
+  return (
+    <div className={DATA_GRID_CLASS}>
+      {rows.map((row, index) => row.fullWidth ? (
+        <div key={index} className="col-span-3 min-w-0 break-words">
+          {row.details}
+        </div>
+      ) : (
+        <React.Fragment key={index}>
+          <div className="min-w-0 break-words font-medium text-foreground">
+            {row.subject ?? <span className="text-muted-foreground/30">-</span>}
+          </div>
+          <div className="min-w-0 break-words">
+            {row.event ?? <span className="text-muted-foreground/30">-</span>}
+          </div>
+          <div className="min-w-0 break-words text-muted-foreground">
+            {row.details ?? <span className="text-muted-foreground/30">-</span>}
+          </div>
+        </React.Fragment>
+      ))}
+    </div>
+  )
+}
+
+function ValueChange({ before, after }: { before?: string | null; after?: string | null }) {
+  return (
+    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_1rem_minmax(0,1fr)] items-start gap-2">
+      <span className="break-words text-red-400/70">{before ?? "null"}</span>
+      <ArrowRight className="mt-0.5 h-3.5 w-3.5 text-muted-foreground/45" />
+      <span className="break-words text-green-400/70">{after ?? "null"}</span>
+    </div>
+  )
+}
+
+function getActionRows(action: GameAction): DataRow[] {
+  const name = action.name ?? action.type ?? "Action"
+
   if (isCardAction(action)) {
-    const cardName = parseCardName(action.card)
-    const targetNames: string[] = []
-    if (action.targets) {
-      for (const ts of action.targets) {
-        if (ts.currentTargets) {
-          for (const t of ts.currentTargets) {
-            const parsed = parseCardName(t)
-            if (parsed) targetNames.push(parsed)
-          }
-        }
-      }
-    }
+    const targets = action.targets
+      ?.flatMap(target => target.currentTargets ?? [])
+      .map(target => parseCardName(target))
+      .filter((target): target is string => Boolean(target)) ?? []
 
-    return (
-      <span>
-        <span className="text-amber-300 font-medium">{name}</span>
-        <span className="text-zinc-500"> — </span>
-        <span className="text-white font-medium">{cardName}</span>
-        {targetNames.length > 0 && (
-          <>
-            <span className="text-zinc-500"> targeting </span>
-            <span className="text-amber-200">{targetNames.join(", ")}</span>
-          </>
-        )}
-        {action.isManaAbility && (
-          <span className="text-zinc-600 text-[10px] ml-1">(mana)</span>
-        )}
-      </span>
-    )
+    return [{
+      subject: parseCardName(action.card),
+      event: <span className="font-medium text-amber-300">{name}</span>,
+      details: (
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
+          {targets.length > 0 ? (
+            <>
+              <span className="text-muted-foreground/60">Targets</span>
+              <span className="text-amber-200">{targets.join(", ")}</span>
+            </>
+          ) : null}
+          {action.isManaAbility ? (
+            <span className="text-[10px] text-muted-foreground/60">Mana ability</span>
+          ) : null}
+        </div>
+      ),
+    }]
   }
 
   switch (action.$type) {
-    case "SelectFromListAction": {
-      const item = action.selectedItem
-      return (
-        <span>
-          <span className="text-amber-300 font-medium">{name}</span>
-          {item && (
-            <>
-              <span className="text-zinc-500"> — </span>
-              <span className="text-amber-200">{item.name ?? String(item)}</span>
-            </>
-          )}
-          {action.itemType && (
-            <span className="text-zinc-600 text-[10px] ml-1">({action.itemType})</span>
-          )}
-        </span>
-      )
-    }
+    case "SelectFromListAction":
+      return [{
+        subject: action.selectedItem?.name ?? action.selectedItem?.value,
+        event: <span className="font-medium text-amber-300">{name}</span>,
+        details: action.itemType,
+      }]
     case "NumericAction":
-      return (
-        <span>
-          <span className="text-amber-300 font-medium">{name}</span>
-          <span className="text-zinc-500"> = </span>
-          <span className="text-white font-medium">{action.chosenNumber}</span>
-          <span className="text-zinc-600 text-[10px] ml-1">
-            ({action.minimum}–{action.maximum})
+      return [{
+        event: <span className="font-medium text-amber-300">{name}</span>,
+        details: (
+          <span>
+            <span className="font-medium text-foreground">{action.chosenNumber}</span>
+            <span className="ml-2 text-[10px] text-muted-foreground/60">
+              Range {action.minimum}-{action.maximum}
+            </span>
           </span>
-        </span>
-      )
-    case "OrderingAction": {
-      const source = parseCardName(action.source)
-      const ordered = action.orderedTargets
-        ?.map(t => parseCardName(t))
-        .filter(Boolean) ?? []
-      return (
-        <span>
-          <span className="text-amber-300 font-medium">{name}</span>
-          {source && (
-            <>
-              <span className="text-zinc-500"> — </span>
-              <span className="text-white font-medium">{source}</span>
-            </>
-          )}
-          {ordered.length > 0 && (
-            <>
-              <span className="text-zinc-500"> → </span>
-              <span className="text-amber-200">{ordered.join(", ")}</span>
-            </>
-          )}
-        </span>
-      )
-    }
+        ),
+      }]
+    case "OrderingAction":
+      return [{
+        subject: parseCardName(action.source),
+        event: <span className="font-medium text-amber-300">{name}</span>,
+        details: action.orderedTargets
+          ?.map(target => parseCardName(target))
+          .filter(Boolean)
+          .join(", ") || undefined,
+      }]
     case "SelectPlayerAction":
-      return (
-        <span>
-          <span className="text-amber-300 font-medium">{name}</span>
-          {action.selectedPlayer && (
-            <>
-              <span className="text-zinc-500"> — </span>
-              <span className="text-white font-medium">{action.selectedPlayer}</span>
-            </>
-          )}
-        </span>
-      )
-    case "CombatDamageAssignmentAction": {
-      const source = parseCardName(action.source)
-      return (
-        <span>
-          <span className="text-amber-300 font-medium">{name}</span>
-          {source && (
-            <>
-              <span className="text-zinc-500"> — </span>
-              <span className="text-white font-medium">{source}</span>
-            </>
-          )}
-          <span className="text-zinc-600 text-[10px] ml-1">
-            ({action.minimumTotal}–{action.maximumTotal} dmg)
-          </span>
-        </span>
-      )
-    }
+      return [{
+        subject: action.selectedPlayer,
+        event: <span className="font-medium text-amber-300">{name}</span>,
+      }]
+    case "CombatDamageAssignmentAction":
+      return [{
+        subject: parseCardName(action.source),
+        event: <span className="font-medium text-amber-300">{name}</span>,
+        details: `Damage ${action.minimumTotal ?? 0}-${action.maximumTotal ?? 0}`,
+      }]
     default:
-      // PrimitiveAction, UndoAction, ConcedeGameAction, LocalAction, etc.
-      return (
-        <span>
-          <span className="text-amber-300 font-medium">{name}</span>
-          {action.type && action.type !== name && (
-            <span className="text-zinc-600 text-[10px] ml-1">({action.type})</span>
-          )}
-        </span>
-      )
+      return [{
+        event: <span className="font-medium text-amber-300">{name}</span>,
+        details: action.response != null
+          ? String(action.response)
+          : action.type !== name
+            ? action.type
+            : undefined,
+      }]
   }
 }
 
-/** Format structured data as plain text for clipboard export */
+export function GameLogDataHeader() {
+  return (
+    <div className={DATA_GRID_CLASS}>
+      <span>Subject</span>
+      <span>Event</span>
+      <span>Details</span>
+    </div>
+  )
+}
+
+/** Format structured data as plain text for clipboard export. */
 export function formatDataAsText(type: GameLogType, data: string): string {
   try {
     switch (type) {
       case "GameState": {
-        const d: GameStateData = JSON.parse(data)
-        const prev = d.previousTurn != null ? `Turn ${d.previousTurn} ${d.previousPhase ?? ""} → ` : ""
-        return `${prev}Turn ${d.turn} ${d.phase}`
+        const state: GameStateData = JSON.parse(data)
+        const previous = state.previousTurn != null
+          ? `Turn ${state.previousTurn} ${state.previousPhase ?? ""} -> `
+          : ""
+        return `${previous}Turn ${state.turn} ${state.phase}`
       }
       case "Reveal":
       case "ZoneChange": {
         const transfers: ZoneTransferData[] = JSON.parse(data)
-        return transfers.map(zt => {
-          let s = `${zt.cardName} (${zt.type})`
-          if (zt.fromZone) s += ` ${zt.fromZone}`
-          if (zt.fromZone && zt.toZone) s += ` →`
-          if (zt.toZone) s += ` ${zt.toZone}`
-          s += ` id:${zt.cardId}`
-          if (zt.sourceId != null) s += ` src:${zt.sourceId}`
-          return s
+        return transfers.map(transfer => {
+          const source = transfer.fromZone ?? "null"
+          const destination = transfer.toZone ?? "null"
+          const sourceId = transfer.sourceId != null ? ` src:${transfer.sourceId}` : ""
+          return `${transfer.cardName}  ${transfer.type}  ${source} -> ${destination}  id:${transfer.cardId}${sourceId}`
         }).join("\n")
       }
       case "CardChange": {
         const changes: CardChangeData[] = JSON.parse(data)
-        return changes.map(cc =>
-          `${cc.cardName}.${cc.property} : ${cc.oldValue ?? "null"} → ${cc.newValue ?? "null"}`
+        return changes.map(change =>
+          `${change.cardName}.${change.property} : ${change.oldValue ?? "null"} -> ${change.newValue ?? "null"}`
         ).join("\n")
       }
       case "PlayerChange": {
         const changes: PlayerChangeData[] = JSON.parse(data)
-        return changes.map(pc =>
-          `${pc.playerName}.${pc.property} : ${pc.oldValue ?? "null"} → ${pc.newValue ?? "null"}`
+        return changes.map(change =>
+          `${change.playerName}.${change.property} : ${change.oldValue ?? "null"} -> ${change.newValue ?? "null"}`
         ).join("\n")
       }
       case "GameAction": {
         const action: GameAction = JSON.parse(data)
         const name = action.name ?? ""
         if (isCardAction(action)) {
-          const cn = parseCardName(action.card)
-          return `${name} — ${cn}`
+          return `${name} - ${parseCardName(action.card)}`
         }
         return action.response != null ? `${name} (${action.response})` : name
       }
       case "DamageAssignment": {
-        const assignments: { sourceName?: string; sourceId: number; totalDamage: number; targets: { targetName?: string; targetId: number; amount: number }[] }[] = JSON.parse(data)
-        return assignments.map(a => {
-          const targets = a.targets.map(t =>
-            a.targets.length > 1 ? `${t.targetName ?? `#${t.targetId}`} (${t.amount})` : (t.targetName ?? `#${t.targetId}`)
+        const assignments: DamageAssignment[] = JSON.parse(data)
+        return assignments.map(assignment => {
+          const targets = assignment.targets.map(target =>
+            assignment.targets.length > 1
+              ? `${target.targetName ?? `#${target.targetId}`} (${target.amount})`
+              : target.targetName ?? `#${target.targetId}`
           ).join(", ")
-          return `${a.sourceName ?? `#${a.sourceId}`} deals ${a.totalDamage} to ${targets}`
+          return `${assignment.sourceName ?? `#${assignment.sourceId}`} deals ${assignment.totalDamage} to ${targets}`
         }).join("\n")
       }
       default:
@@ -213,125 +280,93 @@ export function formatDataAsText(type: GameLogType, data: string): string {
   }
 }
 
-/** Render structured data inline for each event type */
+/** Render structured game data into stable subject, event, and detail columns. */
 export function renderData(type: GameLogType, data: string): React.ReactNode {
   try {
     switch (type) {
       case "GameState": {
-        const d: GameStateData = JSON.parse(data)
-        const prev = d.previousTurn != null ? `Turn ${d.previousTurn} ${d.previousPhase ?? ""}` : null
-        return (
-          <span>
-            {prev && <span className="text-zinc-500">{prev.trim()} → </span>}
-            <span className="font-semibold">Turn {d.turn}</span>{" "}
-            <span className="text-blue-300">{d.phase}</span>
-          </span>
-        )
+        const state: GameStateData = JSON.parse(data)
+        return <DataRows rows={[{
+          subject: `Turn ${state.turn}`,
+          event: <span className="text-blue-300">{state.phase}</span>,
+          details: state.previousTurn != null
+            ? `From Turn ${state.previousTurn} ${state.previousPhase ?? ""}`
+            : undefined,
+        }]} />
       }
       case "Reveal":
       case "ZoneChange": {
         const transfers: ZoneTransferData[] = JSON.parse(data)
-        return (
-          <span className="space-y-0.5">
-            {transfers.map((zt, i) => (
-              <span key={i} className="block">
-                <span className="text-white font-medium">{zt.cardName}</span>
-                <span className="text-zinc-500"> ({zt.type}) </span>
-                {zt.fromZone && <span className="text-red-400/80">{zt.fromZone}</span>}
-                {zt.fromZone && zt.toZone && <span className="text-zinc-500"> → </span>}
-                {zt.toZone && <span className="text-green-400/80">{zt.toZone}</span>}
-                <span className="text-zinc-600 text-[10px] ml-1">id:{zt.cardId}</span>
-                {zt.sourceId != null && (
-                  <span className="text-zinc-600 text-[10px] ml-1">src:{zt.sourceId}</span>
-                )}
-              </span>
-            ))}
-          </span>
-        )
+        return <DataRows rows={transfers.map(transfer => ({
+          subject: transfer.cardName,
+          event: <span className="text-cyan-300">{transfer.type}</span>,
+          details: (
+            <div className="space-y-0.5">
+              <ValueChange before={transfer.fromZone} after={transfer.toZone} />
+              <div className="flex gap-2 text-[10px] text-muted-foreground/50">
+                <span>ID {transfer.cardId}</span>
+                {transfer.sourceId != null ? <span>Source {transfer.sourceId}</span> : null}
+              </div>
+            </div>
+          ),
+        }))} />
       }
       case "CardChange": {
         const changes: CardChangeData[] = JSON.parse(data)
-        return (
-          <span className="space-y-0.5">
-            {changes.map((cc, i) => (
-              <span key={i} className="block">
-                <span className="text-white font-medium">{cc.cardName}</span>
-                <span className="text-zinc-500">.</span>
-                <span className="text-purple-300">{cc.property}</span>
-                <span className="text-zinc-500"> : </span>
-                <span className="text-red-400/70">{cc.oldValue ?? "null"}</span>
-                <span className="text-zinc-500"> → </span>
-                <span className="text-green-400/70">{cc.newValue ?? "null"}</span>
-              </span>
-            ))}
-          </span>
-        )
+        return <DataRows rows={changes.map(change => ({
+          subject: change.cardName,
+          event: <span className="text-purple-300">{change.property}</span>,
+          details: <ValueChange before={change.oldValue} after={change.newValue} />,
+        }))} />
       }
       case "PlayerChange": {
         const changes: PlayerChangeData[] = JSON.parse(data)
-        return (
-          <span className="space-y-0.5">
-            {changes.map((pc, i) => (
-              <span key={i} className="block">
-                <span className="text-white font-medium">{pc.playerName}</span>
-                <span className="text-zinc-500">.</span>
-                <span className="text-emerald-300">{pc.property}</span>
-                <span className="text-zinc-500"> : </span>
-                <span className="text-red-400/70">{pc.oldValue ?? "null"}</span>
-                <span className="text-zinc-500"> → </span>
-                <span className="text-green-400/70">{pc.newValue ?? "null"}</span>
-              </span>
-            ))}
-          </span>
-        )
+        return <DataRows rows={changes.map(change => ({
+          subject: change.playerName,
+          event: <span className="text-emerald-300">{change.property}</span>,
+          details: <ValueChange before={change.oldValue} after={change.newValue} />,
+        }))} />
       }
       case "GameAction": {
-        try {
-          const action: GameAction = JSON.parse(data)
-          return renderAction(action)
-        } catch { /* fall through to raw display */ }
-        return <span className="text-amber-200/70">{data.length > 200 ? data.slice(0, 200) + "…" : data}</span>
+        const action: GameAction = JSON.parse(data)
+        return <DataRows rows={getActionRows(action)} />
       }
       case "LogMessage":
-        return (
-          <GameLogText
-            text={data}
-            className={
-              data.includes("wins the game") ? "text-emerald-400 font-bold" :
-              data.includes("has conceded") ? "text-rose-400 italic" :
-              ""
-            }
-          />
-        )
+        return <DataRows rows={[{
+          fullWidth: true,
+          details: (
+            <GameLogText
+              text={data}
+              className={
+                data.includes("wins the game")
+                  ? "font-bold text-emerald-400"
+                  : data.includes("has conceded")
+                    ? "italic text-rose-400"
+                    : ""
+              }
+            />
+          ),
+        }]} />
       case "DamageAssignment": {
-        const assignments: { sourceName?: string; sourceId: number; totalDamage: number; targets: { targetName?: string; targetId: number; amount: number }[] }[] = JSON.parse(data)
-        return (
-          <span className="space-y-0.5">
-            {assignments.map((a, i) => (
-              <span key={i} className="block">
-                <span className="text-white font-medium">{a.sourceName ?? `#${a.sourceId}`}</span>
-                <span className="text-zinc-500"> deals </span>
-                <span className="text-red-300 font-medium">{a.totalDamage}</span>
-                <span className="text-zinc-500"> to </span>
-                <span className="text-red-200">
-                  {a.targets.map((t, j) => (
-                    <span key={j}>
-                      {j > 0 && <span className="text-zinc-500">, </span>}
-                      {t.targetName ?? `#${t.targetId}`}
-                      {a.targets.length > 1 && <span className="text-zinc-500"> ({t.amount})</span>}
-                    </span>
-                  ))}
-                </span>
-              </span>
-            ))}
-          </span>
-        )
+        const assignments: DamageAssignment[] = JSON.parse(data)
+        return <DataRows rows={assignments.map(assignment => ({
+          subject: assignment.sourceName ?? `#${assignment.sourceId}`,
+          event: <span className="font-medium text-red-300">{assignment.totalDamage} damage</span>,
+          details: assignment.targets.map(target => (
+            `${target.targetName ?? `#${target.targetId}`}${
+              assignment.targets.length > 1 ? ` (${target.amount})` : ""
+            }`
+          )).join(", "),
+        }))} />
       }
       default:
-        return <span>{data}</span>
+        return <DataRows rows={[{ fullWidth: true, details: data }]} />
     }
   } catch {
-    // Failed to parse — show raw
-    return <span className="text-zinc-500">{data.length > 300 ? data.slice(0, 300) + "…" : data}</span>
+    const truncated = data.length > 300 ? `${data.slice(0, 300)}...` : data
+    return <DataRows rows={[{
+      fullWidth: true,
+      details: <span className="text-muted-foreground">{truncated}</span>,
+    }]} />
   }
 }

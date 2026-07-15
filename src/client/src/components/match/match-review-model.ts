@@ -22,6 +22,7 @@ export type OpeningHandCard = {
   key: string
   name: string
   catalogId?: number | null
+  bottomed: boolean
 }
 
 export type SideboardingCard = {
@@ -112,6 +113,7 @@ function applyHandTransfer(
   hand.set(key, {
     key,
     name: cardName,
+    bottomed: false,
     catalogId: transfer.cardId != null
       ? catalogIdByCardId.get(transfer.cardId) ?? null
       : transfer.sourceId != null
@@ -137,15 +139,47 @@ function applyHandLog(
   }
 }
 
+function isPregameState(log: GameLogDTO) {
+  if (log.gameLogType !== "GameState") return true
+
+  try {
+    const state = JSON.parse(log.data ?? "{}") as { phase?: string }
+    return state.phase?.toLowerCase().startsWith("pregame") ?? true
+  } catch {
+    return true
+  }
+}
+
+function markBottomedCards(
+  hand: Map<string, OpeningHandCard>,
+  log: GameLogDTO,
+) {
+  if (log.gameLogType !== "ZoneChange" && log.gameLogType !== "Reveal") return
+
+  try {
+    const transfers = JSON.parse(log.data ?? "[]") as ZoneTransferData[]
+    for (const transfer of transfers) {
+      if (transfer.fromZone !== "Hand" || transfer.toZone != null) continue
+
+      for (const key of transferKeys(transfer)) {
+        const card = hand.get(key)
+        if (card) card.bottomed = true
+      }
+    }
+  } catch {
+    // Ignore malformed historical log payloads.
+  }
+}
+
 export function getOpeningHandCards(logs: GameLogDTO[], catalogIdByCardId: Map<number, number | null>) {
   const sorted = sortGameLogs(logs)
-  const keepEntry = sorted.find(entry => isOpeningKeepAction(entry.log))
+  const keepIndex = sorted.findIndex(entry => isOpeningKeepAction(entry.log))
+  const keepEntry = sorted[keepIndex]
   if (!keepEntry) return []
 
   const hand = new Map<string, OpeningHandCard>()
-  for (const entry of sorted) {
-    if (entry.index === keepEntry.index) break
-    applyHandLog(hand, entry.log, catalogIdByCardId)
+  for (let index = 0; index < keepIndex; index++) {
+    applyHandLog(hand, sorted[index].log, catalogIdByCardId)
   }
 
   if (hand.size === 0) {
@@ -154,6 +188,12 @@ export function getOpeningHandCards(logs: GameLogDTO[], catalogIdByCardId: Map<n
       if (getLogTime(entry.log) > keepTime) break
       applyHandLog(hand, entry.log, catalogIdByCardId)
     }
+  }
+
+  for (let index = keepIndex + 1; index < sorted.length; index++) {
+    const log = sorted[index].log
+    if (!isPregameState(log)) break
+    markBottomedCards(hand, log)
   }
 
   return Array.from(hand.values())

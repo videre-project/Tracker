@@ -1,7 +1,14 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react"
 import { ArrowDown, Check, Copy, Filter, Maximize2, Minimize2 } from "lucide-react"
 import type { GameLogDTO, GameLogType, GameStateData } from "@/types/api"
-import { TYPE_CONFIG, ALL_TYPES, TYPE_ORDER, renderData, formatDataAsText } from "@/utils/game-log-rendering"
+import {
+  ALL_TYPES,
+  GameLogDataHeader,
+  TYPE_CONFIG,
+  TYPE_ORDER,
+  formatDataAsText,
+  renderData,
+} from "@/utils/game-log-rendering"
 
 interface GameLogViewerProps {
   logs: GameLogDTO[]
@@ -67,10 +74,12 @@ function TypeFilterBar({ enabled, onToggle }: { enabled: Set<GameLogType>; onTog
           <button
             key={type}
             onClick={() => onToggle(type)}
-            className={`px-2 py-0.5 rounded text-xs font-mono transition-all ${
+            aria-pressed={active}
+            title={cfg.label}
+            className={`rounded-sm border px-2 py-0.5 text-xs font-mono transition-colors ${
               active
-                ? `${cfg.bg} ${cfg.color} ring-1 ring-current/30`
-                : "bg-muted/50 text-muted-foreground/50 hover:text-muted-foreground"
+                ? cfg.tone
+                : "border-sidebar-border/40 bg-background/20 text-muted-foreground/45 hover:border-sidebar-border/60 hover:bg-muted/30 hover:text-muted-foreground/75"
             }`}
           >
             {cfg.short}
@@ -179,7 +188,7 @@ function LogRow({
         {formatDelta(entry.deltaMs)}
       </td>
       <td className="w-[70px] shrink-0 px-2 py-1.5 align-top">
-        <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold ${cfg.color} ${cfg.bg}`}>
+        <span className={`inline-block rounded-sm border px-1.5 py-0.5 text-[10px] font-mono font-semibold ${cfg.tone}`}>
           {cfg.short}
         </span>
       </td>
@@ -294,20 +303,22 @@ export function GameLogViewer({
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className={`min-h-0 ${maxHeightClassName} overflow-y-auto overflow-x-hidden`}
+        className={`min-h-0 ${maxHeightClassName} overflow-auto`}
       >
         {filtered.length === 0 ? (
           <div className="text-muted-foreground italic text-center py-6 px-4 bg-muted/20">
             {entries.length === 0 ? (loading ? "Loading game events..." : emptyMessage) : noMatchMessage}
           </div>
         ) : (
-          <table className="w-full">
+          <table className="w-full min-w-[860px]">
             <thead className="sticky top-0 z-10 bg-background">
               <tr className="bg-background border-b border-sidebar-border/60 text-[10px] text-muted-foreground font-semibold tracking-wider uppercase">
                 <th className="w-[110px] px-3 py-1.5 text-left bg-background">Time</th>
                 <th className="w-[70px] px-2 py-1.5 text-right bg-background">Delta</th>
                 <th className="w-[70px] px-2 py-1.5 text-left bg-background">Type</th>
-                <th className="px-3 py-1.5 text-left bg-background">Data</th>
+                <th className="px-3 py-1.5 text-left bg-background">
+                  <GameLogDataHeader />
+                </th>
               </tr>
             </thead>
             <tbody>

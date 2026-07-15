@@ -26,7 +26,7 @@ import DeckEditor from "@/pages/deck-editor";
 import Collection from "@/pages/collection";
 import History from "@/pages/history";
 import MatchDetails from "@/pages/match-details";
-import GameWatch from "@/pages/game-watch";
+import GameLog from "@/pages/game-log";
 import GameReplay from "@/pages/game-replay";
 import Trades from "@/pages/trades";
 
@@ -130,7 +130,7 @@ export const routes: RouteEntry[] = [
         path: "/history/:matchId/watch",
         name: "Game Log",
         type: NavType.Secondary,
-        element: <GameWatch />
+        element: <GameLog />
       },
       {
         path: "/history/:matchId/game/:gameId/replay",
