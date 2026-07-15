@@ -308,6 +308,35 @@ public sealed class VidereAPIClient
     }
   }
 
+  /// <summary>
+  /// Finds the non-foil catalog entry used by MTGO foil clones, when the
+  /// preceding catalog ID is confirmed to represent the same print.
+  /// </summary>
+  internal async Task<int?> FindNonFoilCatalogIdAsync(
+    int catalogId,
+    CancellationToken cancellationToken = default)
+  {
+    if (catalogId <= 1) return null;
+
+    var foil = await GetCardDetailsAsync(catalogId, cancellationToken);
+    var nonFoil = await GetCardDetailsAsync(catalogId - 1, cancellationToken);
+    if (foil is null || nonFoil is null) return null;
+
+    return IsSamePrint(foil, nonFoil) ? nonFoil.Id : null;
+  }
+
+  private static bool IsSamePrint(
+    VidereCardDetailResult first,
+    VidereCardDetailResult second) =>
+    HasSameValue(first.Name, second.Name) &&
+    HasSameValue(first.SetCode, second.SetCode) &&
+    HasSameValue(first.CollectorNumber, second.CollectorNumber);
+
+  private static bool HasSameValue(string? first, string? second) =>
+    !string.IsNullOrWhiteSpace(first) &&
+    !string.IsNullOrWhiteSpace(second) &&
+    string.Equals(first.Trim(), second.Trim(), StringComparison.OrdinalIgnoreCase);
+
   private static Generated.CardCollection CreateCollection(IReadOnlyCollection<int> ids) => new()
   {
     Ids = ids.ToArray(),

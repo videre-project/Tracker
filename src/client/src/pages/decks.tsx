@@ -19,6 +19,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { useCardArtContext } from "@/components/card-art"
+import { CardImage } from "@/components/card-image"
 import {
   Card,
   CardContent,
@@ -114,10 +115,6 @@ function FormatLabel({
       <span className="truncate">{formatFormatName(format)}</span>
     </span>
   )
-}
-
-function getImageUrl(card: CardEntry) {
-  return `https://r2.videreproject.com/cards/${card.catalogId}-300px.png`
 }
 
 function getFeaturedCards(detail: DeckDetail | null) {
@@ -247,9 +244,9 @@ function DeckHeroPreview({
             const activeTransform = `translateX(calc(-50% + ${offset * 34}px)) translateY(${-16 - distance * 4}px) rotate(${offset * 12}deg)`
 
             return (
-              <img
+              <CardImage
                 key={`${card.catalogId}-${card.name}`}
-                src={getImageUrl(card)}
+                catalogId={card.catalogId}
                 alt={card.name}
                 title={card.name}
                 className="absolute bottom-[-10px] left-1/2 h-32 w-[5.7rem] origin-[50%_92%] rounded-sm object-cover shadow-lg ring-1 ring-border/70 transition-[filter,transform] duration-300 ease-out [transform:var(--deck-card-transform)] group-hover/editor:brightness-110 group-hover/editor:[transform:var(--deck-card-active-transform)] group-focus-visible/editor:brightness-110 group-focus-visible/editor:[transform:var(--deck-card-active-transform)]"

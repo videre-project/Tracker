@@ -21,13 +21,16 @@ using MTGOSDK.Core.Logging;
 using Tracker.Controllers.Base;
 using Tracker.Controllers.Models.Collection;
 using Tracker.Services.MTGO;
+using Tracker.Services.Videre;
 
 
 namespace Tracker.Controllers;
 
 [ApiController]
 [Route("api/collection")]
-public sealed class CollectionMediaController(IClientAPIProvider clientProvider) : APIController
+public sealed class CollectionMediaController(
+  IClientAPIProvider clientProvider,
+  VidereAPIClient videreAPIClient) : APIController
 {
   private static readonly ConcurrentDictionary<string, string> s_imageCache = new();
 
@@ -144,10 +147,13 @@ public sealed class CollectionMediaController(IClientAPIProvider clientProvider)
   [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
   [ProducesResponseType(StatusCodes.Status404NotFound)]
   [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
-  public ActionResult GetCardImageById(int id)
+  public async Task<ActionResult> GetCardImageById(int id, CancellationToken cancellationToken)
   {
     if (!clientProvider.IsReady)
     {
+      var fallback = await TryRedirectToNonFoilImageAsync(id, cancellationToken);
+      if (fallback is not null) return fallback;
+
       return StatusCode(StatusCodes.Status503ServiceUnavailable, new
       {
         error = "MTGO client not ready",
@@ -165,6 +171,8 @@ public sealed class CollectionMediaController(IClientAPIProvider clientProvider)
       if (card == null)
       {
         Log.Debug("GetCardImageById: catalog ID {Id} not found in collection", id);
+        var fallback = await TryRedirectToNonFoilImageAsync(id, cancellationToken);
+        if (fallback is not null) return fallback;
         return NotFound(new { error = $"Card with ID {id} not found" });
       }
 
@@ -172,6 +180,8 @@ public sealed class CollectionMediaController(IClientAPIProvider clientProvider)
       if (string.IsNullOrEmpty(base64))
       {
         Log.Warning("GetCardImageById: render returned empty result for catalog ID {Id}", id);
+        var fallback = await TryRedirectToNonFoilImageAsync(id, cancellationToken);
+        if (fallback is not null) return fallback;
         return NotFound(new { error = $"Failed to render card ID {id}" });
       }
 
@@ -182,12 +192,44 @@ public sealed class CollectionMediaController(IClientAPIProvider clientProvider)
     catch (KeyNotFoundException)
     {
       Log.Debug("GetCardImageById: catalog ID {Id} not found (KeyNotFoundException)", id);
+      var fallback = await TryRedirectToNonFoilImageAsync(id, cancellationToken);
+      if (fallback is not null) return fallback;
       return NotFound(new { error = $"Card with ID {id} not found in collection" });
     }
     catch (Exception ex)
     {
       Log.Error(ex, "GetCardImageById: unexpected error for catalog ID {Id}", id);
+      var fallback = await TryRedirectToNonFoilImageAsync(id, cancellationToken);
+      if (fallback is not null) return fallback;
       return StatusCode(StatusCodes.Status500InternalServerError, new { error = ex.Message });
+    }
+  }
+
+  private async Task<ActionResult?> TryRedirectToNonFoilImageAsync(
+    int catalogId,
+    CancellationToken cancellationToken)
+  {
+    try
+    {
+      var nonFoilCatalogId = await videreAPIClient.FindNonFoilCatalogIdAsync(
+        catalogId,
+        cancellationToken);
+      if (nonFoilCatalogId is not > 0) return null;
+
+      Log.Debug(
+        "GetCardImageById: using non-foil catalog ID {NonFoilId} for foil clone {FoilId}",
+        nonFoilCatalogId,
+        catalogId);
+      return Redirect($"https://r2.videreproject.com/cards/{nonFoilCatalogId}-300px.png");
+    }
+    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+    {
+      throw;
+    }
+    catch (Exception ex)
+    {
+      Log.Debug(ex, "GetCardImageById: non-foil lookup failed for catalog ID {Id}", catalogId);
+      return null;
     }
   }
 

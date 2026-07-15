@@ -16,6 +16,7 @@ import { useSearchParams } from "react-router-dom"
 import { GripVertical, LayoutGrid, Loader2, PanelRightClose, PanelRightOpen } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { CardImage } from "@/components/card-image"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useDeckIdentifiers } from "@/hooks/use-decks"
@@ -49,7 +50,7 @@ interface GridSlot {
 
 interface SheetCardProps {
   index: number
-  imageUrl: string
+  catalogId: number
   cardWidth: number
   cardHeight: number
   position: Position
@@ -60,7 +61,7 @@ interface SheetCardProps {
 
 function SheetCard({
   index,
-  imageUrl,
+  catalogId,
   cardWidth,
   cardHeight,
   position,
@@ -92,8 +93,9 @@ function SheetCard({
       onTouchStart={(e) => onDragStart(index, e)}
     >
       <div className="relative w-full h-full group">
-        <img
-          src={imageUrl}
+        <CardImage
+          catalogId={catalogId}
+          alt=""
           width={cardWidth}
           height={cardHeight}
           draggable={false}
@@ -515,10 +517,8 @@ function DeckGrid({
                const zIndex = cardSlots.get(cardIndex)?.row ?? 0
                const card = unrolledCards.find(c => c.index === cardIndex)
 
-               const imageUrl = card ? `https://r2.videreproject.com/cards/${card.catalogId}-300px.png` : ""
-
-               if (imageUrl) {
-                 return <SheetCard key={cardIndex} index={cardIndex} imageUrl={imageUrl} cardWidth={scaledCardWidth} cardHeight={scaledCardHeight} position={pos} onDragStart={handleDragStart} isDragging={dragState?.index === cardIndex} zIndex={zIndex} />
+               if (card) {
+                 return <SheetCard key={cardIndex} index={cardIndex} catalogId={card.catalogId} cardWidth={scaledCardWidth} cardHeight={scaledCardHeight} position={pos} onDragStart={handleDragStart} isDragging={dragState?.index === cardIndex} zIndex={zIndex} />
                }
                return <SkeletonCard key={cardIndex} cardWidth={scaledCardWidth} cardHeight={scaledCardHeight} position={pos} zIndex={zIndex} />
              })}

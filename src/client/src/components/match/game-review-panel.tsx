@@ -5,14 +5,12 @@
 
 import React from "react"
 
+import { CardImage } from "@/components/card-image"
 import { cn } from "@/lib/utils"
 import type { OpeningHandCard, SideboardingCard, SideboardingDiff } from "./match-review-model"
 
 const CARD_STACK_BADGE_TOP = "12%"
 
-function getCatalogCardImageUrl(catalogId: number) {
-  return `https://r2.videreproject.com/cards/${catalogId}-300px.png`
-}
 function ReviewStripHeader({
   label,
   badge,
@@ -56,13 +54,10 @@ function OpeningHandCardTile({ card }: { card: OpeningHandCard }) {
         {card.name}
       </div>
       {card.catalogId != null ? (
-        <img
-          src={getCatalogCardImageUrl(card.catalogId)}
+        <CardImage
+          catalogId={card.catalogId}
           alt={card.name}
           className="absolute inset-0 h-full w-full object-cover"
-          onError={(event) => {
-            event.currentTarget.style.display = "none"
-          }}
         />
       ) : null}
     </div>
@@ -105,14 +100,11 @@ function SideboardingCardTile({
           {card.name}
         </div>
         {card.catalogId != null ? (
-          <img
-            src={getCatalogCardImageUrl(card.catalogId)}
+          <CardImage
+            catalogId={card.catalogId}
             alt=""
             aria-hidden="true"
             className="absolute inset-0 h-full w-full object-cover"
-            onError={(event) => {
-              event.currentTarget.style.display = "none"
-            }}
           />
         ) : null}
         <div

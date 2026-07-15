@@ -5,11 +5,10 @@
 
 import React, { useRef, useState, useEffect, useCallback } from "react"
 import { motion } from "framer-motion"
+import { CardImage as SharedCardImage } from "@/components/card-image"
 import type { BoardState, CardState, BoardTransition } from "@/types/replay-types"
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip"
-import { getApiUrl } from "@/utils/api-config"
 import { GameLogText } from "@/utils/parse-game-log"
-import { useCardImage } from "@/hooks/use-card-image"
 // -- Layout constants --
 
 /**
@@ -56,33 +55,7 @@ export function CardImg({
   style?: React.CSSProperties
   fallback?: React.ReactNode
 }) {
-  const src = useCardImage(catalogId)
-  const [source, setSource] = useState<"cdn" | "fallback" | "failed">("cdn")
-
-  useEffect(() => {
-    setSource("cdn")
-  }, [catalogId])
-
-  const fallbackSrc = catalogId != null && catalogId > 0
-    ? getApiUrl(`/api/collection/cards/${catalogId}/image`)
-    : null
-  const imageSrc = source === "fallback" ? fallbackSrc : source === "cdn" ? src : null
-
-  if (imageSrc) {
-    return (
-      <img
-        src={imageSrc}
-        alt={alt}
-        className={className}
-        style={style}
-        onError={() => {
-          setSource(current => current === "cdn" && fallbackSrc ? "fallback" : "failed")
-        }}
-      />
-    )
-  }
-
-  return <>{fallback}</>
+  return <SharedCardImage catalogId={catalogId} alt={alt} className={className} style={style} fallback={fallback} />
 }
 
 

@@ -7,6 +7,7 @@ import React, { useEffect } from "react"
 import { SquarePen } from "lucide-react"
 
 import { useCardArtContext } from "@/components/card-art"
+import { CardImage } from "@/components/card-image"
 import type { CardEntry, DeckDetail } from "@/hooks/use-decks"
 import { cn } from "@/lib/utils"
 import { getManaSymbolSvgPath } from "@/utils/mana-symbols"
@@ -17,10 +18,6 @@ export function getDeckPreviewCards(detail?: DeckDetail | null) {
   return [...detail.mainboard]
     .sort((a, b) => b.quantity - a.quantity)
     .slice(0, 5)
-}
-
-function getCardImageUrl(card: CardEntry) {
-  return `https://r2.videreproject.com/cards/${card.catalogId}-300px.png`
 }
 
 export function DeckManaSymbols({ colors }: { colors?: string[] | null }) {
@@ -104,9 +101,9 @@ export function MatchDeckCard({
               const activeTransform = `translateX(calc(-50% + ${offset * 34}px)) translateY(${-16 - distance * 4}px) rotate(${offset * 12}deg)`
 
               return (
-                <img
+                <CardImage
                   key={`${card.catalogId}-${card.name}`}
-                  src={getCardImageUrl(card)}
+                  catalogId={card.catalogId}
                   alt={card.name}
                   title={card.name}
                   className="absolute bottom-[-10px] left-1/2 h-32 w-[5.7rem] origin-[50%_92%] rounded-sm object-cover shadow-lg ring-1 ring-border/70 transition-[filter,transform] duration-300 ease-out [transform:var(--deck-card-transform)] group-hover/editor:brightness-110 group-hover/editor:[transform:var(--deck-card-active-transform)] group-focus-visible/editor:brightness-110 group-focus-visible/editor:[transform:var(--deck-card-active-transform)]"
