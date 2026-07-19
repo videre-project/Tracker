@@ -104,8 +104,8 @@ export function BattlefieldRow({
   type RenderEntry =
     | { type: "card"; card: CardState }
     | { type: "spacer"; key: string }
-    | { type: "stack"; cards: CardState[] }
-    | { type: "attached-group"; parent: CardState; attachments: CardState[] }
+    | { type: "stack"; key: string; cards: CardState[] }
+    | { type: "attached-group"; key: string; parent: CardState; attachments: CardState[] }
 
   const renderEntries: RenderEntry[] = useMemo(() => {
     // Build attachment groups: cards attached to a parent on the board
@@ -122,11 +122,35 @@ export function BattlefieldRow({
       }
     }
 
+    // Flatten nested attachment relationships into a single rendered fan so
+    // every descendant remains visible with its direct attachment nearest to
+    // the parent, regardless of zone or attachment type.
+    const nestedAttachments = new Map<number, CardState[]>()
+    const collectAttachments = (
+      parentId: number,
+      path: Set<number> = new Set(),
+    ): CardState[] => {
+      const cached = nestedAttachments.get(parentId)
+      if (cached) return cached
+      if (path.has(parentId)) return []
+
+      const nextPath = new Set(path)
+      nextPath.add(parentId)
+      const result: CardState[] = []
+      for (const attachment of attachmentMap.get(parentId) ?? []) {
+        // Put deeper attachments first so the direct attachment remains
+        // closest to its parent in the rendered fan.
+        result.push(...collectAttachments(attachment.cardId, nextPath))
+        result.push(attachment)
+      }
+      nestedAttachments.set(parentId, result)
+      return result
+    }
     // Emit a card or attached-group entry depending on whether the card has attachments
-    const emitCardEntry = (card: CardState): RenderEntry => {
-      const attachments = attachmentMap.get(card.cardId)
+    const emitCardEntry = (card: CardState, entryKey?: string): RenderEntry => {
+      const attachments = collectAttachments(card.cardId)
       if (attachments && attachments.length > 0) {
-        return { type: "attached-group", parent: card, attachments }
+        return { type: "attached-group", key: entryKey ?? String(card.cardId), parent: card, attachments }
       }
       return { type: "card", card }
     }
@@ -156,7 +180,11 @@ export function BattlefieldRow({
       const groupOrder: string[] = []
       const stackGroupState = new Map<string, {currentIndex: number; baseKey: string}>()
       for (const card of nonCombatCards) {
-        const canStack = card.isToken || card.isLand
+        // A stackable card with attachments must remain its own render entry.
+        // Otherwise the ordinary land/token stack would absorb the parent and
+        // the attachment group would not have a distinct visual anchor.
+        const hasAttachments = attachmentMap.has(card.cardId)
+        const canStack = (card.isToken || card.isLand) && !hasAttachments
         const key = canStack ? card.name : `__unique_${card.cardId}`
         if (!nameGroups.has(key)) {
           nameGroups.set(key, [])
@@ -203,14 +231,23 @@ export function BattlefieldRow({
       }
       for (const name of groupOrder) {
         const group = nameGroups.get(name)!
-        if (group.length === 1 && !group[0].isLand && !group[0].isToken) {
-          // Non-stackable single cards render as individual flex items
-          entries.push(emitCardEntry(group[0]))
+        if (group.length === 1 &&
+            (!group[0].isLand && !group[0].isToken ||
+             attachmentMap.has(group[0].cardId))) {
+          // Standalone cards and cards with attachments render individually
+          const card = group[0]
+          // Keep attachment-group keys anchored to the parent identity.
+          // The key remains stable as the surrounding stack changes, preventing
+          // Framer from remapping the attachment fan during regrouping.
+          const attachmentKey = (card.isLand || card.isToken)
+            ? `stack-${card.name}-${card.cardId}`
+            : String(card.cardId)
+          entries.push(emitCardEntry(card, attachmentKey))
         } else {
           // Stackable cards (lands, tokens) always render inside a stack
           // container — even with 1 card — so the container structure is
           // stable when more cards join (no flex slot add/remove).
-          entries.push({ type: "stack", cards: group })
+          entries.push({ type: "stack", key: `stack-${name}-${group[0].cardId}`, cards: group })
         }
       }
       return entries
@@ -244,7 +281,7 @@ export function BattlefieldRow({
     for (let i = 0; i < combatSlots.totalSlots; i++) {
       const bucket = slotBuckets.get(i)
       if (bucket && bucket.length > 1) {
-        entries.push({ type: "stack", cards: bucket })
+        entries.push({ type: "stack", key: `combat-${i}`, cards: bucket })
       } else if (bucket && bucket.length === 1) {
         entries.push(emitCardEntry(bucket[0]))
       } else {
@@ -351,7 +388,7 @@ export function BattlefieldRow({
 
             return (
               <div
-                key={`stack-${cards[0].cardId}`}
+                key={entry.key}
                 className="relative h-full flex-shrink-0"
                 style={{ width: totalWidth, minWidth: totalWidth }}
               >
@@ -425,7 +462,7 @@ export function BattlefieldRow({
             const groupWidth = rowH + (totalCards - 1) * fanStep
             return (
               <div
-                key={`attach-${parent.cardId}`}
+                key={entry.key}
                 className="relative h-full flex-shrink-0"
                 style={{ width: groupWidth, minWidth: groupWidth }}
               >
@@ -433,7 +470,6 @@ export function BattlefieldRow({
                   <motion.div
                     key={att.cardId}
                     layoutId={`${idPrefix}-${att.lineageId}`}
-                    layout
                     transition={CARD_TRANSITION}
                     className="absolute top-0 bottom-0"
                     style={{
@@ -458,8 +494,10 @@ export function BattlefieldRow({
                 ))}
                 <motion.div
                   key={parent.cardId}
-                  layoutId={`${idPrefix}-${parent.lineageId}`}
-                  layout
+                  // The parent is already on the battlefield. Avoid a shared zone projection.
+                  // Reparenting from a stack into this wrapper uses position-only layout
+                  // so the parent transition remains separate from the attachment entry.
+                  layout="position"
                   transition={{
                     ...CARD_TRANSITION,
                     y: { type: "tween", duration: 0.25, ease: "easeOut" },
