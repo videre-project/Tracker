@@ -2375,8 +2375,6 @@ export interface components {
             user?: string;
             /** Format: date-time */
             readonly timestamp?: string;
-            /** Format: date-time */
-            readonly clientTimestamp?: string;
             readonly text?: string | null;
         };
         "MTGOSDK.API.Collection.Binder": {
