@@ -10,13 +10,16 @@ import { DataTable } from "@/components/ui/data-table"
 import { EventsTableSkeleton } from "@/components/events-table-skeleton"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { ChevronDown } from "lucide-react"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { DatePickerWithRange } from "@/components/ui/date-range-picker"
+import {
+  GameTypeFormatFilter,
+  type GameType,
+} from "@/components/game-type-format-filter"
 import { DateRange } from "react-day-picker"
 import { cn } from "@/lib/utils"
 import { getManaSymbolSvgPath } from "@/utils/mana-symbols"
 import { getDisplayCardColors } from "@/utils/card-colors"
+import { compareFormats, isLimitedFormat } from "@/utils/formats"
 
 export interface MatchHistoryDTO {
   id: number
@@ -183,11 +186,23 @@ export default function History() {
   })
 
   const [selectedFormat, setSelectedFormat] = useState<string>("")
+  const [gameType, setGameType] = useState<GameType>("All")
   const [page, setPage] = useState(1)
   const pageSize = 50
 
-  // The format list for the dropdown
+  // The format list is shared with the dashboard and deck filters.
   const { formats } = useGames('ALL', '')
+
+  const filteredFormats = useMemo(() => {
+    let result = formats
+    if (gameType === "Limited") {
+      result = formats.filter(isLimitedFormat)
+    } else if (gameType === "Constructed") {
+      result = formats.filter(format => !isLimitedFormat(format))
+    }
+
+    return [...result].sort(compareFormats)
+  }, [formats, gameType])
 
   const effectiveRange = dateRange || 'ALL'
   const { data, loading, error } = useGamesHistory(page, pageSize, effectiveRange, selectedFormat)
@@ -271,6 +286,18 @@ export default function History() {
     setLiveItems([])
   }
 
+  const handleGameTypeSelect = (value: GameType) => {
+    setGameType(value)
+    if (selectedFormat &&
+        value !== "All" &&
+        (value === "Limited") !== isLimitedFormat(selectedFormat)) {
+      handleFormatSelect("")
+    } else {
+      setPage(1)
+      setLiveItems([])
+    }
+  }
+
   const handleDateChange = (range: DateRange | undefined) => {
     setDateRange(range)
     setPage(1)
@@ -286,31 +313,20 @@ export default function History() {
     <div className="container mx-auto space-y-4 px-4 pb-4 pt-1">
       <div className="flex flex-wrap items-center justify-start gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="h-8 gap-2 border-dashed border-sidebar-border/60">
-                <span className="text-muted-foreground">Format:</span>
-                <span className="font-medium">{selectedFormat || "All"}</span>
-                <ChevronDown className="h-4 w-4 text-muted-foreground" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
-              <DropdownMenuItem onClick={() => handleFormatSelect("")}>
-                All
-              </DropdownMenuItem>
-              {formats.map((f: string) => (
-                <DropdownMenuItem key={f} onClick={() => handleFormatSelect(f)}>
-                  {f}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <GameTypeFormatFilter
+            gameType={gameType}
+            onGameTypeChange={handleGameTypeSelect}
+            selectedFormat={selectedFormat}
+            formats={filteredFormats}
+            onFormatChange={handleFormatSelect}
+          />
+        </div>
 
-          <DatePickerWithRange
-            date={dateRange}
-            setDate={handleDateChange}
-            size="sm"
-            className="justify-start text-left font-normal border-dashed border-sidebar-border/60"
+        <DatePickerWithRange
+          date={dateRange}
+          setDate={handleDateChange}
+          size="sm"
+          className="ml-auto justify-start text-left font-normal border-dashed border-sidebar-border/60"
             presets={[
               { label: 'All Time', getValue: () => undefined },
               { label: 'Today', getValue: () => { const today = new Date(); return { from: today, to: today } } },
@@ -318,7 +334,6 @@ export default function History() {
               { label: 'Last 30 Days', getValue: () => { const today = new Date(); const prev = new Date(); prev.setDate(today.getDate() - 30); return { from: prev, to: today } } },
             ]}
           />
-        </div>
       </div>
 
       {error ? (

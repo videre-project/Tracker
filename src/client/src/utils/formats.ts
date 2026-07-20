@@ -54,6 +54,18 @@ export function compareFormats(a: string, b: string): number {
   return a.localeCompare(b)
 }
 
+export function getFormatLabel(format: string): string {
+  const trimmed = format.trim()
+  if (!trimmed) return "Unspecified"
+
+  const definition = findFormat(trimmed)
+  if (definition) return definition.label
+
+  return trimmed
+    .split(/\s+/)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ")
+}
 export function isLimitedFormat(format: string): boolean {
   return /draft|sealed|limited/i.test(format)
 }
