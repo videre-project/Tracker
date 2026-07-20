@@ -26,6 +26,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { useTradePosts, useTrades } from "@/hooks/use-trades"
+import { TradeHistoryView } from "@/components/trades/trade-history"
 import type {
   TradePartner,
   TradePost,
@@ -47,6 +48,8 @@ import {
   Users,
   X,
 } from "lucide-react"
+
+const MARKETPLACE_PAGE_SIZE = 20
 
 function EmptyState({ children }: { children: string }) {
   return (
@@ -132,13 +135,7 @@ function StatCardSkeleton({ icon: Icon }: { icon: typeof Package }) {
 function TradePartnersSkeleton() {
   return (
     <section className="space-y-3">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-          <Users className="h-4 w-4 text-muted-foreground" />
-          Trade Partners
-        </div>
-        <Skeleton className="h-7 w-24" />
-      </div>
+
       <div className="grid gap-2 md:grid-cols-3">
         <StatCardSkeleton icon={Users} />
         <StatCardSkeleton icon={Handshake} />
@@ -169,7 +166,7 @@ function MarketplaceTableHeader() {
 }
 
 function MarketplaceTableSkeleton({
-  rows = 10,
+  rows = MARKETPLACE_PAGE_SIZE,
   className,
 }: {
   rows?: number
@@ -187,7 +184,7 @@ function MarketplaceTableSkeleton({
     <div className={cn("flex min-h-0 flex-col overflow-hidden rounded-md bg-muted/10", className)}>
       <MarketplaceTableHeader />
       <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
-        <Table className="table-fixed [&_td]:py-1.5 [&_th]:py-1.5" wrapperClassName="overflow-visible">
+        <Table className="table-fixed" wrapperClassName="overflow-visible">
           <TableBody>
             {Array.from({ length: rows }).map((_, index) => {
               const widths = rowWidths[index % rowWidths.length]
@@ -215,12 +212,6 @@ function MarketplaceTableSkeleton({
 function MarketplaceSkeleton() {
   return (
     <section className="flex min-h-0 flex-1 flex-col gap-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-          <Package className="h-4 w-4 translate-y-px text-muted-foreground" />
-          Marketplace
-        </div>
-      </div>
       <div className="grid gap-2 lg:grid-cols-[180px_160px_minmax(190px,1fr)_96px]">
         <Skeleton className="h-9" />
         <Skeleton className="h-9" />
@@ -242,14 +233,51 @@ function MarketplaceSkeleton() {
 }
 
 function TradesPageSkeleton() {
-  return (
-    <>
-      <TradePartnersSkeleton />
-      <MarketplaceSkeleton />
-    </>
-  )
+  return <MarketplaceSkeleton />
 }
 
+type TradeView = "marketplace" | "history" | "partners"
+
+function TradeViewTabs({
+  value,
+  onValueChange,
+}: {
+  value: TradeView
+  onValueChange: (value: TradeView) => void
+}) {
+  const tabs = [
+    { value: "marketplace", label: "Marketplace", icon: Package },
+    { value: "partners", label: "Trade Partners", icon: Users },
+    { value: "history", label: "Trade History", icon: History },
+  ] as const
+
+  return (
+    <div
+      aria-label="Trade view"
+      className="inline-flex h-10 shrink-0 items-stretch gap-1"
+      role="tablist"
+    >
+      {tabs.map(({ value: tabValue, label, icon: Icon }) => (
+        <button
+          aria-selected={value === tabValue}
+          className={cn(
+            "-mb-px inline-flex h-10 items-center gap-2 border-b-2 px-4 text-sm font-medium transition-colors",
+            value === tabValue
+              ? "border-primary text-foreground"
+              : "border-transparent text-muted-foreground hover:bg-muted/30 hover:text-foreground"
+          )}
+          key={tabValue}
+          onClick={() => onValueChange(tabValue)}
+          role="tab"
+          type="button"
+        >
+          <Icon className="h-4 w-4" />
+          {label}
+        </button>
+      ))}
+    </div>
+  )
+}
 function useDebouncedValue<T>(value: T, delayMs: number) {
   const [debouncedValue, setDebouncedValue] = useState(value)
 
@@ -262,12 +290,14 @@ function useDebouncedValue<T>(value: T, delayMs: number) {
 }
 
 export default function Trades() {
-  const pageSize = 10
+  const pageSize = MARKETPLACE_PAGE_SIZE
   const marketplaceRowsRef = useRef<HTMLDivElement>(null)
   const [postsPage, setPostsPage] = useState(1)
+  const [activeView, setActiveView] = useState<TradeView>("marketplace")
   const [postFormat, setPostFormat] = useState<TradePostFormatFilter>("all")
   const [userSearch, setUserSearch] = useState("")
   const [messageSearch, setMessageSearch] = useState("")
+
   const debouncedUserSearch = useDebouncedValue(userSearch, 350)
   const debouncedMessageSearch = useDebouncedValue(messageSearch, 350)
   const { data, loading, error, clientReady } = useTrades()
@@ -289,7 +319,7 @@ export default function Trades() {
     postFormat !== "all" ||
     userSearch.trim().length > 0 ||
     messageSearch.trim().length > 0
-  const showPageSkeleton = !clientReady || (loading && !data)
+  const showPageSkeleton = activeView === "marketplace" && (!clientReady || (loading && !data))
 
   useEffect(() => {
     setPostsPage(1)
@@ -309,39 +339,36 @@ export default function Trades() {
 
   return (
     <div className="flex h-[calc(100vh-2.5rem)] min-h-0 min-w-0 flex-col gap-3 overflow-hidden px-4 pb-4 pt-1">
-      {!showPageSkeleton && error && (
+      <div className="flex h-10 shrink-0 items-center justify-between gap-3 border-b border-sidebar-border/70">
+        <TradeViewTabs value={activeView} onValueChange={setActiveView} />
+        {activeView === "marketplace" && postsLoading && (
+          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+        )}
+      </div>
+      {activeView !== "history" && !showPageSkeleton && error && (
         <div className="rounded-md bg-destructive/15 px-4 py-3 text-sm font-medium text-destructive">
           Error loading trades: {error}
         </div>
       )}
 
-      {!showPageSkeleton && postsError && (
+      {activeView === "marketplace" && !showPageSkeleton && postsError && (
         <div className="rounded-md bg-destructive/15 px-4 py-3 text-sm font-medium text-destructive">
           Error loading trade posts: {postsError}
         </div>
       )}
 
-      {showPageSkeleton ? (
-        <TradesPageSkeleton />
-      ) : (
-        <>
-          <section className="space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                <Users className="h-4 w-4 text-muted-foreground" />
-                Trade Partners
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled
-                title="Trade history is not available yet"
-                className="h-7 gap-1.5 border-sidebar-border/60 bg-background/50 px-2.5 text-xs"
-              >
-                <History className="h-3.5 w-3.5 translate-y-px" />
-                History
-              </Button>
-            </div>
+      <div className={cn(
+        "flex min-h-0 min-w-0 flex-1 flex-col",
+        activeView !== "history" && "hidden"
+      )}>
+        <TradeHistoryView />
+      </div>
+      {activeView !== "history" && (
+        activeView === "partners" ? (
+        loading && !data ? (
+          <TradePartnersSkeleton />
+        ) : (
+          <section className="min-h-0 flex-1 space-y-3 overflow-y-auto">
             <div className="grid gap-2 md:grid-cols-3">
               <StatCard label="Last Trade" value={lastTradePartner} icon={Users} />
               <StatCard
@@ -349,7 +376,11 @@ export default function Trades() {
                 value={currentTrade ? "Active" : "None"}
                 icon={Handshake}
               />
-              <StatCard label="Trade Post" value={formatTradePostStatus(data?.myPost)} icon={Package} />
+              <StatCard
+                label="Trade Post"
+                value={formatTradePostStatus(data?.myPost)}
+                icon={Package}
+              />
             </div>
             {tradePartners.length === 0 ? (
               <EmptyState>No previous trade partners are currently available.</EmptyState>
@@ -357,6 +388,7 @@ export default function Trades() {
               <div className="flex flex-wrap gap-2">
                 {tradePartners.map((partner, index) => (
                   <Badge
+                    className="rounded-md"
                     key={`${formatTradePartner(partner)}-${partner.lastTradeTime ?? index}`}
                     variant="outline"
                   >
@@ -366,19 +398,12 @@ export default function Trades() {
               </div>
             )}
           </section>
-
+        )
+      ) : showPageSkeleton ? (
+        <TradesPageSkeleton />
+      ) : (
+        <>
           <section className="flex min-h-0 flex-1 flex-col gap-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                <Package className="h-4 w-4 translate-y-px text-muted-foreground" />
-                {postData
-                  ? `Marketplace - ${postData.totalCount.toLocaleString()} Posts`
-                  : "Marketplace"}
-              </div>
-              <div className="flex h-8 items-center">
-                {postsLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-              </div>
-            </div>
             <div className="grid gap-2 lg:grid-cols-[180px_160px_minmax(190px,1fr)_96px]">
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -442,7 +467,7 @@ export default function Trades() {
                   ref={marketplaceRowsRef}
                   className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden"
                 >
-                  <Table className="table-fixed [&_td]:py-1.5 [&_th]:py-1.5" wrapperClassName="overflow-visible">
+                  <Table className="table-fixed" wrapperClassName="overflow-visible">
                     <TableBody>
                       {allPosts.map((post, index) => (
                         <TableRow key={`${post.posterName}-${index}`}>
@@ -521,6 +546,7 @@ export default function Trades() {
             </div>
           </section>
         </>
+        )
       )}
     </div>
   )
