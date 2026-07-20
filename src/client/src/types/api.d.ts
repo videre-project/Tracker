@@ -664,21 +664,21 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    [path: `/api/Decks/${string}`]: {
+    [path: `/api/Decks/${number}`]: {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Get a single deck by hash with full card details */
+        /** Get a single deck revision with full card details */
         get: {
             parameters: {
                 query?: never;
                 header?: never;
                 path: {
-                    /** @description Deck hash */
-                    hash: string;
+                    /** @description Collection-history deck revision ID */
+                    revisionId: number;
                 };
                 cookie?: never;
             };
@@ -727,9 +727,9 @@ export interface paths {
          * Render a deck as a streaming NDJSON sequence of framed card images.
          *
          *     Line 1: `{"type":"meta", columns, cardWidth, cardHeight, total}`
-         *       — emitted immediately so the client can pre-size its canvas.
+         *       â€” emitted immediately so the client can pre-size its canvas.
          *     Remaining lines: `{"type":"cards", startIndex, cards: string[]}`
-         *       — emitted in two phases so the first visible row arrives before the
+         *       â€” emitted in two phases so the first visible row arrives before the
          *       full deck finishes rendering.
          */
         get: {
@@ -783,14 +783,14 @@ export interface paths {
         };
         /**
          * Get sortable card metadata for a deck.
-         *     Uses persisted deck entries for deck hashes and live MTGO serialization for deck names.
+         *     Uses replayed collection-history revisions for IDs and live MTGO serialization for names.
          */
         get: {
             parameters: {
                 query?: {
                     /** @description Deck name (looks up from MTGO client) */
                     name?: string;
-                    /** @description Deck hash/ID (looks up from DB and caches) */
+                    /** @description Deck revision ID (looks up from Collection.db and caches) */
                     id?: string;
                 };
                 header?: never;
@@ -831,7 +831,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    [path: `/api/decks/${string}/archetype`]: {
+    [path: `/api/decks/${number}/archetype`]: {
         parameters: {
             query?: never;
             header?: never;
@@ -844,8 +844,8 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    /** @description Deck hash */
-                    hash: string;
+                    /** @description Collection-history deck revision ID */
+                    revisionId: number;
                 };
                 cookie?: never;
             };
@@ -890,7 +890,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    [path: `/api/decks/${string}/colors`]: {
+    [path: `/api/decks/${number}/colors`]: {
         parameters: {
             query?: never;
             header?: never;
@@ -903,8 +903,8 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    /** @description Deck hash */
-                    hash: string;
+                    /** @description Collection-history deck revision ID */
+                    revisionId: number;
                 };
                 cookie?: never;
             };
@@ -1789,7 +1789,7 @@ export interface paths {
                     minDate?: string;
                     maxDate?: string;
                     format?: string;
-                    deckHash?: string;
+                    deckRevisionId?: number;
                 };
                 header?: never;
                 path?: never;
@@ -2062,6 +2062,102 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/trades/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get trade history for an account, newest first. */
+        get: {
+            parameters: {
+                query?: {
+                    accountId?: number;
+                    beforeId?: number;
+                    limit?: number;
+                    search?: string;
+                    kind?: TradeEscrowKind;
+                    result?: TradeEscrowResult;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": TradeHistoryPageDTO;
+                        "application/json": TradeHistoryPageDTO;
+                        "text/json": TradeHistoryPageDTO;
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    [path: `/api/trades/history/${number}`]: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get one trade escrow with terminal offers, inferred outputs, chat, and errors. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": TradeHistoryDetailDTO;
+                        "application/json": TradeHistoryDetailDTO;
+                        "text/json": TradeHistoryDetailDTO;
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": ProblemDetails;
+                        "application/json": ProblemDetails;
+                        "text/json": ProblemDetails;
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/Trades": {
         parameters: {
             query?: never;
@@ -2253,9 +2349,42 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        "MTGOSDK.API.Chat.Channel": {
+            chatSession?: ChatSessionViewModel;
+            /** Format: int32 */
+            readonly id?: number;
+            readonly name?: string | null;
+            /** Format: int32 */
+            readonly parentId?: number;
+            readonly isJoined?: boolean;
+            readonly isJoinedForGame?: boolean;
+            readonly messages?: Message[] | null;
+            /** Format: int32 */
+            readonly messageCount?: number;
+            users?: string[];
+            /** Format: int32 */
+            readonly userCount?: number;
+            readonly subChannels?: Channel[] | null;
+            type?: ChannelType;
+            readonly canSendMessage?: boolean;
+            readonly localFileName?: string | null;
+        };
+        /** @enum {string} */
+        "MTGOSDK.API.Chat.ChannelType": "System" | "Private" | "UserCreated" | "GameChat" | "GameLog" | "Alert" | "PredefinedRoom" | "Clan";
+        "MTGOSDK.API.Chat.Message": {
+            user?: string;
+            /** Format: date-time */
+            readonly timestamp?: string;
+            /** Format: date-time */
+            readonly clientTimestamp?: string;
+            readonly text?: string | null;
+        };
         "MTGOSDK.API.Collection.Binder": {
             /** Format: int32 */
             readonly id?: number;
+            /** Format: int32 */
+            readonly netDeckId?: number;
+            groupingType?: CardGroupingType;
             readonly name?: string | null;
             format?: string;
             /** Format: date-time */
@@ -2307,31 +2436,24 @@ export interface components {
             readonly isToken?: boolean;
             readonly rarity?: string | null;
         };
+        /** @enum {string} */
+        "MTGOSDK.API.Collection.CardGroupingType": "Invalid" | "Deck" | "Binder" | "Wishlist" | "MegaBinder";
         "MTGOSDK.API.Collection.CardQuantityPair": {
             /** Format: int32 */
             readonly id?: number;
             readonly name?: string | null;
             card?: string;
             /** Format: int32 */
-            readonly quantity?: number;
-        };
-        "MTGOSDK.API.Collection.CollectionItem": {
+            readonly annotation?: number;
             /** Format: int32 */
-            readonly id?: number;
-            readonly name?: string | null;
-            readonly description?: string | null;
-            readonly isOpenable?: boolean;
-            readonly isSealedProduct?: boolean;
-            readonly isDigitalObject?: boolean;
-            readonly isBooster?: boolean;
-            readonly isCard?: boolean;
-            readonly isTicket?: boolean;
-            readonly isTradeable?: boolean;
-            readonly hasPremiumOdds?: boolean;
+            readonly quantity?: number;
         };
         "MTGOSDK.API.Collection.Deck": {
             /** Format: int32 */
             readonly id?: number;
+            /** Format: int32 */
+            readonly netDeckId?: number;
+            groupingType?: CardGroupingType;
             readonly name?: string | null;
             format?: string;
             /** Format: date-time */
@@ -2354,8 +2476,8 @@ export interface components {
         "MTGOSDK.API.Collection.ItemCollection": {
             /** Format: int32 */
             readonly count?: number;
-            readonly collectionItems?: CollectionItem[] | null;
-            readonly openableItems?: CollectionItem[] | null;
+            readonly collectionItems?: CardQuantityPair[] | null;
+            readonly openableItems?: CardQuantityPair[] | null;
         };
         "MTGOSDK.API.Collection.Set": {
             readonly code?: string | null;
@@ -2369,6 +2491,11 @@ export interface components {
         };
         /** @enum {string} */
         "MTGOSDK.API.Collection.SetType": "NotSet" | "CoreSet" | "LargeExpansionSet" | "SmallExpansionSet" | "EventTicket" | "TestSet" | "Supplemental" | "PromotionalSet" | "Ancillary" | "FixedAncillary" | "Placeholder";
+        "MTGOSDK.API.Interface.ViewModels.ChatSessionViewModel": {
+            readonly name?: string | null;
+            channel?: Channel;
+            readonly isActive?: boolean;
+        };
         "MTGOSDK.API.Play.Event": {
             /** Format: int32 */
             readonly id?: number;
@@ -2425,6 +2552,9 @@ export interface components {
             state?: TradeState;
             finalState?: TradeFinalState;
             readonly isAccepted?: boolean;
+            readonly isPlayerTrade?: boolean;
+            /** Format: int32 */
+            readonly tradePartnerId?: number | null;
             readonly tradePartnerName?: string | null;
             partnerTradedItems?: ItemCollection;
             tradedItems?: ItemCollection;
@@ -2575,10 +2705,6 @@ export interface components {
             /** Format: double */
             winrate: number;
             topCard: string | null;
-            /** Format: double */
-            topCardAvgScore: number;
-            /** Format: double */
-            topCardAvgQuantity: number;
         };
         "Tracker.Controllers.Models.Decks.CardSearchResultDTO": {
             id: string | null;
@@ -2596,14 +2722,16 @@ export interface components {
             defense?: string | null;
         };
         "Tracker.Controllers.Models.Decks.DeckColorsDTO": {
-            hash: string | null;
+            /** Format: int64 */
+            revisionId: number;
             colors: string[] | null;
             colorString: string | null;
         };
         "Tracker.Controllers.Models.Decks.DeckDTO": {
-            hash: string | null;
+            /** Format: int64 */
+            revisionId: number;
             /** Format: int32 */
-            id: number;
+            netDeckId: number;
             name: string | null;
             format: string | null;
             /** Format: date-time */
@@ -2612,14 +2740,21 @@ export interface components {
             mainboardCount: number;
             /** Format: int32 */
             sideboardCount: number;
+            /** Format: int32 */
+            wins: number;
+            /** Format: int32 */
+            losses: number;
+            /** Format: int32 */
+            ties: number;
             archetype?: string | null;
             colors?: string[] | null;
             featuredCards?: CardEntry[] | null;
         };
         "Tracker.Controllers.Models.Decks.DeckDetailDTO": {
-            hash: string | null;
+            /** Format: int64 */
+            revisionId: number;
             /** Format: int32 */
-            id: number;
+            netDeckId: number;
             name: string | null;
             format: string | null;
             /** Format: date-time */
@@ -2628,9 +2763,10 @@ export interface components {
             sideboard: CardEntry[] | null;
         };
         "Tracker.Controllers.Models.Decks.DeckIdentifierDTO": {
-            hash: string | null;
+            /** Format: int64 */
+            revisionId: number;
             /** Format: int32 */
-            id: number;
+            netDeckId: number;
             name: string | null;
             format: string | null;
         };
@@ -2775,7 +2911,8 @@ export interface components {
             result: string | null;
             record: string | null;
             duration: string | null;
-            deckHash?: string | null;
+            /** Format: int64 */
+            deckRevisionId?: number | null;
             deckName?: string | null;
             deckArchetype?: string | null;
             deckColors?: string[] | null;
@@ -2798,7 +2935,8 @@ export interface components {
             result: string | null;
             record: string | null;
             duration: string | null;
-            deckHash?: string | null;
+            /** Format: int64 */
+            deckRevisionId?: number | null;
             deckName?: string | null;
             deckColors?: string[] | null;
             opponentName?: string | null;
@@ -2934,6 +3072,82 @@ export interface components {
             actions?: ReplayActionDTO[] | null;
             logs?: ReplayLogDTO[] | null;
         };
+        "Tracker.Controllers.TradeHistoryDetailDTO": {
+            summary?: TradeHistorySummaryDTO;
+            /** Format: uuid */
+            token?: string;
+            /** Format: int32 */
+            accountId?: number;
+            items?: TradeHistoryItemDTO[] | null;
+            effects?: TradeHistoryEffectDTO[] | null;
+            messages?: TradeHistoryMessageDTO[] | null;
+            errors?: TradeHistoryErrorDTO[] | null;
+        };
+        "Tracker.Controllers.TradeHistoryEffectDTO": {
+            /** Format: int32 */
+            catalogId?: number;
+            /** Format: int32 */
+            quantity?: number;
+            isInferred?: boolean;
+        };
+        "Tracker.Controllers.TradeHistoryErrorDTO": {
+            /** Format: int64 */
+            id?: number;
+            /** Format: date-time */
+            observedAt?: string;
+            /** Format: int32 */
+            errorCode?: number;
+            errorName?: string | null;
+        };
+        "Tracker.Controllers.TradeHistoryItemDTO": {
+            role?: TradeEscrowItemRole;
+            /** Format: int32 */
+            catalogId?: number;
+            /** Format: int32 */
+            quantity?: number;
+        };
+        "Tracker.Controllers.TradeHistoryMessageDTO": {
+            /** Format: int64 */
+            id?: number;
+            /** Format: date-time */
+            timestamp?: string;
+            /** Format: int32 */
+            senderId?: number | null;
+            senderName?: string | null;
+            text?: string | null;
+        };
+        "Tracker.Controllers.TradeHistoryPageDTO": {
+            items?: TradeHistorySummaryDTO[] | null;
+            /** Format: int64 */
+            nextBeforeId?: number | null;
+        };
+        "Tracker.Controllers.TradeHistorySummaryDTO": {
+            /** Format: int64 */
+            id?: number;
+            /** Format: int32 */
+            escrowId?: number | null;
+            kind?: TradeEscrowKind;
+            /** Format: int32 */
+            partnerId?: number | null;
+            partnerName?: string | null;
+            /** Format: date-time */
+            startedAt?: string;
+            /** Format: date-time */
+            closedAt?: string | null;
+            /** Format: int32 */
+            state?: number;
+            stateName?: string | null;
+            result?: TradeEscrowResult;
+            attributionStatus?: TradeAttributionStatus;
+            /** Format: int32 */
+            outgoingQuantity?: number;
+            /** Format: int32 */
+            outgoingCatalogCount?: number;
+            /** Format: int32 */
+            incomingQuantity?: number;
+            /** Format: int32 */
+            incomingCatalogCount?: number;
+        };
         "Tracker.Controllers.TradesController.TradeMarketplaceUpdateDTO": {
             /** Format: date-time */
             timestamp: string;
@@ -2970,6 +3184,14 @@ export interface components {
             /** Format: int32 */
             quantity?: number;
         };
+        /** @enum {string} */
+        "Tracker.Database.Models.Trades.TradeAttributionStatus": "NotApplicable" | "Pending" | "Inferred" | "InferredAmbiguous" | "Unavailable";
+        /** @enum {string} */
+        "Tracker.Database.Models.Trades.TradeEscrowItemRole": "LocalOffer" | "RemoteOffer" | "InferredOutput";
+        /** @enum {string} */
+        "Tracker.Database.Models.Trades.TradeEscrowKind": "Player" | "NonPlayer";
+        /** @enum {string} */
+        "Tracker.Database.Models.Trades.TradeEscrowResult": "InProgress" | "Completed" | "Cancelled" | "Failed" | "ClosedUnknown" | "Interrupted";
         /**
          * @description Data payload item for Tracker.Services.MTGO.Events.GameLogType.CardChange events.
          *     Each event contains an array of these representing property diffs.
@@ -3029,15 +3251,19 @@ export interface components {
     headers: never;
     pathItems: never;
 }
+export type MtgosdkApiChatChannel = Channel;
+export type MtgosdkApiChatChannelType = ChannelType;
+export type MtgosdkApiChatMessage = Message;
 export type MtgosdkApiCollectionBinder = Binder;
 export type MtgosdkApiCollectionCard = Card;
+export type MtgosdkApiCollectionCardGroupingType = CardGroupingType;
 export type MtgosdkApiCollectionCardQuantityPair = CardQuantityPair;
-export type MtgosdkApiCollectionCollectionItem = CollectionItem;
 export type MtgosdkApiCollectionDeck = Deck;
 export type MtgosdkApiCollectionDeckRegion = DeckRegion;
 export type MtgosdkApiCollectionItemCollection = ItemCollection;
 export type MtgosdkApiCollectionSet = Set;
 export type MtgosdkApiCollectionSetType = SetType;
+export type MtgosdkApiInterfaceViewModelsChatSessionViewModel = ChatSessionViewModel;
 export type MtgosdkApiPlayEvent = Event;
 export type MtgosdkApiPlayPlayFormat = PlayFormat;
 export type MtgosdkApiPlayPlayFormatType = PlayFormatType;
@@ -3085,11 +3311,22 @@ export type TrackerControllersModelsReplaysReplayDataDto = ReplayDataDTO;
 export type TrackerControllersModelsReplaysReplayLogDto = ReplayLogDTO;
 export type TrackerControllersModelsReplaysReplayPlayerDto = ReplayPlayerDTO;
 export type TrackerControllersModelsReplaysReplaySnapshotDto = ReplaySnapshotDTO;
+export type TrackerControllersTradeHistoryDetailDto = TradeHistoryDetailDTO;
+export type TrackerControllersTradeHistoryEffectDto = TradeHistoryEffectDTO;
+export type TrackerControllersTradeHistoryErrorDto = TradeHistoryErrorDTO;
+export type TrackerControllersTradeHistoryItemDto = TradeHistoryItemDTO;
+export type TrackerControllersTradeHistoryMessageDto = TradeHistoryMessageDTO;
+export type TrackerControllersTradeHistoryPageDto = TradeHistoryPageDTO;
+export type TrackerControllersTradeHistorySummaryDto = TradeHistorySummaryDTO;
 export type TrackerControllersTradesControllerTradeMarketplaceUpdateDto = TradeMarketplaceUpdateDTO;
 export type TrackerControllersTradesControllerTradePostDto = TradePostDTO;
 export type TrackerControllersTradesControllerTradePostsPageDto = TradePostsPageDTO;
 export type TrackerControllersTradesControllerTradeSnapshotDto = TradeSnapshotDTO;
 export type TrackerDatabaseModelsCardEntry = CardEntry;
+export type TrackerDatabaseModelsTradesTradeAttributionStatus = TradeAttributionStatus;
+export type TrackerDatabaseModelsTradesTradeEscrowItemRole = TradeEscrowItemRole;
+export type TrackerDatabaseModelsTradesTradeEscrowKind = TradeEscrowKind;
+export type TrackerDatabaseModelsTradesTradeEscrowResult = TradeEscrowResult;
 export type TrackerServicesMtgoEventsCardChangeData = CardChangeData;
 export type TrackerServicesMtgoEventsGameLogType = GameLogType;
 export type TrackerServicesMtgoEventsGameStateData = GameStateData;
@@ -3099,15 +3336,19 @@ export type $defs = Record<string, never>;
 export type operations = Record<string, never>;
 
 
+export type Channel = components['schemas']['MTGOSDK.API.Chat.Channel'];
+export type ChannelType = components['schemas']['MTGOSDK.API.Chat.ChannelType'];
+export type Message = components['schemas']['MTGOSDK.API.Chat.Message'];
 export type Binder = components['schemas']['MTGOSDK.API.Collection.Binder'];
 export type Card = components['schemas']['MTGOSDK.API.Collection.Card'];
+export type CardGroupingType = components['schemas']['MTGOSDK.API.Collection.CardGroupingType'];
 export type CardQuantityPair = components['schemas']['MTGOSDK.API.Collection.CardQuantityPair'];
-export type CollectionItem = components['schemas']['MTGOSDK.API.Collection.CollectionItem'];
 export type Deck = components['schemas']['MTGOSDK.API.Collection.Deck'];
 export type DeckRegion = components['schemas']['MTGOSDK.API.Collection.DeckRegion'];
 export type ItemCollection = components['schemas']['MTGOSDK.API.Collection.ItemCollection'];
 export type Set = components['schemas']['MTGOSDK.API.Collection.Set'];
 export type SetType = components['schemas']['MTGOSDK.API.Collection.SetType'];
+export type ChatSessionViewModel = components['schemas']['MTGOSDK.API.Interface.ViewModels.ChatSessionViewModel'];
 export type Event = components['schemas']['MTGOSDK.API.Play.Event'];
 export type PlayFormat = components['schemas']['MTGOSDK.API.Play.PlayFormat'];
 export type PlayFormatType = components['schemas']['MTGOSDK.API.Play.PlayFormatType'];
@@ -3155,11 +3396,22 @@ export type ReplayDataDTO = components['schemas']['Tracker.Controllers.Models.Re
 export type ReplayLogDTO = components['schemas']['Tracker.Controllers.Models.Replays.ReplayLogDTO'];
 export type ReplayPlayerDTO = components['schemas']['Tracker.Controllers.Models.Replays.ReplayPlayerDTO'];
 export type ReplaySnapshotDTO = components['schemas']['Tracker.Controllers.Models.Replays.ReplaySnapshotDTO'];
+export type TradeHistoryDetailDTO = components['schemas']['Tracker.Controllers.TradeHistoryDetailDTO'];
+export type TradeHistoryEffectDTO = components['schemas']['Tracker.Controllers.TradeHistoryEffectDTO'];
+export type TradeHistoryErrorDTO = components['schemas']['Tracker.Controllers.TradeHistoryErrorDTO'];
+export type TradeHistoryItemDTO = components['schemas']['Tracker.Controllers.TradeHistoryItemDTO'];
+export type TradeHistoryMessageDTO = components['schemas']['Tracker.Controllers.TradeHistoryMessageDTO'];
+export type TradeHistoryPageDTO = components['schemas']['Tracker.Controllers.TradeHistoryPageDTO'];
+export type TradeHistorySummaryDTO = components['schemas']['Tracker.Controllers.TradeHistorySummaryDTO'];
 export type TradeMarketplaceUpdateDTO = components['schemas']['Tracker.Controllers.TradesController.TradeMarketplaceUpdateDTO'];
 export type TradePostDTO = components['schemas']['Tracker.Controllers.TradesController.TradePostDTO'];
 export type TradePostsPageDTO = components['schemas']['Tracker.Controllers.TradesController.TradePostsPageDTO'];
 export type TradeSnapshotDTO = components['schemas']['Tracker.Controllers.TradesController.TradeSnapshotDTO'];
 export type CardEntry = components['schemas']['Tracker.Database.Models.CardEntry'];
+export type TradeAttributionStatus = components['schemas']['Tracker.Database.Models.Trades.TradeAttributionStatus'];
+export type TradeEscrowItemRole = components['schemas']['Tracker.Database.Models.Trades.TradeEscrowItemRole'];
+export type TradeEscrowKind = components['schemas']['Tracker.Database.Models.Trades.TradeEscrowKind'];
+export type TradeEscrowResult = components['schemas']['Tracker.Database.Models.Trades.TradeEscrowResult'];
 export type CardChangeData = components['schemas']['Tracker.Services.MTGO.Events.CardChangeData'];
 export type GameLogType = components['schemas']['Tracker.Services.MTGO.Events.GameLogType'];
 export type GameStateData = components['schemas']['Tracker.Services.MTGO.Events.GameStateData'];

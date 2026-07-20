@@ -20,6 +20,7 @@ using MTGOSDK.API.Trade.Enums;
 using MTGOSDK.Core.Logging;
 
 using Tracker.Controllers.Base;
+using Tracker.Controllers.Models.Trades;
 using Tracker.Services.MTGO;
 
 
@@ -296,11 +297,25 @@ public class TradesController(
     }
     finally
     {
-      TradeManager.MarketplaceUpdated -= onMarketplaceUpdated;
+      TryRemoveMarketplaceHook(onMarketplaceUpdated);
       updateChannel.Writer.TryComplete();
     }
 
     return new EmptyResult();
+  }
+
+  private static void TryRemoveMarketplaceHook(Action<DateTime> callback)
+  {
+    try
+    {
+      TradeManager.MarketplaceUpdated -= callback;
+    }
+    catch (Exception ex)
+    {
+      Log.Debug(
+        ex,
+        "Skipped marketplace hook removal because the MTGO event source is unavailable.");
+    }
   }
 
   private static string? NormalizeCacheSearch(string? value) =>
@@ -396,43 +411,17 @@ public class TradesController(
     Response.Headers["X-Has-Previous-Page"] = page.HasPreviousPage.ToString();
   }
 
-  private static IList<TradePost> GetTradePosts(
+  private static IList<ITradePostSnapshot> GetTradePosts(
     int maxItems,
     TradePostFormat? format,
     string? posterNameSearch,
     string? messageSearch)
   {
-    IEnumerable<TradePost> posts = TradeManager.AllPosts;
-
-    if (format.HasValue)
-    {
-      posts = posts.Where(post => post.Format == format.Value);
-    }
-
-    if (!string.IsNullOrWhiteSpace(posterNameSearch))
-    {
-      posts = posts.Where(post =>
-        post.PosterName.Contains(
-          posterNameSearch.Trim(),
-          StringComparison.OrdinalIgnoreCase));
-    }
-
-    if (!string.IsNullOrWhiteSpace(messageSearch))
-    {
-      posts = posts.Where(post =>
-        post.Message.Contains(
-          messageSearch.Trim(),
-          StringComparison.OrdinalIgnoreCase));
-    }
-
-    posts = posts.OrderBy(post => post.PosterName);
-
-    if (maxItems > 0)
-    {
-      posts = posts.Take(maxItems);
-    }
-
-    return posts.ToList();
+    return TradeManager.SerializePostsAs<ITradePostSnapshot>(
+      maxItems,
+      format,
+      posterNameSearch,
+      messageSearch).ToList();
   }
 
   private static int CountTradePosts(
@@ -453,6 +442,15 @@ public class TradesController(
       Message = ChatTextNormalizer.Normalize(post.Message),
       Wanted = post.Wanted.ToList(),
       Offered = post.Offered.ToList()
+    };
+
+  private static TradePostDTO ToTradePostDTO(ITradePostSnapshot post) => new()
+    {
+      PosterName = post.PosterName,
+      Format = post.Format,
+      Message = ChatTextNormalizer.Normalize(post.Message),
+      Wanted = post.Wanted?.ToList() ?? [],
+      Offered = post.Offered?.ToList() ?? [],
     };
 
   private static bool TryParsePostFormat(

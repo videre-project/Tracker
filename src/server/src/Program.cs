@@ -182,8 +182,10 @@ public class Program
       // Configure API services and database context.
       builder.UseDatabase<EventContext>(options);
       builder.UseDatabase<CollectionContext>(options);
+      builder.UseDatabase<TradeContext>(options);
       builder.RegisterClientAPIProvider();
       builder.RegisterCollectionService();
+      builder.RegisterTradeService();
       builder.RegisterGameService();
 
       // Configure the Web API middleware.
