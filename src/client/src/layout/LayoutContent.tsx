@@ -100,46 +100,46 @@ export default function Layout() {
   // Extract the current location and each segment of the path
   const location = useLocation();
   const fragments = location.pathname.split(/(?=\/)/);
-  const deckRouteMatch = matchPath("/decks/:deckHash", location.pathname);
-  const routeDeckHash = deckRouteMatch?.params.deckHash;
-  const inferredDeckHash = routeDeckHash
-    ? routeDeckHash
+  const deckRouteMatch = matchPath("/decks/:deckRevisionId", location.pathname);
+  const routeDeckRevisionId = deckRouteMatch?.params.deckRevisionId;
+  const inferredDeckRevisionId = routeDeckRevisionId
+    ? routeDeckRevisionId
     : location.pathname.match(/^\/decks\/([^/?#]+)/)?.[1];
 
-  const deckHash = (() => {
-    if (!inferredDeckHash) return undefined;
+  const deckRevisionId = (() => {
+    if (!inferredDeckRevisionId) return undefined;
     try {
-      return decodeURIComponent(inferredDeckHash);
+      return decodeURIComponent(inferredDeckRevisionId);
     } catch {
-      return inferredDeckHash;
+      return inferredDeckRevisionId;
     }
   })();
   const routeState = location.state as DeckRouteState | null;
   const [deckBreadcrumbNames, setDeckBreadcrumbNames] = React.useState<Record<string, string>>({});
   const [deckBreadcrumbFormats, setDeckBreadcrumbFormats] = React.useState<Record<string, string>>({});
-  const currentDeckBreadcrumbName = deckHash
-    ? routeState?.deckName ?? deckBreadcrumbNames[deckHash]
+  const currentDeckBreadcrumbName = deckRevisionId
+    ? routeState?.deckName ?? deckBreadcrumbNames[deckRevisionId]
     : undefined;
-  const currentDeckBreadcrumbFormat = deckHash
-    ? routeState?.deckFormat ?? deckBreadcrumbFormats[deckHash]
+  const currentDeckBreadcrumbFormat = deckRevisionId
+    ? routeState?.deckFormat ?? deckBreadcrumbFormats[deckRevisionId]
     : undefined;
 
   React.useEffect(() => {
-    if (!deckHash) return;
+    if (!deckRevisionId) return;
 
     if (routeState?.deckName) {
       setDeckBreadcrumbNames(current => (
-        current[deckHash] === routeState.deckName
+        current[deckRevisionId] === routeState.deckName
           ? current
-          : { ...current, [deckHash]: routeState.deckName! }
+          : { ...current, [deckRevisionId]: routeState.deckName! }
       ));
     }
 
     if (routeState?.deckFormat) {
       setDeckBreadcrumbFormats(current => (
-        current[deckHash] === routeState.deckFormat
+        current[deckRevisionId] === routeState.deckFormat
           ? current
-          : { ...current, [deckHash]: routeState.deckFormat! }
+          : { ...current, [deckRevisionId]: routeState.deckFormat! }
       ));
     }
 
@@ -147,30 +147,37 @@ export default function Layout() {
       return;
     }
 
-    if (deckBreadcrumbNames[deckHash] && deckBreadcrumbFormats[deckHash]) return;
+    if (deckBreadcrumbNames[deckRevisionId] &&
+        deckBreadcrumbFormats[deckRevisionId]) return;
 
     const abortController = new AbortController();
 
     fetch(getApiUrl("/api/decks"), { signal: abortController.signal })
       .then(response => {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return response.json() as Promise<Record<string, { hash: string; name: string; format: string }[]>>;
+        return response.json() as Promise<Record<string, {
+          revisionId: number
+          name: string
+          format: string
+        }[]>>;
       })
       .then(decksByFormat => {
         const flattenedDecks = Object.values(decksByFormat).flat();
-        const deck = flattenedDecks.find(candidate => candidate.hash === deckHash);
+        const deck = flattenedDecks.find(
+          candidate => candidate.revisionId.toString() === deckRevisionId
+        );
         if (!deck) throw new Error("Deck not found in deck index");
 
         if (deck.name) {
           setDeckBreadcrumbNames(current => ({
             ...current,
-            [deckHash]: deck.name,
+            [deckRevisionId]: deck.name,
           }));
         }
         if (deck.format) {
           setDeckBreadcrumbFormats(current => ({
             ...current,
-            [deckHash]: deck.format,
+            [deckRevisionId]: deck.format,
           }));
         }
       })
@@ -179,20 +186,26 @@ export default function Layout() {
         fetch(getApiUrl("/api/decks/identifiers"), { signal: abortController.signal })
           .then(response => {
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            return response.json() as Promise<Array<{ hash: string; name: string; format: string }>>;
+            return response.json() as Promise<Array<{
+              revisionId: number
+              name: string
+              format: string
+            }>>;
           })
           .then(decks => {
-            const deck = decks.find(item => item.hash === deckHash);
+            const deck = decks.find(
+              item => item.revisionId.toString() === deckRevisionId
+            );
             if (!deck) return;
 
             setDeckBreadcrumbNames(current => ({
               ...current,
-              [deckHash]: deck.name,
+              [deckRevisionId]: deck.name,
             }));
             if (deck.format) {
               setDeckBreadcrumbFormats(current => ({
                 ...current,
-                [deckHash]: deck.format,
+                [deckRevisionId]: deck.format,
               }));
             }
           })
@@ -200,13 +213,13 @@ export default function Layout() {
       });
 
     return () => abortController.abort();
-  }, [deckBreadcrumbNames, deckBreadcrumbFormats, deckHash, routeState?.deckName, routeState?.deckFormat]);
+  }, [deckBreadcrumbNames, deckBreadcrumbFormats, deckRevisionId, routeState?.deckName, routeState?.deckFormat]);
 
   // Routes are now nested as children under main routes
   const allRoutes = routes.flatMap(r => r.children || []);
 
   const deckBreadcrumbs = React.useMemo<RouteFragment[]>(() => {
-    if (!deckHash) return [];
+    if (!deckRevisionId) return [];
 
     const formatTitle = currentDeckBreadcrumbFormat
       ? normalizeDeckFormat(currentDeckBreadcrumbFormat)
@@ -228,12 +241,12 @@ export default function Layout() {
 
     breadcrumbs.push({
       title: deckTitle,
-      url: `/decks/${deckHash}`,
+      url: `/decks/${deckRevisionId}`,
       kind: "page",
     });
 
     return breadcrumbs;
-  }, [deckHash, currentDeckBreadcrumbFormat, currentDeckBreadcrumbName]);
+  }, [deckRevisionId, currentDeckBreadcrumbFormat, currentDeckBreadcrumbName]);
 
   const replayBreadcrumb = React.useMemo<RouteFragment | null>(() => {
     const match = matchPath("/history/:matchId/game/:gameId/replay", location.pathname);
@@ -252,7 +265,7 @@ export default function Layout() {
     [...allRoutes].sort((a, b) => (b.path?.length ?? 0) - (a.path?.length ?? 0))
   ), [allRoutes])
 
-  const breadcrumbs = deckHash ? deckBreadcrumbs : fragments.reduce((acc, fragment) => {
+  const breadcrumbs = deckRevisionId ? deckBreadcrumbs : fragments.reduce((acc, fragment) => {
     const cumulativePath = (acc.at(-1)?.url ?? "") + fragment;
     const route = routesBySpecificity.find(({ path }) => {
       if (!path) return false;
@@ -266,7 +279,8 @@ export default function Layout() {
           url: cumulativePath,
           kind: "collection",
         });
-      } else if (route.path === "/decks/:deckHash" && match?.params.deckHash) {
+      } else if (route.path === "/decks/:deckRevisionId" &&
+                 match?.params.deckRevisionId) {
         const title = currentDeckBreadcrumbName ?? route.name ?? "";
         if (currentDeckBreadcrumbFormat) {
           const normalizedFormat = normalizeDeckFormat(currentDeckBreadcrumbFormat);

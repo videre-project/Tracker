@@ -529,7 +529,7 @@ function DeckGrid({
 }
 
 export interface DeckCollectionEditorProps {
-  deckHash?: string
+  deckRevisionId?: string
   className?: string
   editorTitle?: string
   hideDeckSelector?: boolean
@@ -544,7 +544,7 @@ export interface DeckCollectionEditorProps {
 }
 
 export function DeckCollectionEditor({
-  deckHash: routeDeckHash,
+  deckRevisionId: routeDeckRevisionId,
   className,
   editorTitle = "Deck",
   hideDeckSelector = false,
@@ -560,8 +560,8 @@ export function DeckCollectionEditor({
   const { cards: allCards, loading: sortableLoading, fetchSortableCards, reset: resetSortable } = useSortableCards()
   const { identifiers: decks } = useDeckIdentifiers()
   const [searchParams, setSearchParams] = useSearchParams()
-  const deckFromSearch = routeDeckHash ?? searchParams.get("deck") ?? ""
-  const [selectedDeckHash, setSelectedDeckHash] = useState<string>(() => deckFromSearch)
+  const deckFromSearch = routeDeckRevisionId ?? searchParams.get("deck") ?? ""
+  const [selectedDeckRevisionId, setSelectedDeckRevisionId] = useState<string>(() => deckFromSearch)
   const [internalSortMode, setInternalSortMode] = useState<SortMode>('cmc')
   const [internalSideboardCollapsed, setInternalSideboardCollapsed] = useState(true)
   const sortMode = controlledSortMode ?? internalSortMode
@@ -587,22 +587,22 @@ export function DeckCollectionEditor({
   }, [])
 
   useEffect(() => {
-    if (deckFromSearch !== selectedDeckHash) {
-      setSelectedDeckHash(deckFromSearch)
+    if (deckFromSearch !== selectedDeckRevisionId) {
+      setSelectedDeckRevisionId(deckFromSearch)
     }
-  }, [deckFromSearch, selectedDeckHash])
+  }, [deckFromSearch, selectedDeckRevisionId])
 
-  const handleDeckChange = useCallback((hash: string) => {
-    if (routeDeckHash) return
+  const handleDeckChange = useCallback((revisionId: string) => {
+    if (routeDeckRevisionId) return
 
-    setSelectedDeckHash(hash)
+    setSelectedDeckRevisionId(revisionId)
     setSearchParams(prev => {
       const next = new URLSearchParams(prev)
-      if (hash) next.set("deck", hash)
+      if (revisionId) next.set("deck", revisionId)
       else next.delete("deck")
       return next
     }, { replace: true })
-  }, [routeDeckHash, setSearchParams])
+  }, [routeDeckRevisionId, setSearchParams])
 
   const handleSortModeChange = useCallback((mode: SortMode) => {
     onSortModeChange?.(mode)
@@ -622,9 +622,11 @@ export function DeckCollectionEditor({
   }, [controlledSideboardCollapsed, isSideboardCollapsed, onSideboardCollapsedChange])
 
   const selectedDeckName = useMemo(() => {
-    if (!selectedDeckHash) return ""
-    return decks.find(d => d.hash === selectedDeckHash)?.name || ""
-  }, [decks, selectedDeckHash])
+    if (!selectedDeckRevisionId) return ""
+    return decks.find(
+      deck => deck.revisionId.toString() === selectedDeckRevisionId
+    )?.name || ""
+  }, [decks, selectedDeckRevisionId])
 
   const mainboardCards = useMemo(() => allCards.filter(c => c.zone === 'Mainboard' || !c.zone), [allCards])
   const sideboardCards = useMemo(() => allCards.filter(c => c.zone === 'Sideboard'), [allCards])
@@ -637,7 +639,7 @@ export function DeckCollectionEditor({
   const fetchAbortRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
-    const fetchKey = `fetch-${selectedDeckHash || "none"}`
+    const fetchKey = `fetch-${selectedDeckRevisionId || "none"}`
     if (initializedRef.current === fetchKey) return
     initializedRef.current = fetchKey
 
@@ -645,7 +647,7 @@ export function DeckCollectionEditor({
     const abortController = new AbortController()
     fetchAbortRef.current = abortController
 
-    if (!selectedDeckHash) {
+    if (!selectedDeckRevisionId) {
       resetSortable()
       return
     }
@@ -653,11 +655,11 @@ export function DeckCollectionEditor({
     resetSortable()
 
     const fetchParallel = async () => {
-      console.log(`[Collection] Fetching data for ${selectedDeckName || selectedDeckHash} (${selectedDeckHash})...`)
+      console.log(`[Collection] Fetching data for ${selectedDeckName || selectedDeckRevisionId} (${selectedDeckRevisionId})...`)
       if (abortController.signal.aborted) return
 
       try {
-        const deckId = selectedDeckHash
+        const deckId = selectedDeckRevisionId
         await fetchSortableCards(selectedDeckName, deckId || undefined)
       } catch (e) {
         if ((e as Error).name !== 'AbortError') throw e
@@ -666,7 +668,7 @@ export function DeckCollectionEditor({
     fetchParallel()
 
     return () => abortController.abort()
-  }, [fetchSortableCards, resetSortable, selectedDeckName, selectedDeckHash])
+  }, [fetchSortableCards, resetSortable, selectedDeckName, selectedDeckRevisionId])
 
   const sharedScale = useMemo(() => {
      if (containerWidth === 0 || mainNaturalWidth === 0) return 1
@@ -717,13 +719,16 @@ export function DeckCollectionEditor({
             ) : !hideDeckSelector ? (
               <div className="flex items-center gap-2 ml-auto">
                 <span className="text-xs text-muted-foreground">Deck:</span>
-                <Select value={selectedDeckHash} onValueChange={handleDeckChange}>
+                <Select value={selectedDeckRevisionId} onValueChange={handleDeckChange}>
                   <SelectTrigger className="h-7 min-w-[140px] text-xs">
                     <SelectValue placeholder="Select a deck..." />
                   </SelectTrigger>
                   <SelectContent>
                     {decks.map((deck) => (
-                      <SelectItem key={deck.hash} value={deck.hash}>
+                      <SelectItem
+                        key={deck.revisionId}
+                        value={deck.revisionId.toString()}
+                      >
                         {deck.format} - {deck.name}
                       </SelectItem>
                     ))}
@@ -769,12 +774,12 @@ export function DeckCollectionEditor({
           )}
           {/* Mainboard pane */}
           <div className="flex-1 min-w-0 flex flex-col min-h-0">
-            {!selectedDeckHash && (
+            {!selectedDeckRevisionId && (
               <div className="flex-1 flex items-center justify-center">
                 <span className="text-sm text-muted-foreground">Select a deck to view</span>
               </div>
             )}
-            {selectedDeckHash && (
+            {selectedDeckRevisionId && (
               <DeckGrid
                 title="Mainboard"
                 cards={mainboardCards}

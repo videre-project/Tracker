@@ -171,7 +171,7 @@ export function useGamesHistory(
   pageSize: number,
   timeRange: string | DateRange | undefined,
   format?: string,
-  deckHash?: string
+  deckRevisionId?: number
 ) {
   const [data, setData] = useState<PaginatedMatches | null>(null)
   const [loading, setLoading] = useState(true)
@@ -193,7 +193,7 @@ export function useGamesHistory(
     params.append("page", page.toString())
     params.append("pageSize", pageSize.toString())
     if (format) params.append("format", format)
-    if (deckHash) params.append("deckHash", deckHash)
+    if (deckRevisionId) params.append("deckRevisionId", deckRevisionId.toString())
 
     const now = new Date()
     now.setHours(23, 59, 59, 999)
@@ -236,7 +236,7 @@ export function useGamesHistory(
         setError(err)
         setLoading(false)
       })
-  }, [page, pageSize, timeRange, format, deckHash, clientReady, clientLoading])
+  }, [page, pageSize, timeRange, format, deckRevisionId, clientReady, clientLoading])
 
   return { data, loading, error }
 }

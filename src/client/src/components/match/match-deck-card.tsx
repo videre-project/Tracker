@@ -41,7 +41,7 @@ export function DeckManaSymbols({ colors }: { colors?: string[] | null }) {
 
 export function MatchDeckCard({
   deckName,
-  deckHash,
+  deckRevisionId,
   deckArchetype,
   deckColors,
   previewCards,
@@ -49,14 +49,14 @@ export function MatchDeckCard({
   onOpen,
 }: {
   deckName?: string | null
-  deckHash?: string | null
+  deckRevisionId?: number | null
   deckArchetype?: string | null
   deckColors?: string[] | null
   previewCards: CardEntry[]
   loading?: boolean
   onOpen: () => void
 }) {
-  const canOpen = Boolean(deckHash)
+  const canOpen = Boolean(deckRevisionId)
   const backgroundCard = previewCards[Math.floor(previewCards.length / 2)]
   const { getArtUrl, prefetchCards, isReady: cardArtReady } = useCardArtContext()
   const backgroundArtUrl = backgroundCard ? getArtUrl(backgroundCard.name) : null

@@ -95,7 +95,7 @@ export const routes: RouteEntry[] = [
         element: <Decks />
       },
       {
-        path: "/decks/:deckHash",
+        path: "/decks/:deckRevisionId",
         name: "Deck",
         type: NavType.Secondary,
         element: <DeckEditor />

@@ -9,21 +9,24 @@ export interface CardEntry {
 }
 
 export interface DeckSummary {
-  hash: string
-  id: number
+  revisionId: number
+  netDeckId: number
   name: string
   format: string
   timestamp: string
   mainboardCount: number
   sideboardCount: number
+  wins: number
+  losses: number
+  ties: number
   archetype?: string
   colors: string[]
   featuredCards?: CardEntry[]
 }
 
 export interface DeckDetail {
-  hash: string
-  id: number
+  revisionId: number
+  netDeckId: number
   name: string
   format: string
   timestamp: string
@@ -51,35 +54,51 @@ export interface NBACResponse {
 }
 
 export function useDecks() {
+  const { isReady: clientReady, loading: clientLoading } = useClientState()
   const [decks, setDecks] = useState<Record<string, DeckSummary[]>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Fetch all decks grouped by format
   useEffect(() => {
+    if (clientLoading) return
+    if (!clientReady) {
+      setDecks({})
+      setLoading(false)
+      setError(null)
+      return
+    }
+
+    const controller = new AbortController()
     setLoading(true)
     setError(null)
 
-    fetch(getApiUrl("/api/decks"))
+    fetch(getApiUrl("/api/decks"), { signal: controller.signal })
       .then(res => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         return res.json()
       })
       .then(data => setDecks(data))
-      .catch(err => setError(err.message))
-      .finally(() => setLoading(false))
-  }, [])
+      .catch(reason => {
+        if (reason instanceof Error && reason.name === "AbortError") return
+        setError(reason instanceof Error ? reason.message : "Unknown error")
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false)
+      })
 
-  return { decks, loading, error }
+    return () => controller.abort()
+  }, [clientLoading, clientReady])
+
+  return { decks, loading: loading || clientLoading, error }
 }
 
-export function useDeckDetail(hash: string | null) {
+export function useDeckDetail(revisionId: string | null) {
   const [detail, setDetail] = useState<DeckDetail | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!hash) {
+    if (!revisionId) {
       setDetail(null)
       setLoading(false)
       setError(null)
@@ -92,7 +111,7 @@ export function useDeckDetail(hash: string | null) {
     setLoading(true)
     setError(null)
 
-    fetch(getApiUrl(`/api/decks/${hash}`), { signal: abortController.signal })
+    fetch(getApiUrl(`/api/decks/${revisionId}`), { signal: abortController.signal })
       .then(res => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         return res.json()
@@ -109,36 +128,36 @@ export function useDeckDetail(hash: string | null) {
       })
 
     return () => abortController.abort()
-  }, [hash])
+  }, [revisionId])
 
   return { detail, loading, error }
 }
 
-export function useDeckArchetype(hash: string | null) {
+export function useDeckArchetype(revisionId: string | null) {
   const [archetype, setArchetype] = useState<NBACResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const loadingRef = useRef(false)
-  const requestedHashRef = useRef<string | null>(null)
+  const requestedRevisionRef = useRef<string | null>(null)
 
   useEffect(() => {
     setArchetype(null)
     setError(null)
-    requestedHashRef.current = null
-  }, [hash])
+    requestedRevisionRef.current = null
+  }, [revisionId])
 
   const fetchArchetype = useCallback(async (force = false) => {
-    if (!hash) return
+    if (!revisionId) return
     if (loadingRef.current) return
-    if (!force && requestedHashRef.current === hash) return
+    if (!force && requestedRevisionRef.current === revisionId) return
 
     loadingRef.current = true
-    requestedHashRef.current = hash
+    requestedRevisionRef.current = revisionId
     setLoading(true)
     setError(null)
 
     try {
-      const res = await fetch(getApiUrl(`/api/decks/${hash}/archetype`))
+      const res = await fetch(getApiUrl(`/api/decks/${revisionId}/archetype`))
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
       setArchetype(data)
@@ -148,7 +167,7 @@ export function useDeckArchetype(hash: string | null) {
       loadingRef.current = false
       setLoading(false)
     }
-  }, [hash])
+  }, [revisionId])
 
   return { archetype, loading, error, fetchArchetype }
 }
@@ -161,8 +180,6 @@ export interface AggregatedArchetype {
   losses: number
   winrate: number
   topCard: string
-  topCardAvgScore: number
-  topCardAvgQuantity: number
 }
 
 const ARCHETYPES_CACHE: Record<string, { data: AggregatedArchetype[]; timestamp: number }> = {}
@@ -264,8 +281,8 @@ export function useAggregatedArchetypes(timeRange: string | DateRange | undefine
 
 
 export interface DeckIdentifier {
-  hash: string
-  id: number
+  revisionId: number
+  netDeckId: number
   name: string
   format: string
 }

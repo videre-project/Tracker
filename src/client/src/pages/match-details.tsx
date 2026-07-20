@@ -233,7 +233,9 @@ export default function MatchDetails() {
     useConstantRetry: true,
   })
 
-  const { detail: deckDetail, loading: deckDetailLoading } = useDeckDetail(data?.deckHash ?? null)
+  const { detail: deckDetail, loading: deckDetailLoading } = useDeckDetail(
+    data?.deckRevisionId?.toString() ?? null
+  )
 
   if (error) {
     return (
@@ -299,9 +301,9 @@ export default function MatchDetails() {
     ? null
     : document.getElementById("page-header-end")
   const openDeckEditor = () => {
-    if (!data.deckHash) return
+    if (!data.deckRevisionId) return
 
-    navigate(`/decks/${encodeURIComponent(data.deckHash)}`, {
+    navigate(`/decks/${data.deckRevisionId}`, {
       state: {
         deckName: data.deckName ?? undefined,
         deckFormat: data.format ?? undefined,
@@ -431,7 +433,7 @@ export default function MatchDetails() {
           </div>
           <MatchDeckCard
             deckName={data.deckName}
-            deckHash={data.deckHash}
+            deckRevisionId={data.deckRevisionId}
             deckArchetype={data.deckArchetype}
             deckColors={data.deckColors}
             previewCards={deckPreviewCards}

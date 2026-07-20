@@ -126,7 +126,7 @@ function HeaderMeta({
 }
 
 export default function DeckEditor() {
-  const { deckHash = "" } = useParams()
+  const { deckRevisionId = "" } = useParams()
   const navigate = useNavigate()
   const location = useLocation()
   const routeState = location.state as DeckRouteState | null
@@ -140,15 +140,15 @@ export default function DeckEditor() {
   const editorHeaderSingleRowProbeRef = useRef<HTMLDivElement>(null)
 
   const { decks, loading: summariesLoading } = useDecks()
-  const { detail, loading: detailLoading } = useDeckDetail(deckHash)
+  const { detail, loading: detailLoading } = useDeckDetail(deckRevisionId)
 
   const allDecks = useMemo(
     () => Object.values(decks).flat(),
     [decks]
   )
   const summary = useMemo(
-    () => allDecks.find(deck => deck.hash === deckHash),
-    [allDecks, deckHash]
+    () => allDecks.find(deck => deck.revisionId.toString() === deckRevisionId),
+    [allDecks, deckRevisionId]
   )
 
   const deckName = summary?.name ?? detail?.name ?? routeState?.deckName ?? "Deck"
@@ -457,7 +457,7 @@ export default function DeckEditor() {
 
       <div className="flex min-h-0 flex-1 items-stretch gap-4">
         <DeckCollectionEditor
-          deckHash={deckHash}
+          deckRevisionId={deckRevisionId}
           className="h-full flex-1 gap-0 p-0"
           editorTitle="Editor"
           hideDeckSelector
