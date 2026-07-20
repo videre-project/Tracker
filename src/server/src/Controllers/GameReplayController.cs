@@ -15,7 +15,7 @@ using MTGOSDK.API.Chat;
 
 using Tracker.Controllers.Base;
 using Tracker.Database;
-using Tracker.Database.Models;
+using Tracker.Database.Models.Events;
 using Tracker.Controllers.Models.Replays;
 using Tracker.Services.MTGO;
 using Tracker.Services.MTGO.Events;

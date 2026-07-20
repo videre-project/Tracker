@@ -7,7 +7,7 @@
 using System;
 
 
-namespace Tracker.Database.Models;
+namespace Tracker.Database.Models.Events;
 
 public class GamePlayerModel
 {

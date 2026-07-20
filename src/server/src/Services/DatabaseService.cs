@@ -26,6 +26,19 @@ namespace Tracker.Services;
 /// </summary>
 public static class DatabaseService
 {
+  public sealed class DatabaseReadiness<T> where T : DbContext
+  {
+    private readonly TaskCompletionSource _ready =
+      new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    public Task WaitAsync(CancellationToken cancellationToken = default) =>
+      _ready.Task.WaitAsync(cancellationToken);
+
+    internal void SetReady() => _ready.TrySetResult();
+    internal void SetException(Exception exception) =>
+      _ready.TrySetException(exception);
+  }
+
   /// <summary>
   /// Initializes the ASP.NET Core SQLite database service.
   /// </summary>
@@ -48,6 +61,7 @@ public static class DatabaseService
     };
 
     builder.Services.AddSqlite<T>(connectionString.ToString());
+    builder.Services.AddSingleton<DatabaseReadiness<T>>();
     builder.Services.AddTransient<IHostedService>(provider =>
     {
       return new MigrationService<T>(provider, path);
@@ -61,31 +75,39 @@ public static class DatabaseService
   {
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-      // Create the database directory if it does not exist.
-      string directory = Path.GetDirectoryName(path)!;
-      Directory.CreateDirectory(directory);
-
-      using (var scope = provider.CreateScope())
+      var readiness = provider.GetRequiredService<DatabaseReadiness<T>>();
+      try
       {
-        var context = scope.ServiceProvider.GetRequiredService<T>();
-        var db = context.Database;
+        // Create the database directory if it does not exist.
+        string directory = Path.GetDirectoryName(path)!;
+        Directory.CreateDirectory(directory);
 
-        // Check if there are any pending migrations
-        if ((await db.GetPendingMigrationsAsync(cancellationToken)).Any())
+        using (var scope = provider.CreateScope())
         {
-          Log.Debug("Performing database migrations for {0}.", typeof(T).Name);
-          await db.MigrateAsync(cancellationToken);
-        }
-        else
-        {
-          // If there are no pending migrations, ensure the database is created.
-          Log.Debug("No pending migrations found for {0}. Ensuring database is created.", typeof(T).Name);
-          await db.EnsureCreatedAsync(cancellationToken);
+          var context = scope.ServiceProvider.GetRequiredService<T>();
+          var db = context.Database;
+
+          if ((await db.GetPendingMigrationsAsync(cancellationToken)).Any())
+          {
+            Log.Debug("Performing database migrations for {0}.", typeof(T).Name);
+            await db.MigrateAsync(cancellationToken);
+          }
+          else
+          {
+            Log.Debug("No pending migrations found for {0}. Ensuring database is created.", typeof(T).Name);
+            await db.EnsureCreatedAsync(cancellationToken);
+          }
+
+          await db.ExecuteSqlRawAsync("PRAGMA journal_mode=WAL;", cancellationToken);
+          await db.ExecuteSqlRawAsync("PRAGMA busy_timeout=5000;", cancellationToken);
         }
 
-        // Enable WAL mode and set busy timeout for concurrent access
-        await db.ExecuteSqlRawAsync("PRAGMA journal_mode=WAL;", cancellationToken);
-        await db.ExecuteSqlRawAsync("PRAGMA busy_timeout=5000;", cancellationToken);
+        readiness.SetReady();
+      }
+      catch (Exception ex)
+      {
+        readiness.SetException(ex);
+        throw;
       }
     }
 

@@ -10,7 +10,7 @@ namespace Tracker.Controllers.Models.Decks;
 
 public class DeckColorsDTO
 {
-  public required string Hash { get; set; }
+  public required long RevisionId { get; set; }
   public required List<string> Colors { get; set; }
   public required string ColorString { get; set; }
 }

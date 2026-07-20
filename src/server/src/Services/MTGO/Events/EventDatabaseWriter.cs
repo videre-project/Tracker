@@ -27,6 +27,8 @@ using MTGOSDK.Core.Reflection.Serialization;
 
 using Tracker.Database;
 using Tracker.Database.Models;
+using Tracker.Database.Models.Events;
+using Tracker.Services.MTGO.Collection;
 
 
 namespace Tracker.Services.MTGO.Events;
@@ -72,38 +74,9 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
         };
         if (eventObj.RegisteredDeck is Deck deck)
         {
-          eventModel.DeckHash = deck.Hash;
-
-          // Check if the deck already exists in the database
-          DeckModel? deckModel = context.Decks.FirstOrDefault(d => d.Hash == deck.Hash);
-          if (deckModel == null)
-          {
-            // If it doesn't exist, create a new DeckModel entry
-            deckModel = DeckModel.ToModel(deck);
-
-            // Fetch archetype and featured card from NBAC API
-            try
-            {
-              var httpClientFactory = scope.ServiceProvider.GetService<IHttpClientFactory>();
-              var appOptions = scope.ServiceProvider.GetService<ApplicationOptions>();
-              if (httpClientFactory != null && appOptions != null)
-              {
-                var httpClient = httpClientFactory.CreateClient();
-                // PopulateArchetypeAsync sets both Archetype and FeaturedCard
-                deckModel.PopulateArchetypeAsync(httpClient, appOptions.NbacApiUrl)
-                  .GetAwaiter().GetResult();
-              }
-            }
-            catch (Exception ex)
-            {
-              Log.Warning("Failed to fetch archetype for deck {DeckHash}: {Message}",
-                deck.Hash, ex.Message);
-            }
-
-            context.Decks.Add(deckModel);
-          }
-
-          eventModel.Deck = deckModel;
+          var deckService =
+            scope.ServiceProvider.GetRequiredService<CollectionDeckService>();
+          eventModel.DeckRevisionId = deckService.ResolveRevision(deck);
         }
 
         context.Events.Add(eventModel);
@@ -143,39 +116,17 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
         using var transaction = context.Database.BeginTransaction();
 
         var eventModel = context.Events.FirstOrDefault(e => e.Id == eventObj.Id);
-        if (eventModel == null || eventModel.DeckHash != null) return false;
+        if (eventModel == null || eventModel.DeckRevisionId != null) return false;
 
-        eventModel.DeckHash = deck.Hash;
-
-        DeckModel? deckModel = context.Decks.FirstOrDefault(d => d.Hash == deck.Hash);
-        if (deckModel == null)
-        {
-          deckModel = DeckModel.ToModel(deck);
-
-          try
-          {
-            var httpClientFactory = scope.ServiceProvider.GetService<IHttpClientFactory>();
-            var appOptions = scope.ServiceProvider.GetService<ApplicationOptions>();
-            if (httpClientFactory != null && appOptions != null)
-            {
-              var httpClient = httpClientFactory.CreateClient();
-              deckModel.PopulateArchetypeAsync(httpClient, appOptions.NbacApiUrl)
-                .GetAwaiter().GetResult();
-            }
-          }
-          catch (Exception ex)
-          {
-            Log.Warning("Failed to fetch archetype for deck {DeckHash}: {Message}",
-              deck.Hash, ex.Message);
-          }
-
-          context.Decks.Add(deckModel);
-        }
-
-        eventModel.Deck = deckModel;
+        var deckService =
+          scope.ServiceProvider.GetRequiredService<CollectionDeckService>();
+        eventModel.DeckRevisionId = deckService.ResolveRevision(deck);
         context.SaveChanges();
         transaction.Commit();
-        Log.Debug("Backfilled deck {DeckHash} for event {EventId}", deck.Hash, eventObj.Id);
+        Log.Debug(
+          "Backfilled deck revision {DeckRevisionId} for event {EventId}",
+          eventModel.DeckRevisionId,
+          eventObj.Id);
         return true;
       }
       catch (Exception ex)

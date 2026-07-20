@@ -23,6 +23,7 @@ public class ClientAPIProvider : IClientAPIProvider
   public ClientOptions Options { get; set; } = default;
   public ushort? Pid { get; set; } = null;
   public bool IsReady { get; private set; } = false;
+  public UserIdentity? CurrentUser { get; private set; }
 
   private static readonly SemaphoreSlim _semaphore = new(1, 1);
   private TaskCompletionSource<bool> _semaphoreReleased =
@@ -53,14 +54,18 @@ public class ClientAPIProvider : IClientAPIProvider
   {
     if (RemoteClient.IsInitialized && !RemoteClient.IsDisposed)
     {
-      if (!IsReady)
+      if (!IsReady && this.TryGetCurrentUser(
+            out UserIdentity? identity,
+            requireReady: false))
       {
+        CurrentUser = identity;
         IsReady = true;
         OnClientStateChanged();
       }
     }
     else if (IsReady)
     {
+      CurrentUser = null;
       IsReady = false;
       OnClientStateChanged();
     }
@@ -77,6 +82,7 @@ public class ClientAPIProvider : IClientAPIProvider
         // Mark as not ready during initialization
         if (IsReady)
         {
+          CurrentUser = null;
           IsReady = false;
           OnClientStateChanged();
         }
@@ -104,6 +110,7 @@ public class ClientAPIProvider : IClientAPIProvider
 
           if (IsReady)
           {
+            CurrentUser = null;
             IsReady = false;
             OnClientStateChanged();
           }
@@ -239,6 +246,7 @@ public class ClientAPIProvider : IClientAPIProvider
         // Ensure we remain not ready in this failure path
         if (IsReady)
         {
+          CurrentUser = null;
           IsReady = false;
           OnClientStateChanged();
         }
@@ -261,6 +269,7 @@ public class ClientAPIProvider : IClientAPIProvider
         // Ensure we remain not ready in this failure path
         if (IsReady)
         {
+          CurrentUser = null;
           IsReady = false;
           OnClientStateChanged();
         }
@@ -280,12 +289,16 @@ public class ClientAPIProvider : IClientAPIProvider
         return false;
       }
 
-      if (!await WaitForCurrentUserReadyAsync(disposedTcs, cancellationToken))
+      UserIdentity? identity = await WaitForCurrentUserReadyAsync(
+        disposedTcs,
+        cancellationToken);
+      if (identity == null)
       {
         return false;
       }
 
       // Mark as ready and notify listeners
+      CurrentUser = identity;
       IsReady = true;
       OnClientStateChanged();
       return true;
@@ -297,7 +310,7 @@ public class ClientAPIProvider : IClientAPIProvider
     }
   }
 
-  private async Task<bool> WaitForCurrentUserReadyAsync(
+  private async Task<UserIdentity?> WaitForCurrentUserReadyAsync(
     TaskCompletionSource<bool> disposedTcs,
     CancellationToken cancellationToken)
   {
@@ -314,12 +327,14 @@ public class ClientAPIProvider : IClientAPIProvider
           !RemoteClient.IsInitialized)
       {
         Log.Warning("Client disposed while waiting for current user data.");
-        return false;
+        return null;
       }
 
-      if (this.TryGetCurrentUsername(out _, requireReady: false))
+      if (this.TryGetCurrentUser(
+            out UserIdentity? identity,
+            requireReady: false))
       {
-        return true;
+        return identity;
       }
 
       var delayTask = Task.Delay(TimeSpan.FromMilliseconds(250), timeoutCts.Token);
@@ -327,12 +342,14 @@ public class ClientAPIProvider : IClientAPIProvider
       if (completedTask == disposedTcs.Task)
       {
         Log.Warning("Client disposed while waiting for current user data.");
-        return false;
+        return null;
       }
     }
 
-    Log.Warning("Timed out waiting for current user data to become readable.");
-    return false;
+    Log.Error(
+      "Timed out waiting for a valid current user ID and username; " +
+      "the MTGO client will not be marked ready.");
+    return null;
   }
 
   protected virtual void OnClientStateChanged()

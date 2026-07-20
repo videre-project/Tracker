@@ -10,6 +10,7 @@ using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
 
 using Tracker.Database.Models;
+using Tracker.Database.Models.Events;
 using Tracker.Database.Extensions;
 
 using MTGOSDK.API.Play;
@@ -22,7 +23,6 @@ public class EventContext(DbContextOptions<EventContext> options)
     : DbContext(options)
 {
   public DbSet<EventModel> Events { get; set; }
-  public DbSet<DeckModel> Decks { get; set; }
   public DbSet<MatchModel> Matches { get; set; }
   public DbSet<GameModel> Games { get; set; }
   public DbSet<GameCardModel> GameCards { get; set; }
@@ -51,35 +51,6 @@ public class EventContext(DbContextOptions<EventContext> options)
     modelBuilder.Ignore<GamePlayerResult>();
     modelBuilder.Ignore<PlayerResult>();
     modelBuilder.Ignore<Dictionary<int, List<CardEntry>>>();
-
-    //
-    // Deck relationships
-    //
-
-    modelBuilder.Entity<DeckModel>()
-      .HasKey(d => d.Hash);
-
-    modelBuilder.Entity<DeckModel>()
-      .Property(d => d.Mainboard)
-      .HasConversion(
-          e => JsonSerializer.Serialize(e, s_databaseJsonOptions),
-          e => JsonSerializer.Deserialize<List<CardEntry>>(e, s_databaseJsonOptions)!)
-      .Metadata
-        .SetValueComparer(CardEntryComparerExtensions.CardEntryListComparer);
-
-    modelBuilder.Entity<DeckModel>()
-      .Property(d => d.Sideboard)
-      .HasConversion(
-          e => JsonSerializer.Serialize(e, s_databaseJsonOptions),
-          e => JsonSerializer.Deserialize<List<CardEntry>>(e, s_databaseJsonOptions)!)
-      .Metadata
-        .SetValueComparer(CardEntryComparerExtensions.CardEntryListComparer);
-
-    modelBuilder.Entity<EventModel>()
-      .HasOne(e => e.Deck)
-      .WithMany()
-      .HasForeignKey(e => e.DeckHash)
-      .IsRequired(false);
 
     //
     // Event relationships

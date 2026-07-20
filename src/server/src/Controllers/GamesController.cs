@@ -18,6 +18,7 @@ using Tracker.Controllers.Base;
 using Tracker.Database;
 using Tracker.Controllers.Models.Games;
 using Tracker.Services.MTGO;
+using Tracker.Services.MTGO.Collection;
 using static Tracker.Services.MTGO.Events.MatchHistorySerialization;
 
 
@@ -29,11 +30,16 @@ public class GamesController : APIController
 {
   private readonly EventContext context;
   private readonly IClientAPIProvider clientProvider;
+  private readonly CollectionDeckService deckService;
 
-  public GamesController(EventContext context, IClientAPIProvider clientProvider)
+  public GamesController(
+    EventContext context,
+    IClientAPIProvider clientProvider,
+    CollectionDeckService deckService)
   {
     this.context = context;
     this.clientProvider = clientProvider;
+    this.deckService = deckService;
   }
 
   [HttpGet("history")]
@@ -43,7 +49,7 @@ public class GamesController : APIController
     [FromQuery] DateTime? minDate = null,
     [FromQuery] DateTime? maxDate = null,
     [FromQuery] string? format = null,
-    [FromQuery] string? deckHash = null)
+    [FromQuery] long? deckRevisionId = null)
   {
     if (!clientProvider.TryGetCurrentUsername(out var currentUser))
     {
@@ -61,9 +67,8 @@ public class GamesController : APIController
           WHERE EXISTS (
             SELECT 1 FROM json_each(m.PlayerResults)
             WHERE json_extract(value, '$.player') = {0}
-          )", currentUser)
+      )", currentUser)
       .Include(m => m.Event)
-        .ThenInclude(e => e.Deck)
       .Include(m => m.Games)
       .AsSplitQuery()
       .AsNoTracking()
@@ -82,9 +87,10 @@ public class GamesController : APIController
     {
       query = query.Where(m => m.Event.Format == format);
     }
-    if (!string.IsNullOrEmpty(deckHash))
+    if (deckRevisionId.HasValue)
     {
-      query = query.Where(m => m.Event.DeckHash == deckHash);
+      query = query.Where(
+        m => m.Event.DeckRevisionId == deckRevisionId.Value);
     }
 
     // Get total count before pagination
@@ -98,11 +104,14 @@ public class GamesController : APIController
       .Skip((page - 1) * pageSize)
       .Take(pageSize)
       .ToListAsync();
+    var deckRevisions = new Dictionary<long, DeckRevisionView>();
+    await LoadDeckRevisionsAsync(matches.Select(match => match.Event));
 
     // Map to DTOs
     var matchDTOs = new List<MatchHistoryDTO>();
     foreach (var match in matches)
     {
+      DeckRevisionView? deck = GetDeck(match.Event);
       var playerResult = match.PlayerResults.FirstOrDefault(p => p.Player == currentUser);
       
       TimeSpan matchDuration = TimeSpan.Zero;
@@ -136,9 +145,9 @@ public class GamesController : APIController
         Result = playerResult?.Result.ToString() ?? "Unknown",
         Record = $"{wins}-{losses}",
         Duration = FormatDuration(matchDuration),
-        DeckHash = match.Event.DeckHash,
-        DeckName = match.Event.Deck?.Name,
-        DeckColors = GetDeckColors(match.Event.Deck),
+        DeckRevisionId = match.Event.DeckRevisionId,
+        DeckName = deck?.Name,
+        DeckColors = deck?.Colors,
         OpponentName = GetOpponentName(match, currentUser)
       });
     }
@@ -158,15 +167,19 @@ public class GamesController : APIController
       {
         var activeMatches = await context.Matches
           .Where(m => activeMatchIds.Contains(m.Id))
-          .Where(m => string.IsNullOrEmpty(deckHash) || m.Event.DeckHash == deckHash)
-          .Include(m => m.Event).ThenInclude(e => e.Deck)
+          .Where(m => !deckRevisionId.HasValue ||
+            m.Event.DeckRevisionId == deckRevisionId.Value)
+          .Include(m => m.Event)
           .Include(m => m.Games)
             .ThenInclude(g => g.Players)
           .AsSplitQuery().AsNoTracking()
           .ToListAsync();
+        await LoadDeckRevisionsAsync(
+          activeMatches.Select(match => match.Event));
 
         foreach (var match in activeMatches)
         {
+          DeckRevisionView? deck = GetDeck(match.Event);
           TimeSpan dur = TimeSpan.Zero;
           int w = 0, l = 0;
           foreach (var game in match.Games)
@@ -190,9 +203,9 @@ public class GamesController : APIController
             Result = pr?.Result.ToString() ?? "In Progress",
             Record = $"{w}-{l}",
             Duration = FormatDuration(dur),
-            DeckHash = match.Event?.DeckHash,
-            DeckName = match.Event?.Deck?.Name,
-            DeckColors = GetDeckColors(match.Event?.Deck),
+            DeckRevisionId = match.Event?.DeckRevisionId,
+            DeckName = deck?.Name,
+            DeckColors = deck?.Colors,
             OpponentName = GetOpponentName(match, currentUser),
             IsActive = true
           });
@@ -209,13 +222,15 @@ public class GamesController : APIController
       {
         var activeEvents = await context.Events
           .Where(e => activeEventIds.Contains(e.Id))
-          .Where(e => string.IsNullOrEmpty(deckHash) || e.DeckHash == deckHash)
-          .Include(e => e.Deck)
+          .Where(e => !deckRevisionId.HasValue ||
+            e.DeckRevisionId == deckRevisionId.Value)
           .AsNoTracking()
           .ToListAsync();
+        await LoadDeckRevisionsAsync(activeEvents);
 
         foreach (var evt in activeEvents)
         {
+          DeckRevisionView? deck = GetDeck(evt);
           matchDTOs.Add(new MatchHistoryDTO
           {
             Id = 0,
@@ -226,9 +241,9 @@ public class GamesController : APIController
             Result = "In Progress",
             Record = "",
             Duration = "",
-            DeckHash = evt.DeckHash,
-            DeckName = evt.Deck?.Name,
-            DeckColors = GetDeckColors(evt.Deck),
+            DeckRevisionId = evt.DeckRevisionId,
+            DeckName = deck?.Name,
+            DeckColors = deck?.Colors,
             IsActive = true,
             IsEvent = true
           });
@@ -283,7 +298,7 @@ public class GamesController : APIController
           Result = anyActive ? "In Progress" : $"{totalWins}-{totalLosses}",
           Record = $"{totalWins}-{totalLosses}",
           Duration = FormatDuration(totalDuration),
-          DeckHash = first.DeckHash,
+          DeckRevisionId = first.DeckRevisionId,
           DeckName = first.DeckName,
           DeckColors = first.DeckColors,
           IsActive = anyActive || GameAPIService.ActiveEventIds.Contains(first.EventId),
@@ -326,6 +341,23 @@ public class GamesController : APIController
       PageSize = pageSize,
       TotalPages = totalPages
     });
+
+    async Task LoadDeckRevisionsAsync(
+      IEnumerable<Database.Models.Events.EventModel> events)
+    {
+      var loaded = await deckService.GetRevisionsAsync(
+        events
+          .Where(eventModel => eventModel.DeckRevisionId != null)
+          .Select(eventModel => eventModel.DeckRevisionId!.Value));
+      foreach (var pair in loaded)
+        deckRevisions[pair.Key] = pair.Value;
+    }
+
+    DeckRevisionView? GetDeck(Database.Models.Events.EventModel? eventModel) =>
+      eventModel?.DeckRevisionId is long id &&
+      deckRevisions.TryGetValue(id, out var deck)
+        ? deck
+        : null;
   }
 
   [HttpGet("match/{matchId}")]
@@ -350,7 +382,6 @@ public class GamesController : APIController
 
     var match = await context.Matches
       .Include(m => m.Event)
-        .ThenInclude(e => e.Deck)
       .Include(m => m.Games)
         .ThenInclude(g => g.Players)
       .Include(m => m.Games)
@@ -376,6 +407,9 @@ public class GamesController : APIController
     {
       return NotFound($"Match with ID {matchId} not found.");
     }
+    DeckRevisionView? deck = match.Event.DeckRevisionId is long revisionId
+      ? await deckService.GetRevisionAsync(revisionId)
+      : null;
 
     // Verify user participated in this match (or it's currently active)
     var playerResult = match.PlayerResults.FirstOrDefault(p => p.Player == currentUser);
@@ -432,10 +466,10 @@ public class GamesController : APIController
       Result = playerResult?.Result.ToString() ?? "In Progress",
       Record = $"{wins}-{losses}",
       Duration = FormatDuration(matchDuration),
-      DeckHash = match.Event.Deck?.Hash ?? match.Event.DeckHash,
-      DeckName = match.Event.Deck?.Name,
-      DeckArchetype = match.Event.Deck?.Archetype,
-      DeckColors = GetDeckColors(match.Event.Deck),
+      DeckRevisionId = match.Event.DeckRevisionId,
+      DeckName = deck?.Name,
+      DeckArchetype = deck?.Archetype,
+      DeckColors = deck?.Colors,
       OpponentName = GetOpponentName(match, currentUser),
       IsActive = isActive,
       Games = gameDetails
@@ -476,9 +510,8 @@ public class GamesController : APIController
           WHERE EXISTS (
             SELECT 1 FROM json_each(m.PlayerResults)
             WHERE json_extract(value, '$.player') = {0}
-          )", currentUser)
+      )", currentUser)
       .Include(m => m.Event)
-        .ThenInclude(e => e.Deck)
       .Include(m => m.Games)
         .ThenInclude(g => g.Players)
       .AsSplitQuery()
@@ -621,9 +654,8 @@ public class GamesController : APIController
           WHERE EXISTS (
             SELECT 1 FROM json_each(m.PlayerResults)
             WHERE json_extract(value, '$.player') = {0}
-          )", currentUser)
+      )", currentUser)
       .Include(m => m.Event)
-        .ThenInclude(e => e.Deck)
       .AsNoTracking()
       .AsQueryable();
 

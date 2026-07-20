@@ -19,6 +19,7 @@ using Tracker.Controllers.Base;
 using Tracker.Database;
 using Tracker.Controllers.Models.Games;
 using Tracker.Services.MTGO;
+using Tracker.Services.MTGO.Collection;
 using Tracker.Services.MTGO.Events;
 
 using static Tracker.Services.MTGO.Events.MatchHistorySerialization;
@@ -30,7 +31,8 @@ namespace Tracker.Controllers;
 public sealed class GameStreamsController(
   EventContext context,
   ClientStateMonitor clientMonitor,
-  IClientAPIProvider clientProvider) : APIController
+  IClientAPIProvider clientProvider,
+  CollectionDeckService deckService) : APIController
 {  [HttpGet("/api/games/match/{matchId}/watch")]
   [ProducesResponseType(typeof(IEnumerable<GameLogDTO>), StatusCodes.Status200OK)]
   [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
@@ -101,7 +103,6 @@ public sealed class GameStreamsController(
       // Try as match first (covers MatchCreated + MatchResultUpdated)
       var match = await freshContext.Matches
         .Include(m => m.Event)
-          .ThenInclude(e => e.Deck)
         .Include(m => m.Games)
           .ThenInclude(g => g.Players)
         .AsNoTracking()
@@ -109,6 +110,10 @@ public sealed class GameStreamsController(
 
       if (match != null)
       {
+        DeckRevisionView? deck =
+          match.Event.DeckRevisionId is long revisionId
+            ? await deckService.GetRevisionAsync(revisionId)
+            : null;
         bool isActive = GameAPIService.ActiveMatchIds.Contains(id);
         var playerResult = match.PlayerResults.FirstOrDefault(p => p.Player == currentUser);
 
@@ -135,9 +140,9 @@ public sealed class GameStreamsController(
           Result = playerResult?.Result.ToString() ?? "In Progress",
           Record = $"{wins}-{losses}",
           Duration = $"{Math.Floor(matchDuration.TotalMinutes)}m {matchDuration.Seconds}s",
-          DeckHash = match.Event?.DeckHash,
-          DeckName = match.Event?.Deck?.Name,
-          DeckColors = GetDeckColors(match.Event?.Deck),
+          DeckRevisionId = match.Event?.DeckRevisionId,
+          DeckName = deck?.Name,
+          DeckColors = deck?.Colors,
           OpponentName = GetOpponentName(match, currentUser),
           IsActive = isActive
         };
@@ -148,12 +153,14 @@ public sealed class GameStreamsController(
 
       // Fall back to event lookup (tournament just joined, no matches yet)
       var evt = await freshContext.Events
-        .Include(e => e.Deck)
         .AsNoTracking()
         .FirstOrDefaultAsync(e => e.Id == id);
 
       if (evt != null)
       {
+        DeckRevisionView? deck = evt.DeckRevisionId is long revisionId
+          ? await deckService.GetRevisionAsync(revisionId)
+          : null;
         var dto = new MatchHistoryDTO
         {
           Id = 0,
@@ -164,9 +171,9 @@ public sealed class GameStreamsController(
           Result = "In Progress",
           Record = "",
           Duration = "",
-          DeckHash = evt.DeckHash,
-          DeckName = evt.Deck?.Name,
-          DeckColors = GetDeckColors(evt.Deck),
+          DeckRevisionId = evt.DeckRevisionId,
+          DeckName = deck?.Name,
+          DeckColors = deck?.Colors,
           IsActive = true,
           IsEvent = true
         };

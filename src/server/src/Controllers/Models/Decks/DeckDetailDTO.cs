@@ -13,8 +13,8 @@ namespace Tracker.Controllers.Models.Decks;
 
 public class DeckDetailDTO
 {
-  public required string Hash { get; set; }
-  public required int Id { get; set; }
+  public required long RevisionId { get; set; }
+  public required int NetDeckId { get; set; }
   public required string Name { get; set; }
   public required string Format { get; set; }
   public required DateTime Timestamp { get; set; }

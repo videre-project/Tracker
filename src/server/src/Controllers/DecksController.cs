@@ -31,6 +31,7 @@ using Tracker.Database;
 using Tracker.Database.Models;
 using Tracker.Controllers.Models.Decks;
 using Tracker.Services.MTGO;
+using Tracker.Services.MTGO.Collection;
 using Tracker.Services.Videre;
 
 
@@ -44,18 +45,18 @@ namespace Tracker.Controllers;
 public class DecksController : APIController
 {
   private readonly EventContext context;
-  private readonly IServiceScopeFactory scopeFactory;
+  private readonly CollectionDeckService deckService;
   private readonly INBACArchetypeClient nbacArchetypeClient;
   private readonly IClientAPIProvider clientProvider;
 
   public DecksController(
     EventContext context,
-    IServiceScopeFactory scopeFactory,
+    CollectionDeckService deckService,
     INBACArchetypeClient nbacArchetypeClient,
     IClientAPIProvider clientProvider)
   {
     this.context = context;
-    this.scopeFactory = scopeFactory;
+    this.deckService = deckService;
     this.nbacArchetypeClient = nbacArchetypeClient;
     this.clientProvider = clientProvider;
   }
@@ -90,6 +91,12 @@ public class DecksController : APIController
     IList<string> Types,
     string Rarity
   ) : ICardData;
+  private sealed class DeckMatchRecord
+  {
+    public int Wins { get; set; }
+    public int Losses { get; set; }
+    public int Ties { get; set; }
+  }
 
   /// <summary>
   /// Get all decks grouped by format
@@ -97,79 +104,158 @@ public class DecksController : APIController
   /// <returns>Dictionary of format to list of decks</returns>
   [HttpGet] // GET /api/decks
   [ProducesResponseType(typeof(Dictionary<string, List<DeckDTO>>), StatusCodes.Status200OK)]
-  public async Task<ActionResult<Dictionary<string, List<DeckDTO>>>> GetDecks()
+  public async Task<ActionResult<Dictionary<string, List<DeckDTO>>>> GetDecks(
+    CancellationToken cancellationToken)
   {
-    var decks = await context.Decks
-      .OrderByDescending(d => d.Timestamp)
-      .ToListAsync();
+    var decks = (await deckService.GetCurrentDecksAsync(cancellationToken))
+      .OrderByDescending(deck => deck.Timestamp)
+      .ToList();
+    Dictionary<long, DeckMatchRecord> matchRecords =
+      await GetDeckMatchRecordsAsync(decks, cancellationToken);
 
     var grouped = decks
-      .GroupBy(d => d.Format)
+      .GroupBy(deck => deck.Format)
       .ToDictionary(
-        g => g.Key,
-        g => g.Select(d => new DeckDTO
+        group => group.Key,
+        group => group.Select(deck =>
         {
-          Hash = d.Hash,
-          Id = d.Id,
-          Name = d.Name,
-          Format = d.Format,
-          Timestamp = d.Timestamp,
-          MainboardCount = d.Mainboard.Sum(c => c.quantity),
-          SideboardCount = d.Sideboard.Sum(c => c.quantity),
-          Archetype = d.Archetype,
-          Colors = d.Colors,
-          FeaturedCards = d.Mainboard
-            .OrderByDescending(c => c.quantity)
-            .Take(5)
-            .ToList()
-        }).ToList()
-      );
+          DeckMatchRecord? record = matchRecords.GetValueOrDefault(
+            deck.CardGroupingId);
+          return new DeckDTO
+          {
+            RevisionId = deck.RevisionId,
+            NetDeckId = deck.NetDeckId,
+            Name = deck.Name,
+            Format = deck.Format,
+            Timestamp = deck.Timestamp,
+            MainboardCount = deck.Mainboard.Sum(card => card.quantity),
+            SideboardCount = deck.Sideboard.Sum(card => card.quantity),
+            Wins = record?.Wins ?? 0,
+            Losses = record?.Losses ?? 0,
+            Ties = record?.Ties ?? 0,
+            Archetype = deck.Archetype,
+            Colors = deck.Colors,
+            FeaturedCards = deck.Mainboard
+              .OrderByDescending(card => card.quantity)
+              .Take(5)
+              .ToList(),
+          };
+        }).ToList());
 
     return Ok(grouped);
   }
 
+  private async Task<Dictionary<long, DeckMatchRecord>> GetDeckMatchRecordsAsync(
+    IReadOnlyCollection<DeckRevisionView> decks,
+    CancellationToken cancellationToken)
+  {
+    var records = new Dictionary<long, DeckMatchRecord>();
+    string? currentUser = clientProvider.CurrentUser?.Username;
+    if (decks.Count == 0 || string.IsNullOrWhiteSpace(currentUser))
+      return records;
+
+    IReadOnlyDictionary<long, long> groupingIdsByRevision =
+      await deckService.GetRevisionGroupingIdsAsync(
+        decks.Select(deck => deck.CardGroupingId),
+        cancellationToken);
+    if (groupingIdsByRevision.Count == 0)
+      return records;
+
+    long[] relevantRevisionIds = groupingIdsByRevision.Keys.ToArray();
+    var events = await context.Events
+      .AsNoTracking()
+      .Include(eventModel => eventModel.Matches)
+      .Where(eventModel =>
+        eventModel.DeckRevisionId != null &&
+        relevantRevisionIds.Contains(eventModel.DeckRevisionId.Value))
+      .ToListAsync(cancellationToken);
+    if (events.Count == 0)
+      return records;
+
+    foreach (var eventModel in events)
+    {
+      if (eventModel.DeckRevisionId is not long revisionId ||
+          !groupingIdsByRevision.TryGetValue(revisionId, out long groupingId))
+      {
+        continue;
+      }
+
+      foreach (var match in eventModel.Matches)
+      {
+        PlayerResult? result = match.PlayerResults.FirstOrDefault(player =>
+          string.Equals(
+            player.Player,
+            currentUser,
+            StringComparison.OrdinalIgnoreCase));
+        if (result == null || result.Result == MatchResult.NotSet)
+          continue;
+
+        if (!records.TryGetValue(groupingId, out DeckMatchRecord? record))
+        {
+          record = new DeckMatchRecord();
+          records[groupingId] = record;
+        }
+
+        switch (result.Result)
+        {
+          case MatchResult.Win:
+            record.Wins++;
+            break;
+          case MatchResult.Loss:
+            record.Losses++;
+            break;
+          case MatchResult.Draw:
+            record.Ties++;
+            break;
+        }
+      }
+    }
+
+    return records;
+  }
   /// <summary>
   /// Get a flat list of all deck identifiers
   /// </summary>
   /// <returns>List of deck identifiers</returns>
   [HttpGet("identifiers")] // GET /api/decks/identifiers
   [ProducesResponseType(typeof(List<DeckIdentifierDTO>), StatusCodes.Status200OK)]
-  public async Task<ActionResult<List<DeckIdentifierDTO>>> GetDeckIdentifiers()
+  public async Task<ActionResult<List<DeckIdentifierDTO>>> GetDeckIdentifiers(
+    CancellationToken cancellationToken)
   {
-    var decks = await context.Decks
-      .OrderByDescending(d => d.Timestamp)
-      .Select(d => new DeckIdentifierDTO
+    var decks = (await deckService.GetCurrentDecksAsync(cancellationToken))
+      .OrderByDescending(deck => deck.Timestamp)
+      .Select(deck => new DeckIdentifierDTO
       {
-        Hash = d.Hash,
-        Id = d.Id,
-        Name = d.Name,
-        Format = d.Format
+        RevisionId = deck.RevisionId,
+        NetDeckId = deck.NetDeckId,
+        Name = deck.Name,
+        Format = deck.Format
       })
-      .ToListAsync();
+      .ToList();
 
     return Ok(decks);
   }
 
   /// <summary>
-  /// Get a single deck by hash with full card details
+  /// Get a single deck revision with full card details
   /// </summary>
-  /// <param name="hash">Deck hash</param>
+  /// <param name="revisionId">Collection-history deck revision ID</param>
   /// <returns>Full deck details</returns>
-  [HttpGet("{hash}")] // GET /api/decks/{hash}
+  [HttpGet("{revisionId:long}")]
   [ProducesResponseType(typeof(DeckDetailDTO), StatusCodes.Status200OK)]
   [ProducesResponseType(StatusCodes.Status404NotFound)]
-  public async Task<ActionResult<DeckDetailDTO>> GetDeck(string hash)
+  public async Task<ActionResult<DeckDetailDTO>> GetDeck(long revisionId)
   {
-    var deck = await context.Decks.FindAsync(hash);
+    var deck = await deckService.GetRevisionAsync(revisionId);
     if (deck == null)
     {
-      return NotFound(new { error = $"Deck with hash {hash} not found" });
+      return NotFound(new { error = $"Deck revision {revisionId} not found" });
     }
 
     return Ok(new DeckDetailDTO
     {
-      Hash = deck.Hash,
-      Id = deck.Id,
+      RevisionId = deck.RevisionId,
+      NetDeckId = deck.NetDeckId,
       Name = deck.Name,
       Format = deck.Format,
       Timestamp = deck.Timestamp,
@@ -180,14 +266,14 @@ public class DecksController : APIController
 
   private record CachedDeck(List<CardEntry> Mainboard, List<CardEntry> Sideboard);
 
-  private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, CachedDeck> s_deckCache = new();
+  private static readonly System.Collections.Concurrent.ConcurrentDictionary<long, CachedDeck> s_deckCache = new();
   /// <summary>
   /// Render a deck as a streaming NDJSON sequence of framed card images.
   ///
   /// Line 1: <c>{"type":"meta", columns, cardWidth, cardHeight, total}</c>
-  ///   — emitted immediately so the client can pre-size its canvas.
+  ///   â€” emitted immediately so the client can pre-size its canvas.
   /// Remaining lines: <c>{"type":"cards", startIndex, cards: string[]}</c>
-  ///   — emitted in two phases so the first visible row arrives before the
+  ///   â€” emitted in two phases so the first visible row arrives before the
   ///   full deck finishes rendering.
   /// </summary>
   [HttpGet("sheet")] // GET /api/decks/sheet?name=Plains&id=HASH
@@ -204,12 +290,14 @@ public class DecksController : APIController
     // Prioritize ID/Hash lookup (DB -> Cache)
     if (!string.IsNullOrEmpty(id))
     {
-      var cached = await GetOrLoadDeck(id);
+      if (!long.TryParse(id, out long revisionId))
+        return BadRequest(new { error = "Deck ID must be a revision ID" });
+      var cached = await GetOrLoadDeck(revisionId);
       if (cached == null)
-        return NotFound(new { error = $"Deck with hash {id} not found in database" });
+        return NotFound(new { error = $"Deck revision {revisionId} not found" });
 
       // Union of mainboard + sideboard (both grids share the same sheet image).
-      // Deduped in DB order — must match the ordering used by GetSortableCards.
+      // Deduped in DB order â€” must match the ordering used by GetSortableCards.
       catalogIds = cached.Mainboard
         .Concat(cached.Sideboard)
         .Select(c => c.catalogId)
@@ -242,14 +330,14 @@ public class DecksController : APIController
 
     StartNDJSONResponse();
 
-    // Line 1 — metadata: client pre-sizes the canvas and hides the overlay.
+    // Line 1 â€” metadata: client pre-sizes the canvas and hides the overlay.
     await WriteCompactNDJSONLine(
       new { type = "meta", columns, cardWidth, cardHeight, total },
       HttpContext.RequestAborted);
 
     // Stream one row at a time. RenderCardsRowByRow does a single WPF render
     // pass for all cards, then yields each row as soon as its parallel
-    // crop+encode finishes — no second render pass, no double overhead.
+    // crop+encode finishes â€” no second render pass, no double overhead.
     int startIndex = 0;
     foreach (var rowCards in CardRenderer.RenderCardsRowByRow(catalogIds, columns, cardHeight))
     {
@@ -265,12 +353,12 @@ public class DecksController : APIController
 
   /// <summary>
   /// Get sortable card metadata for a deck.
-  /// Uses persisted deck entries for deck hashes and live MTGO serialization for deck names.
+  /// Uses replayed collection-history revisions for IDs and live MTGO serialization for names.
   /// </summary>
   /// <param name="name">Deck name (looks up from MTGO client)</param>
-  /// <param name="id">Deck hash/ID (looks up from DB and caches)</param>
+  /// <param name="id">Deck revision ID (looks up from Collection.db and caches)</param>
   /// <returns>List of cards with sortable metadata (CMC, Colors, Types, Rarity)</returns>
-  [HttpGet("sortable")] // GET /api/decks/sortable?name=Plains&id=HASH
+  [HttpGet("sortable")] // GET /api/decks/sortable?name=Plains&id=REVISION_ID
   [ProducesResponseType(typeof(List<SortableCardEntry>), StatusCodes.Status200OK)]
   [ProducesResponseType(StatusCodes.Status404NotFound)]
   public async Task<ActionResult<List<SortableCardEntry>>> GetSortableCards(
@@ -282,10 +370,12 @@ public class DecksController : APIController
     // Prioritize ID/Hash lookup (DB -> Cache)
     if (!string.IsNullOrEmpty(id))
     {
-      var cachedDeck = await GetOrLoadDeck(id);
+      if (!long.TryParse(id, out long revisionId))
+        return BadRequest(new { error = "Deck ID must be a revision ID" });
+      var cachedDeck = await GetOrLoadDeck(revisionId);
       if (cachedDeck == null)
       {
-        return NotFound(new { error = $"Deck with hash {id} not found in database" });
+        return NotFound(new { error = $"Deck revision {revisionId} not found" });
       }
       return Ok(BuildCachedSortableCards(cachedDeck));
     }
@@ -445,29 +535,26 @@ public class DecksController : APIController
     return new CardDataRecord(entry.catalogId, fallbackName, entry.quantity, 0, "", new List<string>(), "");
   }
 
-  private async Task<CachedDeck?> GetOrLoadDeck(string hash)
+  private async Task<CachedDeck?> GetOrLoadDeck(long revisionId)
   {
-    if (s_deckCache.TryGetValue(hash, out var cached))
+    if (s_deckCache.TryGetValue(revisionId, out var cached))
       return cached;
 
-    using var scope = scopeFactory.CreateScope();
-    var scopedContext = scope.ServiceProvider.GetRequiredService<EventContext>();
-
-    var deckModel = await scopedContext.Decks.FindAsync(hash);
-    if (deckModel == null) return null;
+    var deck = await deckService.GetRevisionAsync(revisionId);
+    if (deck == null) return null;
 
     try
     {
-      var mainboard = deckModel.Mainboard.ToList();
-      var sideboard = deckModel.Sideboard.ToList();
+      var mainboard = deck.Mainboard.ToList();
+      var sideboard = deck.Sideboard.ToList();
 
       var result = new CachedDeck(mainboard, sideboard);
-      s_deckCache.TryAdd(hash, result);
+      s_deckCache.TryAdd(revisionId, result);
       return result;
     }
     catch (Exception ex)
     {
-      Log.Error($"Failed to construct deck for hash {hash}: {ex}");
+      Log.Error($"Failed to replay deck revision {revisionId}: {ex}");
       return null;
     }
   }
@@ -495,23 +582,23 @@ public class DecksController : APIController
     return sb.ToString();
   }
 
-/// <summary>
+  /// <summary>
   /// Get archetype information for a deck from the NBAC API
   /// </summary>
-  /// <param name="hash">Deck hash</param>
+  /// <param name="revisionId">Collection-history deck revision ID</param>
   /// <returns>Raw NBAC API response</returns>
-  [HttpGet("/api/decks/{hash}/archetype")] // GET /api/decks/{hash}/archetype
+  [HttpGet("/api/decks/{revisionId:long}/archetype")]
   [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
   [ProducesResponseType(StatusCodes.Status404NotFound)]
   [ProducesResponseType(StatusCodes.Status502BadGateway)]
   public async Task<ActionResult<object>> GetArchetype(
-    string hash,
+    long revisionId,
     CancellationToken cancellationToken)
   {
-    var deck = await context.Decks.FindAsync(hash);
+    var deck = await deckService.GetRevisionAsync(revisionId, cancellationToken);
     if (deck == null)
     {
-      return NotFound(new { error = $"Deck with hash {hash} not found" });
+      return NotFound(new { error = $"Deck revision {revisionId} not found" });
     }
 
     // Build request body with card names and quantities
@@ -529,6 +616,12 @@ public class DecksController : APIController
       var nbacResponse = await nbacArchetypeClient.DetectArchetypeAsync(
         cards,
         deck.Format,
+        cancellationToken);
+      var (archetype, featuredCard) = ParseArchetype(nbacResponse);
+      await deckService.SetEnrichmentAsync(
+        revisionId,
+        archetype,
+        featuredCard,
         cancellationToken);
       return Ok(nbacResponse);
     }
@@ -555,58 +648,53 @@ public class DecksController : APIController
   /// <summary>
   /// Get the colors of a deck by analyzing all cards in the mainboard
   /// </summary>
-  /// <param name="hash">Deck hash</param>
+  /// <param name="revisionId">Collection-history deck revision ID</param>
   /// <returns>List of color characters (W, U, B, R, G)</returns>
-  [HttpGet("/api/decks/{hash}/colors")] // GET /api/decks/{hash}/colors
+  [HttpGet("/api/decks/{revisionId:long}/colors")]
   [ProducesResponseType(typeof(DeckColorsDTO), StatusCodes.Status200OK)]
   [ProducesResponseType(StatusCodes.Status404NotFound)]
-  public async Task<ActionResult<DeckColorsDTO>> GetDeckColors(string hash)
+  public async Task<ActionResult<DeckColorsDTO>> GetDeckColors(long revisionId)
   {
-    var deck = await context.Decks.FindAsync(hash);
+    var deck = await deckService.GetRevisionAsync(revisionId);
     if (deck == null)
     {
-      return NotFound(new { error = $"Deck with hash {hash} not found" });
+      return NotFound(new { error = $"Deck revision {revisionId} not found" });
     }
-
-    var colors = new HashSet<char>();
-
-    foreach (var cardEntry in deck.Mainboard)
-    {
-      try
-      {
-        // Look up the card using the MTGOSDK CollectionManager
-        var card = CollectionManager.GetCard(cardEntry.name);
-        if (card != null && !string.IsNullOrEmpty(card.Colors))
-        {
-          foreach (char color in card.Colors)
-          {
-            if (VidereCardColors.IsCanonical(color))
-            {
-              colors.Add(color);
-            }
-          }
-        }
-      }
-      catch (KeyNotFoundException)
-      {
-        // Card not found in collection, skip silently
-        continue;
-      }
-      catch (Exception)
-      {
-        // Other errors, skip silently
-        continue;
-      }
-    }
-
-    var sortedColors = VidereCardColors.Normalize(colors).ToList();
 
     return Ok(new DeckColorsDTO
     {
-      Hash = hash,
-      Colors = sortedColors,
-      ColorString = string.Join("", sortedColors)
+      RevisionId = revisionId,
+      Colors = deck.Colors,
+      ColorString = string.Join("", deck.Colors)
     });
+  }
+
+  private static (string? Archetype, string? FeaturedCard) ParseArchetype(
+    JsonElement response)
+  {
+    if (!response.TryGetProperty("data", out var data))
+      return (null, null);
+
+    var best = data.EnumerateObject()
+      .OrderByDescending(entry => entry.Value.GetDouble())
+      .FirstOrDefault();
+    if (string.IsNullOrEmpty(best.Name))
+      return (null, null);
+
+    string? featuredCard = null;
+    if (response.TryGetProperty("explain", out var explain) &&
+        explain.TryGetProperty("archetypes", out var archetypes) &&
+        archetypes.TryGetProperty(best.Name, out var cards))
+    {
+      JsonElement topCard = cards.EnumerateArray().FirstOrDefault();
+      if (topCard.ValueKind != JsonValueKind.Undefined &&
+          topCard.TryGetProperty("card", out var card))
+      {
+        featuredCard = card.GetString();
+      }
+    }
+
+    return (best.Name, featuredCard);
   }
 
   /// <summary>
@@ -628,11 +716,10 @@ public class DecksController : APIController
       return Ok(new List<AggregatedArchetypeDTO>());
     }
 
-    // Query events with their decks and matches, filtered by date/format
+    // Query events and matches, then resolve their deck revisions from Collection.db.
     var eventsQuery = context.Events
-      .Include(e => e.Deck)
       .Include(e => e.Matches)
-      .Where(e => e.Deck != null)
+      .Where(e => e.DeckRevisionId != null)
       .AsQueryable();
 
     if (minDate.HasValue)
@@ -654,6 +741,10 @@ public class DecksController : APIController
     {
       return Ok(new List<AggregatedArchetypeDTO>());
     }
+    var revisions = await deckService.GetRevisionsAsync(
+      events
+        .Where(eventModel => eventModel.DeckRevisionId != null)
+        .Select(eventModel => eventModel.DeckRevisionId!.Value));
 
     // Track stats per archetype (using only stored data)
     // Key: archetype name -> (wins, losses, ties, colors, featuredCardVotes)
@@ -661,7 +752,11 @@ public class DecksController : APIController
 
     foreach (var evt in events)
     {
-      var deck = evt.Deck!;
+      if (evt.DeckRevisionId is not long revisionId ||
+          !revisions.TryGetValue(revisionId, out var deck))
+      {
+        continue;
+      }
 
       // Skip decks without a stored archetype
       if (string.IsNullOrEmpty(deck.Archetype)) continue;
@@ -733,9 +828,7 @@ public class DecksController : APIController
         Wins = wins,
         Losses = losses,
         Winrate = Math.Round((double)wins / totalMatches * 100, 1),
-        TopCard = topCardName,
-        TopCardAvgScore = 0,
-        TopCardAvgQuantity = 0
+        TopCard = topCardName
       });
     }
 

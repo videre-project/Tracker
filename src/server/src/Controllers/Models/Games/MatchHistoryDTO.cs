@@ -19,7 +19,7 @@ public class MatchHistoryDTO
   public required string Result { get; set; }
   public required string Record { get; set; }
   public required string Duration { get; set; }
-  public string? DeckHash { get; set; }
+  public long? DeckRevisionId { get; set; }
   public string? DeckName { get; set; }
   public List<string>? DeckColors { get; set; }
   public string? OpponentName { get; set; }

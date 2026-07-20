@@ -8,7 +8,7 @@ using System;
 using System.Collections.Generic;
 
 
-namespace Tracker.Database.Models;
+namespace Tracker.Database.Models.Events;
 
 public class GameStateModel
 {

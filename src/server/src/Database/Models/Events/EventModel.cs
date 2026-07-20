@@ -7,7 +7,7 @@ using System;
 using System.Collections.Generic;
 
 
-namespace Tracker.Database.Models;
+namespace Tracker.Database.Models.Events;
 
 public class EventModel
 {
@@ -19,8 +19,14 @@ public class EventModel
   public DateTime StartTime { get; set; }
   public DateTime? EndTime { get; set; }
 
-  public string? DeckHash { get; set; }
-  public DeckModel? Deck { get; set; }
+  /// <summary>
+  /// Reference to Collection.db/CardGroupingRevisions.Id.
+  /// </summary>
+  /// <remarks>
+  /// This is a logical referencea as SQLite cannot enforce a foreign key
+  /// across the two database files.
+  /// </remarks>
+  public long? DeckRevisionId { get; set; }
 
   public List<MatchModel> Matches { get; set; } = new();
 }

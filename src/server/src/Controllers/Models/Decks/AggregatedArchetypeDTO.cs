@@ -17,6 +17,4 @@ public class AggregatedArchetypeDTO
   public required int Losses { get; set; }
   public required double Winrate { get; set; }
   public required string TopCard { get; set; }
-  public required double TopCardAvgScore { get; set; }
-  public required double TopCardAvgQuantity { get; set; }
 }

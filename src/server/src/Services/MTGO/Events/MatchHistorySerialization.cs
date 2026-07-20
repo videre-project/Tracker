@@ -10,7 +10,7 @@ using System.Text.Json;
 
 using MTGOSDK.API.Chat;
 
-using Tracker.Database.Models;
+using Tracker.Database.Models.Events;
 using Tracker.Controllers.Models.Games;
 
 
@@ -18,9 +18,6 @@ namespace Tracker.Services.MTGO.Events;
 
 internal static class MatchHistorySerialization
 {
-  internal static List<string>? GetDeckColors(DeckModel? deck) =>
-    deck == null ? null : deck.Colors?.ToList() ?? new List<string>();
-
   internal static bool IsDifferentPlayer(string? player, string currentUser) =>
     !string.IsNullOrWhiteSpace(player) &&
     !string.Equals(player, currentUser, StringComparison.OrdinalIgnoreCase);

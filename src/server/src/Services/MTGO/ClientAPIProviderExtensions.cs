@@ -12,6 +12,35 @@ namespace Tracker.Services.MTGO;
 
 public static class ClientAPIProviderExtensions
 {
+  public static bool TryGetCurrentUser(
+    this IClientAPIProvider clientProvider,
+    out UserIdentity? identity,
+    bool requireReady = true)
+  {
+    identity = null;
+
+    if ((requireReady && !clientProvider.IsReady) ||
+        clientProvider.Client == null)
+    {
+      return false;
+    }
+
+    try
+    {
+      var currentUser = clientProvider.Client.CurrentUser;
+      int id = currentUser?.Id ?? 0;
+      string username = currentUser?.Name ?? string.Empty;
+      return UserIdentity.TryCreate(id, username, out identity);
+    }
+    catch (Exception ex) when (IsTransientCurrentUserReadFailure(ex))
+    {
+      Log.Trace(
+        "Current MTGO user identity is not readable yet: {Message}",
+        ex.Message);
+      return false;
+    }
+  }
+
   public static bool TryGetCurrentUsername(
     this IClientAPIProvider clientProvider,
     out string username,
@@ -25,18 +54,13 @@ public static class ClientAPIProviderExtensions
       return false;
     }
 
-    try
-    {
-      username = clientProvider.Client.CurrentUser?.Name ?? string.Empty;
-      return !string.IsNullOrWhiteSpace(username);
-    }
-    catch (Exception ex) when (IsTransientCurrentUserReadFailure(ex))
-    {
-      Log.Trace(
-        "Current MTGO user is not readable yet: {Message}",
-        ex.Message);
+    if (!clientProvider.TryGetCurrentUser(
+          out UserIdentity? identity,
+          requireReady))
       return false;
-    }
+
+    username = identity!.Username;
+    return true;
   }
 
   private static bool IsTransientCurrentUserReadFailure(Exception ex)

@@ -19,6 +19,7 @@ using MTGOSDK.Core.Logging;
 using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 using Tracker.Database.Models;
+using Tracker.Database.Models.Events;
 
 
 namespace Tracker.Services.MTGO.Events;
