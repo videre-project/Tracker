@@ -18,6 +18,7 @@ using Microsoft.Extensions.DependencyInjection;
 using MTGOSDK.API.Collection;
 using MTGOSDK.API.Play;
 using MTGOSDK.API.Play.Games;
+using MTGOSDK.API.Play.Leagues;
 using MTGOSDK.API.Play.Games.Processors;
 using MTGOSDK.API.Play.Games.Processors.Partials;
 using MTGOSDK.API.Play.Tournaments;
@@ -28,6 +29,7 @@ using MTGOSDK.Core.Reflection.Serialization;
 using Tracker.Database;
 using Tracker.Database.Models;
 using Tracker.Database.Models.Events;
+using Tracker.Database.Extensions;
 using Tracker.Services.MTGO.Collection;
 
 
@@ -44,13 +46,43 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
     using (var scope = serviceProvider.CreateScope())
     {
       var context = scope.ServiceProvider.GetRequiredService<EventContext>();
+      int eventId = eventObj.GetDatabaseId();
 
       try
       {
         using var transaction = context.Database.BeginTransaction();
 
-        // Check if event already exists (use FirstOrDefault to prevent multiple enumeration)
-        var existingEvent = context.Events.FirstOrDefault(e => e.Id == eventObj.Id);
+        // Determine event type and description for extracting event-specific properties
+        string description = eventObj.Description;
+        EventType type;
+        int? leagueEventId = null;
+
+        if (eventObj is League leagueObj)
+        {
+          leagueEventId = eventObj.Id;
+          // Leagues use the Description field as a true description, so fall
+          // back to the league's Name (and MTGO ID) for the event description.
+          description = $"{leagueObj.Name} #{leagueObj.Id}";
+          type = EventType.League;
+        }
+        else if (string.IsNullOrEmpty(description) && eventObj is Match m)
+        {
+          string bestOf = m.MaxGames == 3 ? "Bo3" : "Bo1";
+          description = $"{bestOf} Match #{m.Id}";
+          type = EventType.Match;
+        }
+        else if (eventObj is Tournament)
+        {
+          type = EventType.Tournament;
+        }
+        else
+        {
+          // Fallback for any other event type
+          type = EventType.Match;
+        }
+
+        // Check if event already exists
+        var existingEvent = context.Events.FirstOrDefault(e => e.Id == eventId);
         if (existingEvent != null)
         {
           eventModel = existingEvent;
@@ -58,19 +90,14 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
           return false;
         }
 
-        string description = eventObj.Description;
-        if (string.IsNullOrEmpty(description) && eventObj is Match m)
-        {
-          string bestOf = m.MaxGames == 3 ? "Bo3" : "Bo1";
-          description = $"{bestOf} Match #{m.Id}";
-        }
-
         eventModel = new EventModel
         {
-          Id = eventObj.Id,
+          Id = eventId,
           Format = eventObj.Format,
           Description = description,
-          StartTime = eventObj is Tournament tournament ? tournament.StartTime : startTime
+          Type = type,
+          LeagueEventId = leagueEventId,
+          StartTime = eventObj is Tournament t ? t.StartTime : startTime
         };
         if (eventObj.RegisteredDeck is Deck deck)
         {
@@ -91,7 +118,7 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
                   eventObj.Id, ex.Message);
 
         // Check if event was added by another process
-        eventModel = context.Events.FirstOrDefault(e => e.Id == eventObj.Id);
+        eventModel = context.Events.FirstOrDefault(e => e.Id == eventId);
         return eventModel != null;
       }
       catch (Exception ex)
@@ -115,7 +142,9 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
       {
         using var transaction = context.Database.BeginTransaction();
 
-        var eventModel = context.Events.FirstOrDefault(e => e.Id == eventObj.Id);
+        int eventId = eventObj.GetDatabaseId();
+
+        var eventModel = context.Events.FirstOrDefault(e => e.Id == eventId);
         if (eventModel == null || eventModel.DeckRevisionId != null) return false;
 
         var deckService =
@@ -126,7 +155,7 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
         Log.Debug(
           "Backfilled deck revision {DeckRevisionId} for event {EventId}",
           eventModel.DeckRevisionId,
-          eventObj.Id);
+          eventId);
         return true;
       }
       catch (Exception ex)
@@ -384,7 +413,10 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
       return await WaitUntilAsync(async () =>
         await context.Games
           .AnyAsync(g => g.Id == gameId && g.GamePlayerResults.Count > 0,
-                    cancellationToken)
+                    cancellationToken),
+        delay: 250,
+        retries: 8,
+        ct: cancellationToken
       );
     }
   }

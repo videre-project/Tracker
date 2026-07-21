@@ -9,11 +9,21 @@ using System.Collections.Generic;
 
 namespace Tracker.Database.Models.Events;
 
+
+public enum EventType
+{
+  League,
+  Tournament,
+  Match
+}
+
 public class EventModel
 {
   public required int Id { get; set; }
 
   public required string Format { get; set; }
+
+  public required EventType Type { get; set; }
 
   public required string Description { get; set; }
   public DateTime StartTime { get; set; }
@@ -27,6 +37,16 @@ public class EventModel
   /// across the two database files.
   /// </remarks>
   public long? DeckRevisionId { get; set; }
+
+  /// <summary>
+  /// The ID of the league this course is associated with.
+  /// </summary>
+  /// <remarks>
+  /// This stores the ID of the league in MTGO's system for identifying the event.
+  /// We otherwise use the CourseID as the primary key for the event in our database,
+  /// using this field to link them as league IDs persist over the whole season.
+  /// </remarks>
+  public int? LeagueEventId { get; set; } 
 
   public List<MatchModel> Matches { get; set; } = new();
 }

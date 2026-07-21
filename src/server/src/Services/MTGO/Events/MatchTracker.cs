@@ -34,6 +34,7 @@ public class MatchTracker: IDisposable
   private readonly object _lock = new();
   private readonly AutoResetEvent _deckChanged = new(false);
   private readonly ConcurrentQueue<List<CardEntry>> _sideboardChanges = new();
+  private int _matchCompletedHandled = 0;
 
   /// <summary>
   /// Eagerly initializes the static hooks used by MatchTracker so that
@@ -153,6 +154,9 @@ public class MatchTracker: IDisposable
     if (matchState.HasFlag(MatchState.MatchCompleted) ||
         matchState.HasFlag(MatchState.GameClosed))
     {
+      if (Interlocked.Exchange(ref _matchCompletedHandled, 1) != 0)
+        return;
+
       // Capture game/player data now while the MTGO objects are still alive.
       // After RemoveFromSystem, the match's JoinedUsers may be cleared.
       int[] gameIds;
@@ -160,9 +164,9 @@ public class MatchTracker: IDisposable
       IEnumerable<User> players;
       try
       {
-        matchGames = m_match.Games;
+        matchGames = m_match.Games.ToArray();
         gameIds = matchGames.Select(g => g.Id).ToArray();
-        players = m_match.Players.ToList();
+        players = m_match.Players.ToArray();
       }
       catch (Exception ex)
       {
@@ -177,12 +181,15 @@ public class MatchTracker: IDisposable
         try
         {
           Log.Debug("Match {Id} completed (state: {State})", m_match.Id, matchState);
-          Dispose();
           UpdateMatchResults(gameIds, matchGames, players);
         }
         catch (Exception ex)
         {
           Log.Error(ex, "Match {Id} failed to update results", m_match.Id);
+        }
+        finally
+        {
+          Dispose();
         }
       });
     }
@@ -207,7 +214,7 @@ public class MatchTracker: IDisposable
         Game? game = matchGames.FirstOrDefault(g => g.Id == gameId);
         if (game == null)
         {
-          Log.Error("Game {Id} not found in match games list", gameId);
+          Log.Debug("Game {Id} not found in match games snapshot during fallback check", gameId);
           continue;
         }
         var fallbackResults = BuildFallbackResults(game);
@@ -270,7 +277,7 @@ public class MatchTracker: IDisposable
   /// The Game object's WinningPlayers and Players are populated via the
   /// FLS HandlePlayerRanking path independently of CompileWinningPlayers.
   /// </summary>
-  private static IList<GamePlayerResult>? BuildFallbackResults(Game game)
+  internal static IList<GamePlayerResult>? BuildFallbackResults(Game game)
   {
     try
     {

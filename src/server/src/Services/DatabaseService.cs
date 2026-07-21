@@ -60,7 +60,9 @@ public static class DatabaseService
       DefaultTimeout = 5
     };
 
-    builder.Services.AddSqlite<T>(connectionString.ToString());
+    builder.Services.AddSqlite<T>(
+      connectionString.ToString(),
+      sqliteOptions => sqliteOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery));
     builder.Services.AddSingleton<DatabaseReadiness<T>>();
     builder.Services.AddTransient<IHostedService>(provider =>
     {

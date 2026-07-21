@@ -848,6 +848,7 @@ public class GameTracker : IDisposable
   //
   // Direct Game event handlers (lifecycle)
   //
+  private volatile bool _resultsWritten = false;
 
   private void OnGameStatusChanged()
   {
@@ -865,6 +866,19 @@ public class GameTracker : IDisposable
         // the callbacks arrive from separate hooks and can race.
         Thread.Sleep(2_000);
 
+        if (!_resultsWritten)
+        {
+          var fallbackResults = MatchTracker.BuildFallbackResults(_game);
+          if (fallbackResults != null)
+          {
+            if (_dbWriter.TryUpdateGameResults(_game, fallbackResults))
+            {
+              _resultsWritten = true;
+              Log.Debug("Updated fallback game results for {Id}", _game.Id);
+            }
+          }
+        }
+
         Dispose();
       });
     }
@@ -874,6 +888,7 @@ public class GameTracker : IDisposable
   {
     if (_dbWriter.TryUpdateGameResults(_game, results))
     {
+      _resultsWritten = true;
       string jsonRes = JsonSerializer.Serialize(results);
       Log.Debug("Updated game results for {Id}: {Results}", _game.Id, jsonRes);
     }

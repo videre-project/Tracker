@@ -8,6 +8,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Linq;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -23,7 +24,9 @@ using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 using Tracker.Services.Base;
 using Tracker.Services.MTGO.Events;
+using Tracker.Database.Extensions;
 
+using MTGOSDK.API.Play.Leagues;
 using MTGOSDK.API.Play.Tournaments;
 using static MTGOSDK.API.Events;
 
@@ -407,7 +410,7 @@ public static class GameAPIService
     private void CreateEventTracker(Event eventObj)
     {
       EventTracker tracker = new(eventObj, _dbWriter);
-      _eventTrackers.TryAdd(eventObj.Id, tracker);
+      _eventTrackers.TryAdd(eventObj.GetDatabaseId(), tracker);
     }
 
     private void CreateMatchTracker(Match match, int eventId)
@@ -427,66 +430,82 @@ public static class GameAPIService
       _gameTrackers.TryAdd(game.Id, tracker);
     }
 
-    private void OnEventJoined(Event e, object _)
+    private void OnEventJoined(Event e, DateTime timestamp)
     {
-      if (_activeEvents.TryAdd(e.Id, e) &&
-          _dbWriter.TryAddEvent(e, out var _))
+      if (e is Match match)
       {
-        Log.Debug("Event Joined {Id}", e.Id);
-        CreateEventTracker(e);
-        if (e is not Match)
-          EventCreated?.Invoke(null, e.Id);
+        if (_activeMatches.TryAdd(match.Id, match))
+        {
+          Log.Debug("Match Joined {Id}", match.Id);
+          var parentEvent = EventManager.FindParentEvent(EventManager.JoinedEvents, match);
+          Event targetEvent = parentEvent ?? match;
+          int parentEventId = targetEvent.GetDatabaseId();
+
+          if (_activeEvents.TryAdd(parentEventId, targetEvent) &&
+              _dbWriter.TryAddEvent(targetEvent, out var _))
+          {
+            Log.Debug("Event Joined {Id} at {Timestamp}", parentEventId, timestamp);
+            CreateEventTracker(targetEvent);
+            if (targetEvent is not Match)
+              EventCreated?.Invoke(null, parentEventId);
+          }
+
+          CreateMatchTracker(match, parentEventId);
+        }
       }
-      if (e is Match match && _activeMatches.TryAdd(match.Id, match))
+      else
       {
-        Log.Debug("Match Joined {Id}", match.Id);
-        CreateMatchTracker(match, e.Id);
+        int eventId = e.GetDatabaseId();
+        if (_activeEvents.TryAdd(eventId, e) &&
+            _dbWriter.TryAddEvent(e, out var _))
+        {
+          Log.Debug("Event Joined {Id} at {Timestamp}", eventId, timestamp);
+          CreateEventTracker(e);
+          EventCreated?.Invoke(null, eventId);
+        }
       }
     }
 
     private void OnGameJoined(Event parentEvent, Game game)
     {
+      int parentEventId = parentEvent.GetDatabaseId();
+
       // First add the parent event if needed
-      if (_activeEvents.TryAdd(parentEvent.Id, parentEvent))
+      if (_activeEvents.TryAdd(parentEventId, parentEvent))
       {
-        Log.Debug("Found event {Id}", parentEvent.Id);
+        Log.Debug("Found event {Id}", parentEventId);
         if (_dbWriter.TryAddEvent(parentEvent, out var _))
         {
           CreateEventTracker(parentEvent);
         }
-
-        // If it's a match, add it to its parent event
-        if (parentEvent is Match match)
-        {
-          // Add the match connected to its parent event
-          if (_activeMatches.TryAdd(match.Id, match))
-          {
-            Log.Debug("Match Joined {Id}", match.Id);
-            CreateMatchTracker(match, parentEvent.Id);
-          }
-
-          // Now add the game connected to its parent match
-          if (_activeGames.TryAdd(game.Id, game))
-          {
-            Log.Debug("Game Joined {Id}", game.Id);
-            CreateGameTracker(game, match.Id);
-          }
-        }
       }
-      // Parent event already exists, just add the game to the match
-      else if (parentEvent is Match match &&
-                _activeGames.TryAdd(game.Id, game))
-      {
-        // Add the match connected to its parent event
-        if (_activeMatches.TryAdd(match.Id, match))
-        {
-          Log.Debug("Match Joined {Id}", match.Id);
-          CreateMatchTracker(match, parentEvent.Id);
-        }
 
-        // Event already exists, just add the game to the match
-        Log.Debug("Game Joined {Id} for existing event", game.Id);
+      // Track the match and game
+      Match match = game.Match;
+      if (_activeMatches.TryAdd(match.Id, match))
+      {
+        Log.Debug("Match Joined {Id}", match.Id);
+        CreateMatchTracker(match, parentEventId);
+      }
+
+      if (_activeGames.TryAdd(game.Id, game))
+      {
+        Log.Debug("Game Joined {Id}", game.Id);
         CreateGameTracker(game, match.Id);
+      }
+    }
+
+    private void OnEventRemoved(Event e, DateTime timestamp)
+    {
+      int eventId = e.GetDatabaseId();
+      if (_eventTrackers.TryRemove(eventId, out var tracker))
+      {
+        Log.Information("Event Removed {Id} at {Timestamp}", eventId, timestamp);
+        tracker.Dispose(timestamp);
+      }
+      else if (_activeEvents.TryRemove(eventId, out _))
+      {
+        Log.Information("Event Removed {Id} at {Timestamp}", eventId, timestamp);
       }
     }
 
@@ -509,6 +528,7 @@ public static class GameAPIService
       SyncThread.Enqueue(() =>
       {
         EventManager.EventJoined += OnEventJoined;
+        EventManager.EventRemoved += OnEventRemoved;
         EventManager.GameJoined += OnGameJoined;
         
         // Monitor all featured events for player count changes using event discovery.
@@ -529,6 +549,20 @@ public static class GameAPIService
         {
           CacheDiscoveredTournament(t);
           StateUpdated?.Invoke(null, (t, state));
+
+          if (state == TournamentState.Finished)
+          {
+            int tournamentId = t.Id;
+            if (_eventTrackers.TryRemove(tournamentId, out var tracker))
+            {
+              Log.Information("Tournament {Id} finished", tournamentId);
+              tracker.Dispose();
+            }
+            else if (_activeEvents.TryRemove(tournamentId, out _))
+            {
+              Log.Information("Tournament {Id} finished", tournamentId);
+            }
+          }
         };
         Tournament.StandingsChanged += s_standingsChangedHandler;
         Tournament.RoundChanged += s_roundChangedHandler;
@@ -538,44 +572,80 @@ public static class GameAPIService
         Log.Information("Game API service listener has started.");
       });
 
-      // Filter events list to get all joined events
-      if (EventManager.JoinedEventsCount > 0)
+      // Filter events list to get all joined events and open leagues
+      IEnumerable<Event> joinedEvents = EventManager.JoinedEvents.Cast<Event>();
+      IEnumerable<Event> openLeagues = LeagueManager.OpenLeagues.Cast<Event>();
+      IEnumerable<Event> initialEvents = joinedEvents.Concat(openLeagues);
+
+      Log.Information("Finding all joined events, open leagues, and matches...");
+      foreach (Event joinedEvent in initialEvents)
       {
-        Log.Information("Finding all joined events and matches...");
-        foreach (Event joinedEvent in EventManager.JoinedEvents)
+        int eventId = joinedEvent.GetDatabaseId();
+        if (_activeEvents.TryAdd(eventId, joinedEvent))
         {
-          if (_activeEvents.TryAdd(joinedEvent.Id, joinedEvent))
+          Log.Information("Found event {Id}", eventId);
+          SyncThread.Enqueue(() =>
           {
-            Log.Information("Found event {Id}", joinedEvent.Id);
-            SyncThread.Enqueue(() =>
+            // Add the event to the database
+            if (_dbWriter.TryAddEvent(joinedEvent, out var _))
             {
-              // Add the event to the database
-              if (_dbWriter.TryAddEvent(joinedEvent, out var _))
-              {
-                Log.Debug("Added event {Id} to database", joinedEvent.Id);
-                CreateEventTracker(joinedEvent);
-              }
-            });
+              Log.Debug("Added event {Id} to database", eventId);
+              CreateEventTracker(joinedEvent);
+            }
+          });
+        }
+        // Add any active games from any joined matches
+        if (joinedEvent is Match match)
+        {
+          if (_activeMatches.TryAdd(match.Id, match))
+          {
+            Log.Information("Found match {Id}", match.Id);
+            var parentEvent = EventManager.FindParentEvent(EventManager.JoinedEvents, match);
+            int parentEventId = parentEvent?.GetDatabaseId() ?? match.Id;
+            SyncThread.Enqueue(() => CreateMatchTracker(match, parentEventId));
           }
-          // Add any active games from any joined matches
-          if (joinedEvent is Match match)
+
+          Game? game = match.CurrentGame;
+          if (game == null) continue;
+
+          if (_activeGames.TryAdd(game.Id, game))
           {
-            if (_activeMatches.TryAdd(match.Id, match))
-            {
-              Log.Information("Found match {Id}", match.Id);
-              SyncThread.Enqueue(() => CreateMatchTracker(match, joinedEvent.Id));
-            }
-
-            Game? game = match.CurrentGame;
-            if (game == null) continue;
-
-            if (_activeGames.TryAdd(game.Id, game))
-            {
-              Log.Information("Found game {Id}", game.Id);
-              SyncThread.Enqueue(() => CreateGameTracker(game, match.Id));
-            }
+            Log.Information("Found game {Id}", game.Id);
+            SyncThread.Enqueue(() => CreateGameTracker(game, match.Id));
           }
         }
+          else if (joinedEvent is League league && league.ActiveMatch is Match activeMatch)
+          {
+            if (_activeMatches.TryAdd(activeMatch.Id, activeMatch))
+            {
+              Log.Information("Found active league match {Id}", activeMatch.Id);
+              int parentEventId = league.CourseId;
+              SyncThread.Enqueue(() => CreateMatchTracker(activeMatch, parentEventId));
+            }
+
+            Game? game = activeMatch.CurrentGame;
+            if (game != null && _activeGames.TryAdd(game.Id, game))
+            {
+              Log.Information("Found game {Id}", game.Id);
+              SyncThread.Enqueue(() => CreateGameTracker(game, activeMatch.Id));
+            }
+          }
+          else if (joinedEvent is Tournament tournament && tournament.ActiveMatch is Match activeTourneyMatch)
+          {
+            if (_activeMatches.TryAdd(activeTourneyMatch.Id, activeTourneyMatch))
+            {
+              Log.Information("Found active tournament match {Id}", activeTourneyMatch.Id);
+              int parentEventId = tournament.Id;
+              SyncThread.Enqueue(() => CreateMatchTracker(activeTourneyMatch, parentEventId));
+            }
+
+            Game? game = activeTourneyMatch.CurrentGame;
+            if (game != null && _activeGames.TryAdd(game.Id, game))
+            {
+              Log.Information("Found game {Id}", game.Id);
+              SyncThread.Enqueue(() => CreateGameTracker(game, activeTourneyMatch.Id));
+            }
+          }
       }
       Log.Trace("Game API service finished initializing");
     }

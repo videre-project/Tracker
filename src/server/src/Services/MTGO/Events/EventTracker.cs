@@ -6,9 +6,12 @@
 using System;
 
 using MTGOSDK.API.Play;
+using MTGOSDK.API.Play.Leagues;
 using MTGOSDK.API.Play.Tournaments;
 using MTGOSDK.Core.Logging;
 using static MTGOSDK.Core.Reflection.DLRWrapper;
+
+using Tracker.Database.Extensions;
 
 
 namespace Tracker.Services.MTGO.Events;
@@ -32,46 +35,53 @@ public class EventTracker : IDisposable
 
   private bool _disposed = false;
 
-  public void Dispose()
+  public void Dispose() => Dispose(null);
+
+  public void Dispose(DateTime? removalTime)
   {
     if (_disposed) return;
     _disposed = true;
 
     // Check completion one last time — but the remote object may be dead
     // if the MTGO process exited, so guard against stale references.
-    if (Try(() => m_event.IsCompleted))
+    if (Try(() => m_event.IsCompleted) || removalTime.HasValue)
     {
-      UpdateEndTime();
+      UpdateEndTime(removalTime);
     }
 
-    GameAPIService.RemoveActiveEvent(m_event.Id);
+    int eventId = m_event.GetDatabaseId();
+    GameAPIService.RemoveActiveEvent(eventId);
     GC.SuppressFinalize(this);
   }
 
-  private void UpdateEndTime()
+  private void UpdateEndTime(DateTime? overrideEndTime = null)
   {
-    DateTime endTime = DateTime.Now;
+    DateTime endTime = overrideEndTime ?? DateTime.Now;
 
-    if (m_event is Tournament tournament)
+    if (!overrideEndTime.HasValue)
     {
-      // Use the tournament's end time if available
-      if (tournament.EndTime != default)
+      if (m_event is Tournament tournament)
       {
-        endTime = tournament.EndTime;
+        // Use the tournament's estimated end time if still in progress
+        if (tournament.EndTime != default && !tournament.IsCompleted)
+        {
+          endTime = tournament.EndTime;
+        }
+      }
+      else if (m_event is Match match)
+      {
+        // Use the match's end time if available
+        if (match.EndTime != default)
+        {
+          endTime = match.EndTime;
+        }
       }
     }
-    else if (m_event is Match match)
-    {
-      // Use the match's end time if available
-      if (match.EndTime != default)
-      {
-        endTime = match.EndTime;
-      }
-    }
 
-    if (_dbWriter.TryUpdateEventEndTime(m_event.Id, endTime))
+    int eventId = m_event.GetDatabaseId();
+    if (_dbWriter.TryUpdateEventEndTime(eventId, endTime))
     {
-      Log.Debug("Updated end time for event {Id} to {EndTime}", m_event.Id, endTime);
+      Log.Debug("Updated end time for event {Id} to {EndTime}", eventId, endTime);
     }
   }
 }
