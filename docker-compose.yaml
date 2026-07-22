@@ -1,0 +1,50 @@
+services:
+  mtgo-wayland:
+    image: videreproject/mtgo:wayland
+    init: true
+    stdin_open: true
+    tty: true
+    devices:
+      - /dev/dri:/dev/dri
+    environment:
+      DISPLAY: ${DISPLAY:-}
+      WAYLAND_DISPLAY: ${WAYLAND_DISPLAY:-wayland-0}
+      XDG_RUNTIME_DIR: /tmp/runtime-dir
+      WINEDEBUG: -all
+    command:
+      - /bin/bash
+      - /workspace/docker/run-mtgo-wayland.sh
+    volumes:
+      - .:/workspace
+      - mtgo-wine-data:/home/wine/.wine
+      - ${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR must be set}/${WAYLAND_DISPLAY:-wayland-0}:/tmp/runtime-dir/${WAYLAND_DISPLAY:-wayland-0}
+      - /tmp/.X11-unix:/tmp/.X11-unix
+
+  tracker-wayland:
+    build:
+      context: .
+      dockerfile: docker/tracker-wine.Dockerfile
+    image: videreproject/tracker:wayland-dev
+    init: true
+    stdin_open: true
+    tty: true
+    devices:
+      - /dev/dri:/dev/dri
+    environment:
+      DISPLAY: ${DISPLAY:-}
+      WAYLAND_DISPLAY: ${WAYLAND_DISPLAY:-wayland-0}
+      XDG_RUNTIME_DIR: /tmp/runtime-dir
+      WINEDEBUG: -all
+      TRACKER_DISABLE_INSTALLER: "1"
+      TRACKER_WINE_COMPAT: "1"
+      APP_THEME: Dark
+      WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: --disable-gpu
+    volumes:
+      - .:/workspace
+      - tracker-wine-data:/home/wine/.wine
+      - ${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR must be set}/${WAYLAND_DISPLAY:-wayland-0}:/tmp/runtime-dir/${WAYLAND_DISPLAY:-wayland-0}
+      - /tmp/.X11-unix:/tmp/.X11-unix
+
+volumes:
+  mtgo-wine-data:
+  tracker-wine-data:
