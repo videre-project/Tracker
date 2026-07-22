@@ -82,6 +82,7 @@ public static class CollectionAPIService
 
           InstallHooks();
           await UpsertAccountAsync(identity, sessionCts.Token);
+          await PurgeRedundantRevisionsAsync(sessionCts.Token);
 
           Task processor = ProcessSignalsAsync(identity.Id, sessionCts.Token);
           Task disconnect =
@@ -152,6 +153,24 @@ public static class CollectionAPIService
       await using var scope = scopeFactory.CreateAsyncScope();
       var context = scope.ServiceProvider.GetRequiredService<CollectionContext>();
       await historyWriter.UpsertAccountAsync(context, identity, cancellationToken);
+    }
+
+    private async Task PurgeRedundantRevisionsAsync(CancellationToken cancellationToken)
+    {
+      try
+      {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<CollectionContext>();
+        int purged = await historyWriter.PurgeRedundantRevisionsAsync(context, cancellationToken);
+        if (purged > 0)
+        {
+          Log.Information("Purged {PurgedCount} redundant deck/collection revisions from database.", purged);
+        }
+      }
+      catch (Exception ex)
+      {
+        Log.Warning(ex, "Failed to purge redundant collection revisions on startup.");
+      }
     }
 
     private async Task ProcessSignalsAsync(

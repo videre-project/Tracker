@@ -141,7 +141,6 @@ public static class CardGroupingRevisionCodec
 
     return left.Kind == right.Kind &&
       left.NetDeckId == right.NetDeckId &&
-      Nullable.Equals(left.Timestamp, right.Timestamp) &&
       string.Equals(left.Name, right.Name, StringComparison.Ordinal) &&
       string.Equals(left.FormatCode, right.FormatCode, StringComparison.Ordinal) &&
       left.Items.SequenceEqual(right.Items);

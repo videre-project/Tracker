@@ -716,6 +716,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    [path: `/api/Decks/${number}/history`]: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get full revision history for a deck */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description Collection-history deck revision ID */
+                    revisionId: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": DeckHistoryView;
+                        "application/json": DeckHistoryView;
+                        "text/json": DeckHistoryView;
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": ProblemDetails;
+                        "application/json": ProblemDetails;
+                        "text/json": ProblemDetails;
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/Decks/sheet": {
         parameters: {
             query?: never;
@@ -2760,6 +2812,51 @@ export interface components {
             mainboard: CardEntry[] | null;
             sideboard: CardEntry[] | null;
         };
+        "Tracker.Controllers.Models.Decks.DeckHistoryChangeView": {
+            /** Format: int32 */
+            catalogId?: number;
+            name?: string | null;
+            /** Format: int32 */
+            quantityDelta?: number;
+            zone?: string | null;
+            /** Format: int32 */
+            cmc?: number;
+            colors?: string[] | null;
+            types?: string[] | null;
+            rarity?: string | null;
+        };
+        "Tracker.Controllers.Models.Decks.DeckHistoryRevisionView": {
+            /** Format: int64 */
+            revisionId?: number;
+            /** Format: int64 */
+            cardGroupingId?: number;
+            /** Format: date-time */
+            observedAt?: string;
+            /** Format: date-time */
+            timestamp?: string;
+            name?: string | null;
+            format?: string | null;
+            /** Format: int32 */
+            mainboardCount?: number;
+            /** Format: int32 */
+            sideboardCount?: number;
+            colors?: string[] | null;
+            archetype?: string | null;
+            featuredCard?: string | null;
+            mainboard?: CardEntry[] | null;
+            sideboard?: CardEntry[] | null;
+            changesFromPrevious?: DeckHistoryChangeView[] | null;
+            changesFromLatest?: DeckHistoryChangeView[] | null;
+        };
+        "Tracker.Controllers.Models.Decks.DeckHistoryView": {
+            /** Format: int64 */
+            currentRevisionId?: number;
+            /** Format: int64 */
+            cardGroupingId?: number;
+            name?: string | null;
+            format?: string | null;
+            revisions?: DeckHistoryRevisionView[] | null;
+        };
         "Tracker.Controllers.Models.Decks.DeckIdentifierDTO": {
             /** Format: int64 */
             revisionId: number;
@@ -3181,6 +3278,11 @@ export interface components {
             name?: string | null;
             /** Format: int32 */
             quantity?: number;
+            /** Format: int32 */
+            cmc?: number;
+            colors?: string[] | null;
+            types?: string[] | null;
+            rarity?: string | null;
         };
         /** @enum {string} */
         "Tracker.Database.Models.Trades.TradeAttributionStatus": "NotApplicable" | "Pending" | "Inferred" | "InferredAmbiguous" | "Unavailable";
@@ -3288,6 +3390,9 @@ export type TrackerControllersModelsDecksCardSearchResultDto = CardSearchResultD
 export type TrackerControllersModelsDecksDeckColorsDto = DeckColorsDTO;
 export type TrackerControllersModelsDecksDeckDto = DeckDTO;
 export type TrackerControllersModelsDecksDeckDetailDto = DeckDetailDTO;
+export type TrackerControllersModelsDecksDeckHistoryChangeView = DeckHistoryChangeView;
+export type TrackerControllersModelsDecksDeckHistoryRevisionView = DeckHistoryRevisionView;
+export type TrackerControllersModelsDecksDeckHistoryView = DeckHistoryView;
 export type TrackerControllersModelsDecksDeckIdentifierDto = DeckIdentifierDTO;
 export type TrackerControllersModelsDecksSortableCardEntry = SortableCardEntry;
 export type TrackerControllersModelsEventsIEventStructure = IEventStructure;
@@ -3373,6 +3478,9 @@ export type CardSearchResultDTO = components['schemas']['Tracker.Controllers.Mod
 export type DeckColorsDTO = components['schemas']['Tracker.Controllers.Models.Decks.DeckColorsDTO'];
 export type DeckDTO = components['schemas']['Tracker.Controllers.Models.Decks.DeckDTO'];
 export type DeckDetailDTO = components['schemas']['Tracker.Controllers.Models.Decks.DeckDetailDTO'];
+export type DeckHistoryChangeView = components['schemas']['Tracker.Controllers.Models.Decks.DeckHistoryChangeView'];
+export type DeckHistoryRevisionView = components['schemas']['Tracker.Controllers.Models.Decks.DeckHistoryRevisionView'];
+export type DeckHistoryView = components['schemas']['Tracker.Controllers.Models.Decks.DeckHistoryView'];
 export type DeckIdentifierDTO = components['schemas']['Tracker.Controllers.Models.Decks.DeckIdentifierDTO'];
 export type SortableCardEntry = components['schemas']['Tracker.Controllers.Models.Decks.SortableCardEntry'];
 export type IEventStructure = components['schemas']['Tracker.Controllers.Models.Events.IEventStructure'];

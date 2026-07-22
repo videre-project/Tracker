@@ -33,6 +33,7 @@ import {
   DeckBuildSidePane,
   type SidePanelView,
 } from "@/components/decks/deck-build-side-pane"
+import { useDeckHistory } from "@/hooks/use-deck-history"
 import type { SortMode } from "@/hooks/use-sortable-cards"
 import { Button } from "@/components/ui/button"
 import {
@@ -141,6 +142,16 @@ export default function DeckEditor() {
 
   const { decks, loading: summariesLoading } = useDecks()
   const { detail, loading: detailLoading } = useDeckDetail(deckRevisionId)
+
+  const {
+    history: historyData,
+    loading: historyLoading,
+    error: historyError,
+    selectedRevisionId,
+    setSelectedRevisionId,
+    selectedRevisionCards,
+    diffMap,
+  } = useDeckHistory(deckRevisionId)
 
   const allDecks = useMemo(
     () => Object.values(decks).flat(),
@@ -457,7 +468,9 @@ export default function DeckEditor() {
 
       <div className="flex min-h-0 flex-1 items-stretch gap-4">
         <DeckCollectionEditor
-          deckRevisionId={deckRevisionId}
+          deckRevisionId={selectedRevisionId ? String(selectedRevisionId) : deckRevisionId}
+          overrideCards={selectedRevisionCards}
+          diffMap={sidePanelView === "history" ? diffMap : undefined}
           className="h-full flex-1 gap-0 p-0"
           editorTitle="Editor"
           hideDeckSelector
@@ -473,6 +486,11 @@ export default function DeckEditor() {
           view={sidePanelView}
           onViewChange={setSidePanelView}
           isCollapsed={isDeckToolsCollapsed}
+          historyData={historyData}
+          historyLoading={historyLoading}
+          historyError={historyError}
+          selectedRevisionId={selectedRevisionId}
+          onSelectRevision={setSelectedRevisionId}
         />
       </div>
     </div>

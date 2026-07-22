@@ -229,6 +229,87 @@ public sealed class CollectionHistoryWriter
     return missing.Count;
   }
 
+  public async Task<int> PurgeRedundantRevisionsAsync(
+    CollectionContext context,
+    CancellationToken cancellationToken = default)
+  {
+    var allGroupings = await context.CardGroupings
+      .Select(g => g.Id)
+      .ToListAsync(cancellationToken);
+
+    int totalPurged = 0;
+
+    foreach (long groupingId in allGroupings)
+    {
+      var revisions = await context.CardGroupingRevisions
+        .Where(r => r.CardGroupingId == groupingId && r.RevisionType != CardGroupingRevisionType.Deleted)
+        .OrderBy(r => r.Id)
+        .ToListAsync(cancellationToken);
+
+      if (revisions.Count <= 1) continue;
+
+      var grouping = await context.CardGroupings
+        .SingleOrDefaultAsync(g => g.Id == groupingId, cancellationToken);
+      if (grouping == null) continue;
+
+      var toDelete = new List<CardGroupingRevisionModel>();
+      CardGroupingState? previousState = null;
+      var accumulatedModels = new List<CardGroupingRevisionModel>();
+
+      for (int i = 0; i < revisions.Count; i++)
+      {
+        var rev = revisions[i];
+        if (rev.RevisionType == CardGroupingRevisionType.Snapshot)
+        {
+          accumulatedModels.Clear();
+        }
+        accumulatedModels.Add(rev);
+
+        var currentState = Replay(grouping, accumulatedModels.ToList());
+        if (currentState == null) continue;
+
+        bool isLatest = i == revisions.Count - 1;
+
+        if (previousState != null && CardGroupingRevisionCodec.StateEquals(previousState, currentState))
+        {
+          if (!isLatest)
+          {
+            toDelete.Add(rev);
+          }
+        }
+        else
+        {
+          previousState = currentState;
+        }
+      }
+
+      if (toDelete.Count > 0)
+      {
+        var toDeleteIds = toDelete.Select(d => d.Id).ToList();
+
+        var referencedIds = await context.DeckRevisionEnrichments
+          .Where(e => toDeleteIds.Contains(e.CardGroupingRevisionId))
+          .Select(e => e.CardGroupingRevisionId)
+          .ToListAsync(cancellationToken);
+
+        toDelete.RemoveAll(d => referencedIds.Contains(d.Id));
+
+        if (toDelete.Count > 0)
+        {
+          context.CardGroupingRevisions.RemoveRange(toDelete);
+          totalPurged += toDelete.Count;
+        }
+      }
+    }
+
+    if (totalPurged > 0)
+    {
+      await context.SaveChangesAsync(cancellationToken);
+    }
+
+    return totalPurged;
+  }
+
   public static CardGroupingState? Replay(
     CardGroupingModel grouping,
     IReadOnlyList<CardGroupingRevisionModel> revisions)

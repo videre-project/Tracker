@@ -33,6 +33,7 @@ import { cn } from "@/lib/utils"
 import { COLORLESS_CARD_COLOR, VIDERE_CARD_COLORS } from "@/utils/card-colors"
 import { getStackPeekOffset } from "@/utils/card-layout"
 import { getManaSymbolSvgPath } from "@/utils/mana-symbols"
+
 const GAP = 16
 const COLUMNS = 5
 const COLUMN_HEADER_HEIGHT = 40
@@ -55,9 +56,12 @@ interface SheetCardProps {
   cardWidth: number
   cardHeight: number
   position: Position
-  onDragStart: (index: number, e: ReactMouseEvent | ReactTouchEvent) => void
+  onDragStart: (index: number, e: React.MouseEvent | React.TouchEvent) => void
   isDragging: boolean
   zIndex: number
+  diffDelta?: number
+  suppressBottomBorder?: boolean
+  suppressTopBorder?: boolean
 }
 
 function SheetCard({
@@ -68,9 +72,14 @@ function SheetCard({
   position,
   onDragStart,
   isDragging,
-  zIndex
+  zIndex,
+  diffDelta,
+  suppressBottomBorder,
+  suppressTopBorder,
 }: SheetCardProps) {
   const dragTransform = "translateZ(0) scale(1.05)"
+  const isAdded = diffDelta != null && diffDelta > 0
+  const isRemoved = diffDelta != null && diffDelta < 0
 
   return (
     <div
@@ -84,7 +93,10 @@ function SheetCard({
         width: cardWidth,
         height: cardHeight,
         zIndex: isDragging ? 1000 : zIndex,
-        willChange: isDragging ? "transform" : "left, top",
+        // Only promote to compositor layer while actually dragging or during
+        // a CSS transition. Keeping will-change on every idle card is very
+        // expensive because the browser allocates a separate GPU layer per card.
+        willChange: isDragging ? "transform" : "auto",
         transform: isDragging ? dragTransform : "none",
         transition: isDragging
           ? "transform 0.1s ease, box-shadow 0.2s ease"
@@ -102,6 +114,20 @@ function SheetCard({
           draggable={false}
           style={{ display: "block", width: cardWidth, height: cardHeight }}
         />
+
+        {diffDelta != null && diffDelta !== 0 && (
+          <div
+            className={cn(
+              "absolute inset-0 pointer-events-none z-30 rounded-lg border-2",
+              isAdded
+                ? "border-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.4)]"
+                : "border-rose-400 shadow-[0_0_12px_rgba(244,63,94,0.4)]",
+              suppressTopBorder && "border-t-0 rounded-t-none",
+              suppressBottomBorder && "border-b-0 rounded-b-none"
+            )}
+          />
+        )}
+
         <div className={`
           absolute top-2 right-2 p-1 rounded
           bg-black/40 backdrop-blur-sm
@@ -221,246 +247,381 @@ function DeckStats({ mainboard, sideboard }: DeckStatsProps) {
   )
 }
 
+export type DiffMapEntry = {
+  delta: number
+  zone: string
+  name: string
+  cmc?: number
+  colors?: string[]
+  types?: string[]
+  rarity?: string
+}
+
 interface DeckGridProps {
   title: string
   cards: SortableCardEntry[]
+  allCards?: SortableCardEntry[]
   loading: boolean
   sortMode: SortMode
   collapsed?: boolean
   forceScale?: number
   onNaturalWidthChange?: (width: number) => void
+  diffMap?: Map<number, DiffMapEntry>
+}
+
+function getEffectiveCardsForZone(
+  cards: SortableCardEntry[],
+  allCards: SortableCardEntry[] = [],
+  zone: 'Mainboard' | 'Sideboard',
+  diffMap?: Map<number, DiffMapEntry>
+): SortableCardEntry[] {
+  if (!diffMap || diffMap.size === 0) return cards
+
+  const ghostEntries: SortableCardEntry[] = []
+  let nextGhostIndex = 900000
+
+  diffMap.forEach((diff, catalogId) => {
+    if (diff.delta < 0) {
+      const isSide = diff.zone?.toLowerCase().includes("side")
+      const isTargetSide = zone === 'Sideboard'
+      if (isSide === isTargetSide) {
+        const ghostCount = Math.abs(diff.delta)
+        const template = allCards.find(c => c.catalogId === catalogId) || cards.find(c => c.catalogId === catalogId)
+
+        for (let i = 0; i < ghostCount; i++) {
+          const types = (template?.types && template.types.length > 0)
+            ? template.types
+            : ((diff.types && diff.types.length > 0) ? diff.types : ["Unknown"])
+
+          ghostEntries.push({
+            index: nextGhostIndex++,
+            originalIndex: nextGhostIndex,
+            catalogId,
+            name: diff.name,
+            quantity: 1,
+            cmc: template?.cmc ?? diff.cmc ?? 0,
+            colors: template?.colors ?? diff.colors ?? [],
+            types,
+            rarity: template?.rarity ?? diff.rarity ?? "common",
+            zone,
+          })
+        }
+      }
+    }
+  })
+
+  return ghostEntries.length > 0 ? [...cards, ...ghostEntries] : cards
 }
 
 function DeckGrid({
   title,
   cards,
+  allCards,
   loading,
   sortMode,
   collapsed = false,
   forceScale,
-  onNaturalWidthChange
+  onNaturalWidthChange,
+  diffMap,
 }: DeckGridProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
-  const [cardSlots, setCardSlots] = useState<Map<number, GridSlot>>(new Map())
-  const [dragState, setDragState] = useState<{
+  // Use a ref for drag state so mousemove handlers never need to be re-attached.
+  // Only state that React needs to re-render is extracted separately.
+  const dragStateRef = useRef<{
     index: number
     startSlot: GridSlot
     startMousePos: Position
-    currentPos: Position
+    basePos: Position
   } | null>(null)
-  const [cardOrder, setCardOrder] = useState<number[]>([])
+  const [draggingIndex, setDraggingIndex] = useState<number | null>(null)
+  const [dragCurrentPos, setDragCurrentPos] = useState<Position>({ x: 0, y: 0 })
 
-  // Use passed scale (from parent) or default to 1 (if not yet calculated)
-  const scale = forceScale ?? 1
+  const zone = title.toLowerCase().includes("side") ? 'Sideboard' : 'Mainboard'
+  const effectiveCards = useMemo(() => {
+    return getEffectiveCardsForZone(cards, allCards, zone, diffMap)
+  }, [cards, allCards, zone, diffMap])
 
   const unrolledCards = useMemo(() => {
-    return cards.length > 0 ? unrollCards(cards) : []
-  }, [cards])
+    const sorted = sortCardsBySortMode(effectiveCards, sortMode)
+    return unrollCards(sorted)
+  }, [effectiveCards, sortMode])
 
-  // Report natural width to parent whenever layout changes
-  useEffect(() => {
-    if (cardSlots.size === 0) return
+  const groupedCards = useMemo(() => {
+    return groupCardsBySortMode(unrolledCards, sortMode)
+  }, [unrolledCards, sortMode])
 
-    // Calculate natural width (unscaled)
-    const cardWidth = DEFAULT_CARD_WIDTH
-    let maxCol = 0
-    cardSlots.forEach(slot => { if (slot.col > maxCol) maxCol = slot.col })
-    const effectiveColumns = cardSlots.size > 0 ? maxCol + 1 : COLUMNS
-    // Add padding to natural width
-    const naturalGridWidth = effectiveColumns * cardWidth + (effectiveColumns + 1) * GAP + 4
+  const actualColumns = useMemo(() => {
+    if (collapsed) return 1
+    return getSortModeColumns(sortMode, unrolledCards).length || COLUMNS
+  }, [collapsed, sortMode, unrolledCards])
 
-    onNaturalWidthChange?.(naturalGridWidth)
-  }, [cardSlots, collapsed, onNaturalWidthChange])
+  const [draggedSlots, setDraggedSlots] = useState<Map<number, GridSlot> | null>(null)
 
-  useEffect(() => {
-    const totalCards = unrolledCards.length
-    if (totalCards > 0) {
-      const newSlots = new Map<number, GridSlot>()
-
-      if (collapsed) {
-         sortCardsBySortMode(unrolledCards, sortMode).forEach((card, rowIndex) => {
-           newSlots.set(card.index, { col: 0, row: rowIndex })
-         })
-      } else {
-        const columns = getSortModeColumns(sortMode, unrolledCards)
-        const groups = groupCardsBySortMode(unrolledCards, sortMode)
-
-        columns.forEach((colKey, colIndex) => {
-          const cardsInGroup = groups.get(colKey) || []
-          cardsInGroup.forEach((card, rowIndex) => {
-            newSlots.set(card.index, { col: colIndex, row: rowIndex })
-          })
-        })
-
-        let extraCol = columns.length
-        groups.forEach((groupCards, key) => {
-          if (!columns.includes(key)) {
-            groupCards.forEach((card, rowIndex) => {
-              if (!newSlots.has(card.index)) {
-                newSlots.set(card.index, { col: extraCol, row: rowIndex })
-              }
-            })
-            extraCol++
-          }
-        })
-      }
-
-      setCardSlots(newSlots)
-      setCardOrder(prev => {
-        if (prev.length === totalCards) return prev
-        return Array.from({ length: totalCards }, (_, i) => i)
+  const defaultSlots = useMemo(() => {
+    const newSlots = new Map<number, GridSlot>()
+    if (collapsed) {
+      unrolledCards.forEach((card, index) => {
+        newSlots.set(card.index, { col: 0, row: index })
       })
     } else {
-      setCardSlots(new Map())
-      setCardOrder([])
+      let currentColumn = 0
+      groupedCards.forEach((pile) => {
+        pile.forEach((card, rowIndex) => {
+          newSlots.set(card.index, { col: currentColumn, row: rowIndex })
+        })
+        currentColumn++
+      })
     }
-  }, [unrolledCards, sortMode, collapsed])
+    return newSlots
+  }, [collapsed, groupedCards, unrolledCards])
+
+  const cardSlots = draggedSlots || defaultSlots
+
+  const cardsPerColumn = useMemo(() => {
+    const counts = new Array(actualColumns).fill(0)
+
+    if (collapsed) {
+      counts[0] = unrolledCards.length
+      return counts
+    }
+
+    cardSlots.forEach((slot) => {
+      if (slot.col >= 0 && slot.col < actualColumns) {
+        counts[slot.col] = Math.max(counts[slot.col], slot.row + 1)
+      }
+    })
+    return counts
+  }, [actualColumns, cardSlots, collapsed, unrolledCards.length])
+
+  const effectiveCardSlots = useMemo(() => {
+    if (draggingIndex == null) return cardSlots
+
+    const offsetPerCard = getStackPeekOffset(DEFAULT_CARD_HEIGHT)
+    const colWidth = DEFAULT_CARD_WIDTH + GAP
+    const hoverCol = Math.max(0, Math.min(actualColumns - 1, Math.round((dragCurrentPos.x - GAP) / colWidth)))
+    const hoverRowRaw = Math.max(0, Math.round((dragCurrentPos.y - GAP - COLUMN_HEADER_HEIGHT) / offsetPerCard))
+
+    const next = new Map(cardSlots)
+    const srcSlot = cardSlots.get(draggingIndex)
+    if (!srcSlot) return cardSlots
+
+    const targetColCards = Array.from(cardSlots.entries())
+      .filter(([idx, s]) => idx !== draggingIndex && s.col === hoverCol)
+      .sort((a, b) => a[1].row - b[1].row)
+
+    const hoverRow = Math.min(hoverRowRaw, targetColCards.length)
+
+    targetColCards.forEach(([idx], rIndex) => {
+      const effectiveRow = rIndex >= hoverRow ? rIndex + 1 : rIndex
+      next.set(idx, { col: hoverCol, row: effectiveRow })
+    })
+
+    if (srcSlot.col !== hoverCol) {
+      const srcColCards = Array.from(cardSlots.entries())
+        .filter(([idx, s]) => idx !== draggingIndex && s.col === srcSlot.col)
+        .sort((a, b) => a[1].row - b[1].row)
+
+      srcColCards.forEach(([idx], rIndex) => {
+        next.set(idx, { col: srcSlot.col, row: rIndex })
+      })
+    }
+
+    return next
+  }, [actualColumns, cardSlots, draggingIndex, dragCurrentPos])
 
   const cardPositions = useMemo(() => {
+    const positions = new Map<number, Position>()
     const cardWidth = DEFAULT_CARD_WIDTH
     const cardHeight = DEFAULT_CARD_HEIGHT
-    const positions = new Map<number, Position>()
-    cardSlots.forEach((slot, cardIndex) => {
-      positions.set(cardIndex, getSlotPosition(slot.col, slot.row, cardWidth, cardHeight))
+
+    unrolledCards.forEach((card) => {
+      const slot = effectiveCardSlots.get(card.index)
+      if (slot) {
+        positions.set(card.index, getSlotPosition(slot.col, slot.row, cardWidth, cardHeight))
+      }
     })
+
     return positions
+  }, [effectiveCardSlots, unrolledCards])
+
+  // Build a fast O(1) lookup from card index → card, so we don't scan
+  // unrolledCards inside the render map.
+  const cardByIndex = useMemo(() => {
+    const m = new Map<number, (typeof unrolledCards)[number]>()
+    unrolledCards.forEach(c => m.set(c.index, c))
+    return m
+  }, [unrolledCards])
+
+  // Build a fast O(1) slot-neighbour lookup: (col, row) → cardIndex.
+  // Used for diff border suppression so we don't do O(n) Array.from().find()
+  // per card during render.
+  const slotKey = (col: number, row: number) => `${col}|${row}`
+  const slotToCardIndex = useMemo(() => {
+    const m = new Map<string, number>()
+    cardSlots.forEach((slot, idx) => m.set(slotKey(slot.col, slot.row), idx))
+    return m
   }, [cardSlots])
-
-  const insertCardInColumn = useCallback((cardIndex: number, targetCol: number, targetRow: number) => {
-    setCardSlots(prev => {
-      const newSlots = new Map(prev)
-      const currentSlot = prev.get(cardIndex)
-      const sourceCol = currentSlot?.col
-
-      if (sourceCol !== undefined && sourceCol !== targetCol) {
-        const sourceColumnCards: { index: number; row: number }[] = []
-        prev.forEach((slot, idx) => {
-          if (idx !== cardIndex && slot.col === sourceCol) {
-            sourceColumnCards.push({ index: idx, row: slot.row })
-          }
-        })
-        sourceColumnCards.sort((a, b) => a.row - b.row)
-        sourceColumnCards.forEach(({ index }, row) => {
-          newSlots.set(index, { col: sourceCol, row })
-        })
-      }
-
-      const columnCards: { index: number; row: number }[] = []
-      prev.forEach((slot, idx) => {
-        if (idx !== cardIndex && slot.col === targetCol) {
-          columnCards.push({ index: idx, row: slot.row })
-        }
-      })
-      columnCards.sort((a, b) => a.row - b.row)
-      const allCardsInColumn = [...columnCards.map(c => c.index)]
-
-      let insertAt = 0
-      for (let i = 0; i < columnCards.length; i++) {
-        if (columnCards[i].row < targetRow) insertAt = i + 1
-        else break
-      }
-      allCardsInColumn.splice(insertAt, 0, cardIndex)
-      allCardsInColumn.forEach((idx, row) => {
-        newSlots.set(idx, { col: targetCol, row })
-      })
-      return newSlots
-    })
-  }, [])
-
-  const handleDragStart = useCallback((index: number, e: ReactMouseEvent | ReactTouchEvent) => {
-    e.preventDefault()
-    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
-    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
-    const slot = cardSlots.get(index) || { col: 0, row: 0 }
-    const pos = getSlotPosition(slot.col, slot.row, DEFAULT_CARD_WIDTH, DEFAULT_CARD_HEIGHT)
-
-    setDragState({
-      index,
-      startSlot: slot,
-      startMousePos: { x: clientX, y: clientY },
-      currentPos: pos
-    })
-    setCardOrder(prev => {
-      const newOrder = prev.filter(i => i !== index)
-      newOrder.push(index)
-      return newOrder
-    })
-  }, [cardSlots])
-
-  const handleDragMove = useCallback((e: MouseEvent | TouchEvent) => {
-    if (!dragState) return
-    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
-    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
-    const startPos = getSlotPosition(dragState.startSlot.col, dragState.startSlot.row, DEFAULT_CARD_WIDTH, DEFAULT_CARD_HEIGHT)
-    const deltaX = (clientX - dragState.startMousePos.x) / scale
-    const deltaY = (clientY - dragState.startMousePos.y) / scale
-    const newPos = {
-      x: Math.max(0, startPos.x + deltaX),
-      y: Math.max(0, startPos.y + deltaY)
-    }
-    setDragState(prev => prev ? { ...prev, currentPos: newPos } : null)
-    const hoverSlot = findNearestSlot(newPos, DEFAULT_CARD_WIDTH, DEFAULT_CARD_HEIGHT, COLUMNS)
-    const currentSlot = cardSlots.get(dragState.index)
-    if (currentSlot && (currentSlot.col !== hoverSlot.col || currentSlot.row !== hoverSlot.row)) {
-      insertCardInColumn(dragState.index, hoverSlot.col, hoverSlot.row)
-    }
-  }, [dragState, scale, cardSlots, insertCardInColumn])
-
-  const handleDragEnd = useCallback(() => setDragState(null), [])
-
-  useEffect(() => {
-    if (!dragState) return
-    const handleMouseMove = (e: MouseEvent) => handleDragMove(e)
-    const handleTouchMove = (e: TouchEvent) => handleDragMove(e)
-    window.addEventListener("mousemove", handleMouseMove)
-    window.addEventListener("mouseup", handleDragEnd)
-    window.addEventListener("touchmove", handleTouchMove)
-    window.addEventListener("touchend", handleDragEnd)
-    return () => {
-      window.removeEventListener("mousemove", handleMouseMove)
-      window.removeEventListener("mouseup", handleDragEnd)
-      window.removeEventListener("touchmove", handleTouchMove)
-      window.removeEventListener("touchend", handleDragEnd)
-    }
-  }, [dragState, handleDragMove, handleDragEnd])
 
   const cardWidth = DEFAULT_CARD_WIDTH
   const cardHeight = DEFAULT_CARD_HEIGHT
 
-  const actualColumns = useMemo(() => {
-    if (cardSlots.size === 0) return COLUMNS
-    let maxCol = 0
-    cardSlots.forEach(slot => { if (slot.col > maxCol) maxCol = slot.col })
-    return maxCol + 1
-  }, [cardSlots])
-
-  const cardsPerColumn = new Array(actualColumns).fill(0)
-  cardSlots.forEach(slot => { if (slot.col < actualColumns) cardsPerColumn[slot.col]++ })
-
   const naturalWidth = cardWidth * actualColumns + GAP * (actualColumns + 1)
   const maxPileHeight = Math.max(...cardsPerColumn.map(count => getPileHeight(count, cardHeight)), cardHeight)
   const maxY = maxPileHeight + GAP * 2 + COLUMN_HEADER_HEIGHT
+
+  useEffect(() => {
+    onNaturalWidthChange?.(naturalWidth)
+  }, [naturalWidth, onNaturalWidthChange])
+
+  const scale = forceScale ?? 1
+
   const scaleToPixel = useCallback((value: number) => (
     value === 0 ? 0 : Math.max(1, Math.round(value * scale))
   ), [scale])
+
   const scaledWidth = scaleToPixel(naturalWidth)
   const scaledHeight = scaleToPixel(maxY)
   const scaledCardWidth = scaleToPixel(cardWidth)
   const scaledCardHeight = scaleToPixel(cardHeight)
 
-  const getCardPosition = (cardIndex: number): Position => {
-    if (dragState?.index === cardIndex) return dragState.currentPos
-    return cardPositions.get(cardIndex) || { x: 0, y: 0 }
-  }
+  // Memoize column labels so they aren't recomputed on every render.
+  const columnLabels = useMemo(
+    () => getSortModeColumns(sortMode, unrolledCards),
+    [sortMode, unrolledCards]
+  )
 
-  const getScaledCardPosition = (cardIndex: number): Position => {
-    const position = getCardPosition(cardIndex)
-    return {
-      x: scaleToPixel(position.x),
-      y: scaleToPixel(position.y),
+  const cardInstanceKeys = useMemo(() => {
+    const keys = new Map<number, string>()
+    const catalogCopyCounts = new Map<number, number>()
+
+    unrolledCards.forEach((card) => {
+      const count = catalogCopyCounts.get(card.catalogId) ?? 0
+      catalogCopyCounts.set(card.catalogId, count + 1)
+      keys.set(card.index, `${card.catalogId}-${count}`)
+    })
+
+    return keys
+  }, [unrolledCards])
+
+  const cardOrder = useMemo(() => {
+    return unrolledCards.map((c) => c.index)
+  }, [unrolledCards])
+
+  // Stable ref so mousemove/mouseup handlers are attached exactly once.
+  const cardPositionsRef = useRef(cardPositions)
+  cardPositionsRef.current = cardPositions
+  const cardSlotsRef = useRef(cardSlots)
+  cardSlotsRef.current = cardSlots
+  const scaleRef = useRef(scale)
+  scaleRef.current = scale
+  const actualColumnsRef = useRef(actualColumns)
+  actualColumnsRef.current = actualColumns
+
+  const handleDragStart = useCallback((index: number, e: ReactMouseEvent | ReactTouchEvent) => {
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
+    const startSlot = cardSlotsRef.current.get(index)
+    if (!startSlot) return
+
+    const basePos = cardPositionsRef.current.get(index) || { x: 0, y: 0 }
+
+    dragStateRef.current = {
+      index,
+      startSlot,
+      startMousePos: { x: clientX, y: clientY },
+      basePos,
     }
-  }
+    setDraggingIndex(index)
+    setDragCurrentPos(basePos)
+  }, [])
+
+  // Attach listeners once and read state from refs — no re-attachment on every
+  // mousemove, which was causing the listener churn.
+  useEffect(() => {
+    const onMove = (e: MouseEvent | TouchEvent) => {
+      if (!dragStateRef.current) return
+      const { startMousePos, basePos } = dragStateRef.current
+      const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
+      const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
+      const s = scaleRef.current
+      setDragCurrentPos({
+        x: basePos.x + (clientX - startMousePos.x) / s,
+        y: basePos.y + (clientY - startMousePos.y) / s,
+      })
+    }
+
+    const onEnd = () => {
+      const ds = dragStateRef.current
+      if (!ds) return
+
+      const pos = dragStateRef.current ? {
+        x: ds.basePos.x,
+        y: ds.basePos.y,
+      } : { x: 0, y: 0 }
+
+      // Reconstruct current drag position from the last setDragCurrentPos value
+      // by reading it from the ref we'll update below.
+      const currentPos = currentPosRef.current
+      const cols = actualColumnsRef.current
+      const slots = cardSlotsRef.current
+
+      const offsetPerCard = getStackPeekOffset(DEFAULT_CARD_HEIGHT)
+      const colWidth = DEFAULT_CARD_WIDTH + GAP
+      const targetCol = Math.max(0, Math.min(cols - 1, Math.round((currentPos.x - GAP) / colWidth)))
+      const targetRowRaw = Math.max(0, Math.round((currentPos.y - GAP - COLUMN_HEADER_HEIGHT) / offsetPerCard))
+
+      setDraggedSlots(() => {
+        const next = new Map(slots)
+        const srcSlot = slots.get(ds.index)
+        if (!srcSlot) return slots
+
+        const targetColCards = Array.from(next.entries())
+          .filter(([idx, s]) => idx !== ds.index && s.col === targetCol)
+          .sort((a, b) => a[1].row - b[1].row)
+
+        const targetRow = Math.min(targetRowRaw, targetColCards.length)
+        targetColCards.splice(targetRow, 0, [ds.index, { col: targetCol, row: targetRow }])
+
+        targetColCards.forEach(([idx], rIndex) => {
+          next.set(idx, { col: targetCol, row: rIndex })
+        })
+
+        if (srcSlot.col !== targetCol) {
+          const srcColCards = Array.from(next.entries())
+            .filter(([idx, s]) => idx !== ds.index && s.col === srcSlot.col)
+            .sort((a, b) => a[1].row - b[1].row)
+
+          srcColCards.forEach(([idx], rIndex) => {
+            next.set(idx, { col: srcSlot.col, row: rIndex })
+          })
+        }
+
+        return next
+      })
+
+      dragStateRef.current = null
+      setDraggingIndex(null)
+    }
+
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onEnd)
+    window.addEventListener('touchmove', onMove)
+    window.addEventListener('touchend', onEnd)
+
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onEnd)
+      window.removeEventListener('touchmove', onMove)
+      window.removeEventListener('touchend', onEnd)
+    }
+  // Empty deps: attach once, read everything through refs.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Keep a ref to the latest dragCurrentPos so the onEnd handler can read it.
+  const currentPosRef = useRef(dragCurrentPos)
+  currentPosRef.current = dragCurrentPos
 
   if (!loading && cards.length === 0) return null
 
@@ -469,60 +630,106 @@ function DeckGrid({
       ref={scrollContainerRef}
       className="flex-1 overflow-y-scroll overflow-x-hidden bg-muted/30 relative min-h-0"
     >
+      <div style={{ height: scaledHeight, position: "relative" }}>
+        <div
+          className="absolute top-0 left-0 origin-top-left"
+          style={{
+            width: scaledWidth, height: scaledHeight, touchAction: draggingIndex != null ? "none" : "auto"
+          }}
+        >
+          {cardSlots.size > 0 && (
+            <div
+              className="absolute top-0 left-0 flex origin-top-left"
+              style={{ gap: GAP, paddingLeft: GAP, paddingTop: GAP / 2, transform: `scale(${scale})` }}
+            >
+              {cardsPerColumn.map((count, col) => {
+                if (collapsed && col === 0) {
+                  return (
+                    <div key={col} className="flex flex-col items-center justify-center text-xs font-medium text-muted-foreground bg-muted/50 rounded-md px-1"
+                         style={{ width: cardWidth, height: COLUMN_HEADER_HEIGHT - GAP / 2 }}>
+                      <span className="truncate max-w-full">{title}</span>
+                      <span className="text-[10px] opacity-60">{count}</span>
+                    </div>
+                  )
+                }
 
-
-        <div style={{ height: scaledHeight, position: "relative" }}>
-          <div
-             className="absolute top-0 left-0 origin-top-left"
-             style={{
-               width: scaledWidth, height: scaledHeight, touchAction: dragState ? "none" : "auto"
-             }}
-          >
-             {cardSlots.size > 0 && (() => {
-                const labels = getSortModeColumns(sortMode, unrolledCards)
+                const label = columnLabels[col] || ''
+                const isMana = sortMode === 'colors' && [...VIDERE_CARD_COLORS, COLORLESS_CARD_COLOR].some(color => color === label)
                 return (
-                  <div
-                    className="absolute top-0 left-0 flex origin-top-left"
-                    style={{ gap: GAP, paddingLeft: GAP, paddingTop: GAP / 2, transform: `scale(${scale})` }}
-                  >
-                    {cardsPerColumn.map((count, col) => {
-                       if (collapsed && col === 0) {
-                          return (
-                            <div key={col} className="flex flex-col items-center justify-center text-xs font-medium text-muted-foreground bg-muted/50 rounded-md px-1"
-                                 style={{ width: cardWidth, height: COLUMN_HEADER_HEIGHT - GAP / 2 }}>
-                               <span className="truncate max-w-full">{title}</span>
-                               <span className="text-[10px] opacity-60">{count}</span>
-                            </div>
-                          )
-                       }
-
-                       const label = labels[col] || ''
-                       const isMana = sortMode === 'colors' && [...VIDERE_CARD_COLORS, COLORLESS_CARD_COLOR].some(color => color === label)
-                       return (
-                         <div key={col} className="flex flex-col items-center justify-center text-xs font-medium text-muted-foreground bg-muted/50 rounded-md px-1"
-                              style={{ width: cardWidth, height: COLUMN_HEADER_HEIGHT - GAP / 2 }}>
-                             <span className="truncate max-w-full flex items-center gap-1" title={label}>
-                                {isMana ? <img src={getManaSymbolSvgPath(label) ?? undefined} alt={label} className="h-4 w-4"/> : label}
-                             </span>
-                             <span className="text-[10px] opacity-60">{count}</span>
-                         </div>
-                       )
-                    })}
+                  <div key={col} className="flex flex-col items-center justify-center text-xs font-medium text-muted-foreground bg-muted/50 rounded-md px-1"
+                       style={{ width: cardWidth, height: COLUMN_HEADER_HEIGHT - GAP / 2 }}>
+                    <span className="truncate max-w-full flex items-center gap-1" title={label}>
+                      {isMana ? <img src={getManaSymbolSvgPath(label) ?? undefined} alt={label} className="h-4 w-4"/> : label}
+                    </span>
+                    <span className="text-[10px] opacity-60">{count}</span>
                   </div>
                 )
-             })()}
+              })}
+            </div>
+          )}
 
-             {cardOrder.map((cardIndex) => {
-               const pos = getScaledCardPosition(cardIndex)
-               const zIndex = cardSlots.get(cardIndex)?.row ?? 0
-               const card = unrolledCards.find(c => c.index === cardIndex)
+          {cardOrder.map((cardIndex) => {
+            // O(1) lookup via pre-built Map instead of O(n) find() per card.
+            const card = cardByIndex.get(cardIndex)
 
-               if (card) {
-                 return <SheetCard key={cardIndex} index={cardIndex} catalogId={card.catalogId} cardWidth={scaledCardWidth} cardHeight={scaledCardHeight} position={pos} onDragStart={handleDragStart} isDragging={dragState?.index === cardIndex} zIndex={zIndex} />
-               }
-               return <SkeletonCard key={cardIndex} cardWidth={scaledCardWidth} cardHeight={scaledCardHeight} position={pos} zIndex={zIndex} />
-             })}
-          </div>
+            const slot = cardSlots.get(cardIndex)
+            const zIndex = slot?.row ?? 0
+
+            // Position: if this card is being dragged, use live drag position.
+            const rawPos = draggingIndex === cardIndex
+              ? dragCurrentPos
+              : (cardPositions.get(cardIndex) ?? { x: 0, y: 0 })
+            const pos = {
+              x: scaleToPixel(rawPos.x),
+              y: scaleToPixel(rawPos.y),
+            }
+
+            if (card) {
+              const diff = diffMap?.get(card.catalogId)
+              let suppressBottomBorder = false
+              let suppressTopBorder = false
+
+              // O(1) neighbour lookups via pre-built slot map.
+              if (slot && diff?.delta) {
+                const belowIdx = slotToCardIndex.get(slotKey(slot.col, slot.row + 1))
+                if (belowIdx != null) {
+                  const cardBelowDiff = diffMap?.get(cardByIndex.get(belowIdx)?.catalogId ?? -1)
+                  if (cardBelowDiff?.delta != null && Math.sign(cardBelowDiff.delta) === Math.sign(diff.delta)) {
+                    suppressBottomBorder = true
+                  }
+                }
+
+                const aboveIdx = slotToCardIndex.get(slotKey(slot.col, slot.row - 1))
+                if (aboveIdx != null) {
+                  const cardAboveDiff = diffMap?.get(cardByIndex.get(aboveIdx)?.catalogId ?? -1)
+                  if (cardAboveDiff?.delta != null && Math.sign(cardAboveDiff.delta) === Math.sign(diff.delta)) {
+                    suppressTopBorder = true
+                  }
+                }
+              }
+
+              const instanceKey = cardInstanceKeys.get(cardIndex) ?? cardIndex
+
+              return (
+                <SheetCard
+                  key={instanceKey}
+                  index={cardIndex}
+                  catalogId={card.catalogId}
+                  cardWidth={scaledCardWidth}
+                  cardHeight={scaledCardHeight}
+                  position={pos}
+                  onDragStart={handleDragStart}
+                  isDragging={draggingIndex === cardIndex}
+                  zIndex={zIndex}
+                  diffDelta={diff?.delta}
+                  suppressBottomBorder={suppressBottomBorder}
+                  suppressTopBorder={suppressTopBorder}
+                />
+              )
+            }
+            return <SkeletonCard key={cardIndex} cardWidth={scaledCardWidth} cardHeight={scaledCardHeight} position={pos} zIndex={zIndex} />
+          })}
+        </div>
       </div>
     </div>
   )
@@ -530,6 +737,7 @@ function DeckGrid({
 
 export interface DeckCollectionEditorProps {
   deckRevisionId?: string
+  overrideCards?: SortableCardEntry[]
   className?: string
   editorTitle?: string
   hideDeckSelector?: boolean
@@ -541,10 +749,12 @@ export interface DeckCollectionEditorProps {
   sideboardCollapsed?: boolean
   onSideboardCollapsedChange?: (collapsed: boolean) => void
   onSortableCardsChange?: (cards: SortableCardEntry[], loading: boolean) => void
+  diffMap?: Map<number, DiffMapEntry>
 }
 
 export function DeckCollectionEditor({
   deckRevisionId: routeDeckRevisionId,
+  overrideCards,
   className,
   editorTitle = "Deck",
   hideDeckSelector = false,
@@ -556,27 +766,35 @@ export function DeckCollectionEditor({
   sideboardCollapsed: controlledSideboardCollapsed,
   onSideboardCollapsedChange,
   onSortableCardsChange,
+  diffMap,
 }: DeckCollectionEditorProps = {}) {
-  const { cards: allCards, loading: sortableLoading, fetchSortableCards, reset: resetSortable } = useSortableCards()
-  const { identifiers: decks } = useDeckIdentifiers()
   const [searchParams, setSearchParams] = useSearchParams()
-  const deckFromSearch = routeDeckRevisionId ?? searchParams.get("deck") ?? ""
-  const [selectedDeckRevisionId, setSelectedDeckRevisionId] = useState<string>(() => deckFromSearch)
-  const [internalSortMode, setInternalSortMode] = useState<SortMode>('cmc')
-  const [internalSideboardCollapsed, setInternalSideboardCollapsed] = useState(true)
+  const deckFromSearch = searchParams.get("deck") || ""
+
+  const [selectedDeckRevisionId, setSelectedDeckRevisionId] = useState<string>(
+    routeDeckRevisionId || deckFromSearch
+  )
+
+  const [internalSortMode, setInternalSortMode] = useState<SortMode>("cmc")
   const sortMode = controlledSortMode ?? internalSortMode
+
+  const [internalSideboardCollapsed, setInternalSideboardCollapsed] = useState(false)
   const isSideboardCollapsed = controlledSideboardCollapsed ?? internalSideboardCollapsed
 
-  // Track natural widths for parent-driven scaling
-  const [mainNaturalWidth, setMainNaturalWidth] = useState(0)
-  const [sideNaturalWidth, setSideNaturalWidth] = useState(0)
+  const { cards: fetchedCards, loading: sortableLoading, fetchSortableCards, reset: resetSortable } = useSortableCards()
+  const { identifiers: decks } = useDeckIdentifiers()
+
+  const allCards = useMemo(() => {
+    if (overrideCards && overrideCards.length > 0) return overrideCards
+    return fetchedCards
+  }, [overrideCards, fetchedCards])
+
   const [containerWidth, setContainerWidth] = useState(0)
   const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!containerRef.current) return
     const observer = new ResizeObserver(() => {
-      // Use requestAnimationFrame to debounce slightly/prevent loop errors
       requestAnimationFrame(() => {
         if (!containerRef.current) return
         setContainerWidth(containerRef.current.clientWidth)
@@ -587,10 +805,11 @@ export function DeckCollectionEditor({
   }, [])
 
   useEffect(() => {
-    if (deckFromSearch !== selectedDeckRevisionId) {
-      setSelectedDeckRevisionId(deckFromSearch)
+    const targetId = routeDeckRevisionId || deckFromSearch
+    if (targetId && targetId !== selectedDeckRevisionId) {
+      setSelectedDeckRevisionId(targetId)
     }
-  }, [deckFromSearch, selectedDeckRevisionId])
+  }, [deckFromSearch, routeDeckRevisionId, selectedDeckRevisionId])
 
   const handleDeckChange = useCallback((revisionId: string) => {
     if (routeDeckRevisionId) return
@@ -652,8 +871,6 @@ export function DeckCollectionEditor({
       return
     }
 
-    resetSortable()
-
     const fetchParallel = async () => {
       console.log(`[Collection] Fetching data for ${selectedDeckName || selectedDeckRevisionId} (${selectedDeckRevisionId})...`)
       if (abortController.signal.aborted) return
@@ -670,17 +887,34 @@ export function DeckCollectionEditor({
     return () => abortController.abort()
   }, [fetchSortableCards, resetSortable, selectedDeckName, selectedDeckRevisionId])
 
-  const sharedScale = useMemo(() => {
-     if (containerWidth === 0 || mainNaturalWidth === 0) return 1
-     // Total natural width required.
-     // Note: we might have a pixel for the border.
-     const totalNatural = mainNaturalWidth + (sideboardCards.length > 0 ? sideNaturalWidth : 0)
-     // Prevent divide by zero
-     if (totalNatural === 0) return 1
-     return Math.min(1, containerWidth / totalNatural)
-  }, [containerWidth, mainNaturalWidth, sideNaturalWidth, sideboardCards.length])
+  const effectiveMainCards = useMemo(() => {
+    return getEffectiveCardsForZone(mainboardCards, allCards, 'Mainboard', diffMap)
+  }, [mainboardCards, allCards, diffMap])
+  const mainUnrolledCards = useMemo(() => unrollCards(effectiveMainCards), [effectiveMainCards])
+  const mainActualColumns = useMemo(() => {
+    return getSortModeColumns(sortMode, mainUnrolledCards).length || COLUMNS
+  }, [sortMode, mainUnrolledCards])
+  const mainNaturalWidth = DEFAULT_CARD_WIDTH * mainActualColumns + GAP * (mainActualColumns + 1)
 
-  // Calculated width for the sideboard container
+  const effectiveSideCards = useMemo(() => {
+    return getEffectiveCardsForZone(sideboardCards, allCards, 'Sideboard', diffMap)
+  }, [sideboardCards, allCards, diffMap])
+  const sideUnrolledCards = useMemo(() => unrollCards(effectiveSideCards), [effectiveSideCards])
+  const sideActualColumns = useMemo(() => {
+    if (isSideboardCollapsed) return 1
+    return getSortModeColumns(sortMode, sideUnrolledCards).length || COLUMNS
+  }, [isSideboardCollapsed, sortMode, sideUnrolledCards])
+  const sideNaturalWidth = sideboardCards.length > 0
+    ? (DEFAULT_CARD_WIDTH * sideActualColumns + GAP * (sideActualColumns + 1))
+    : 0
+
+  const totalNatural = mainNaturalWidth + sideNaturalWidth
+
+  const sharedScale = useMemo(() => {
+     if (containerWidth === 0 || totalNatural === 0) return 1
+     return Math.min(1, containerWidth / totalNatural)
+  }, [containerWidth, totalNatural])
+
   const sideContainerWidth = sideboardCards.length > 0 ? sideNaturalWidth * sharedScale : 0
 
   return (
@@ -760,10 +994,7 @@ export function DeckCollectionEditor({
           </CardHeader>
         )}
 
-        {/* Side-by-side grid panes */}
         <div ref={containerRef} className="flex-1 flex min-h-0 relative">
-          {/* Shared Loading Overlay â€” only shown while we have no card data at all.
-               Once sortable cards arrive, skeleton cards are shown instead. */}
           {allCards.length === 0 && sortableLoading && (
             <div className="absolute inset-0 flex items-center justify-center z-50 bg-background/50 backdrop-blur-[1px]">
               <div className="flex flex-col items-center gap-3">
@@ -772,26 +1003,25 @@ export function DeckCollectionEditor({
               </div>
             </div>
           )}
-          {/* Mainboard pane */}
           <div className="flex-1 min-w-0 flex flex-col min-h-0">
-            {!selectedDeckRevisionId && (
+            {!(selectedDeckRevisionId || routeDeckRevisionId || deckFromSearch || allCards.length > 0) && (
               <div className="flex-1 flex items-center justify-center">
                 <span className="text-sm text-muted-foreground">Select a deck to view</span>
               </div>
             )}
-            {selectedDeckRevisionId && (
+            {(selectedDeckRevisionId || routeDeckRevisionId || deckFromSearch || allCards.length > 0) && (
               <DeckGrid
                 title="Mainboard"
                 cards={mainboardCards}
+                allCards={allCards}
                 loading={sortableLoading}
                 sortMode={sortMode}
-                onNaturalWidthChange={setMainNaturalWidth}
                 forceScale={sharedScale}
+                diffMap={diffMap}
               />
             )}
           </div>
 
-          {/* Sideboard pane */}
           {sideboardCards.length > 0 && (
             <div
               className="flex-shrink-0 flex flex-col min-h-0 border-l border-border/50 transition-[width] duration-300 ease-in-out"
@@ -800,11 +1030,12 @@ export function DeckCollectionEditor({
               <DeckGrid
                 title="Sideboard"
                 cards={sideboardCards}
+                allCards={allCards}
                 loading={sortableLoading}
                 sortMode={sortMode}
                 collapsed={isSideboardCollapsed}
-                onNaturalWidthChange={setSideNaturalWidth}
                 forceScale={sharedScale}
+                diffMap={diffMap}
               />
             </div>
           )}

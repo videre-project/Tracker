@@ -264,6 +264,26 @@ public class DecksController : APIController
     });
   }
 
+  /// <summary>
+  /// Get full revision history for a deck
+  /// </summary>
+  /// <param name="revisionId">Collection-history deck revision ID</param>
+  /// <returns>History of revisions with card diffs</returns>
+  [HttpGet("{revisionId:long}/history")]
+  [ProducesResponseType(typeof(DeckHistoryView), StatusCodes.Status200OK)]
+  [ProducesResponseType(StatusCodes.Status404NotFound)]
+  public async Task<ActionResult<DeckHistoryView>> GetDeckHistory(
+    long revisionId,
+    CancellationToken cancellationToken)
+  {
+    var history = await deckService.GetDeckHistoryAsync(revisionId, cancellationToken);
+    if (history == null)
+    {
+      return NotFound(new { error = $"Deck revision {revisionId} history not found" });
+    }
+    return Ok(history);
+  }
+
   private record CachedDeck(List<CardEntry> Mainboard, List<CardEntry> Sideboard);
 
   private static readonly System.Collections.Concurrent.ConcurrentDictionary<long, CachedDeck> s_deckCache = new();

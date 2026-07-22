@@ -17,6 +17,7 @@ using Microsoft.Extensions.DependencyInjection;
 using MTGOSDK.API.Collection;
 using MTGOSDK.Core.Logging;
 
+using Tracker.Controllers.Models.Decks;
 using Tracker.Database;
 using Tracker.Database.Models;
 using Tracker.Database.Models.Collection;
@@ -59,7 +60,12 @@ public sealed class CollectionDeckService(
   CollectionSnapshotReader snapshotReader,
   ICollectionStateFeed stateFeed)
 {
-  private sealed record CatalogData(string Name, string? Colors);
+  private sealed record CatalogData(
+    string Name,
+    int Cmc,
+    string? Colors,
+    List<string> Types,
+    string Rarity);
 
   private static readonly TimeSpan s_initialReconciliationTimeout =
     TimeSpan.FromSeconds(30);
@@ -209,6 +215,191 @@ public sealed class CollectionDeckService(
     await using var scope = scopeFactory.CreateAsyncScope();
     var context = scope.ServiceProvider.GetRequiredService<CollectionContext>();
     return await LoadRevisionAsync(context, revisionId, cancellationToken);
+  }
+
+  public async Task<DeckHistoryView?> GetDeckHistoryAsync(
+    long revisionId,
+    CancellationToken cancellationToken = default)
+  {
+    await databaseReadiness.WaitAsync(cancellationToken);
+    await using var scope = scopeFactory.CreateAsyncScope();
+    var context = scope.ServiceProvider.GetRequiredService<CollectionContext>();
+
+    var targetRevision = await context.CardGroupingRevisions
+      .AsNoTracking()
+      .Where(r => r.Id == revisionId && r.CardGrouping.Kind == CardGroupingKind.Deck)
+      .Select(r => new { r.CardGroupingId, r.Id })
+      .FirstOrDefaultAsync(cancellationToken);
+    if (targetRevision == null) return null;
+
+    long groupingId = targetRevision.CardGroupingId;
+
+    var grouping = await context.CardGroupings
+      .AsNoTracking()
+      .SingleOrDefaultAsync(g => g.Id == groupingId, cancellationToken);
+    if (grouping == null) return null;
+
+    var allRevisionModels = await context.CardGroupingRevisions
+      .AsNoTracking()
+      .Where(r => r.CardGroupingId == groupingId && r.RevisionType != CardGroupingRevisionType.Deleted)
+      .OrderBy(r => r.Id)
+      .ToListAsync(cancellationToken);
+
+    if (allRevisionModels.Count == 0) return null;
+
+    var allRevisionIds = allRevisionModels.Select(r => r.Id).ToList();
+    var enrichments = await context.DeckRevisionEnrichments
+      .AsNoTracking()
+      .Where(e => allRevisionIds.Contains(e.CardGroupingRevisionId))
+      .ToDictionaryAsync(e => e.CardGroupingRevisionId, cancellationToken);
+
+    var materializedRevisions = new List<DeckRevisionView>();
+    var accumulatedModels = new List<CardGroupingRevisionModel>();
+
+    for (int i = 0; i < allRevisionModels.Count; i++)
+    {
+      var revModel = allRevisionModels[i];
+      if (revModel.RevisionType == CardGroupingRevisionType.Snapshot)
+      {
+        accumulatedModels.Clear();
+      }
+      accumulatedModels.Add(revModel);
+
+      enrichments.TryGetValue(revModel.Id, out var enrichment);
+      var deckView = MaterializeRevision(
+        grouping,
+        accumulatedModels.ToList(),
+        enrichment,
+        allowRemoteCatalogLookup: false);
+
+      if (deckView != null)
+      {
+        materializedRevisions.Add(deckView);
+      }
+    }
+
+    if (materializedRevisions.Count == 0) return null;
+
+    var latestRevision = materializedRevisions[^1];
+
+    // Filter materialized revisions to only keep revisions where card composition actually changed
+    var filteredRevisions = new List<DeckRevisionView>();
+    DeckRevisionView? previousKept = null;
+
+    for (int i = 0; i < materializedRevisions.Count; i++)
+    {
+      var cur = materializedRevisions[i];
+      bool isLatest = i == materializedRevisions.Count - 1;
+
+      if (previousKept == null)
+      {
+        filteredRevisions.Add(cur);
+        previousKept = cur;
+      }
+      else
+      {
+        var cardChanges = ComputeDeltas(cur, previousKept);
+        if (cardChanges.Count > 0)
+        {
+          filteredRevisions.Add(cur);
+          previousKept = cur;
+        }
+        else if (isLatest)
+        {
+          // Replace previous kept entry with latest so we always reference the latest revision ID & timestamp
+          filteredRevisions[^1] = cur;
+        }
+      }
+    }
+
+    var historyRevisions = new List<DeckHistoryRevisionView>();
+    for (int i = 0; i < filteredRevisions.Count; i++)
+    {
+      var cur = filteredRevisions[i];
+      var prev = i > 0 ? filteredRevisions[i - 1] : null;
+
+      var changesFromPrev = prev != null ? ComputeDeltas(cur, prev) : new List<DeckHistoryChangeView>();
+      var changesFromLatest = cur.RevisionId != latestRevision.RevisionId
+        ? ComputeDeltas(cur, latestRevision)
+        : new List<DeckHistoryChangeView>();
+
+      historyRevisions.Add(new DeckHistoryRevisionView(
+        cur.RevisionId,
+        cur.CardGroupingId,
+        cur.ObservedAt,
+        cur.Timestamp,
+        cur.Name,
+        cur.Format,
+        cur.Mainboard.Sum(c => c.quantity),
+        cur.Sideboard.Sum(c => c.quantity),
+        cur.Colors,
+        cur.Archetype,
+        cur.FeaturedCard,
+        cur.Mainboard,
+        cur.Sideboard,
+        changesFromPrev,
+        changesFromLatest));
+    }
+
+    historyRevisions.Reverse();
+
+    return new DeckHistoryView(
+      latestRevision.RevisionId,
+      groupingId,
+      latestRevision.Name,
+      latestRevision.Format,
+      historyRevisions);
+  }
+
+  private static List<DeckHistoryChangeView> ComputeDeltas(
+    DeckRevisionView source,
+    DeckRevisionView target)
+  {
+    var changes = new List<DeckHistoryChangeView>();
+    ComputeZoneDeltas(source.Mainboard, target.Mainboard, "Mainboard", changes);
+    ComputeZoneDeltas(source.Sideboard, target.Sideboard, "Sideboard", changes);
+    return changes;
+  }
+
+  private static void ComputeZoneDeltas(
+    List<CardEntry> sourceEntries,
+    List<CardEntry> targetEntries,
+    string zone,
+    List<DeckHistoryChangeView> changes)
+  {
+    var sourceMap = sourceEntries
+      .GroupBy(c => c.catalogId)
+      .ToDictionary(g => g.Key, g => (Card: g.First(), Qty: g.Sum(c => c.quantity)));
+    var targetMap = targetEntries
+      .GroupBy(c => c.catalogId)
+      .ToDictionary(g => g.Key, g => (Card: g.First(), Qty: g.Sum(c => c.quantity)));
+
+    var allCatalogIds = sourceMap.Keys.Union(targetMap.Keys).Distinct();
+    foreach (int catalogId in allCatalogIds)
+    {
+      sourceMap.TryGetValue(catalogId, out var src);
+      targetMap.TryGetValue(catalogId, out var tgt);
+
+      int delta = src.Qty - tgt.Qty;
+      if (delta != 0)
+      {
+        string name = !string.IsNullOrWhiteSpace(src.Card?.name) ? src.Card.name : tgt.Card?.name ?? "";
+        CatalogData catalogData = ResolveCatalogData(catalogId, allowRemoteLookup: true);
+        List<string> colorList = !string.IsNullOrWhiteSpace(catalogData.Colors)
+          ? catalogData.Colors.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).ToList()
+          : new List<string>();
+
+        changes.Add(new DeckHistoryChangeView(
+          catalogId,
+          name,
+          delta,
+          zone,
+          catalogData.Cmc,
+          colorList,
+          catalogData.Types,
+          catalogData.Rarity));
+      }
+    }
   }
 
   public async Task<IReadOnlyDictionary<long, DeckRevisionView>> GetRevisionsAsync(
@@ -444,10 +635,20 @@ public sealed class CollectionDeckService(
     bool allowRemoteCatalogLookup) =>
     state.Items
       .Where(item => item.Region == (int)region && item.Quantity > 0)
-      .Select(item => new CardEntry(
-        item.CatalogId,
-        ResolveCatalogData(item.CatalogId, allowRemoteCatalogLookup).Name,
-        item.Quantity))
+      .Select(item => {
+        var catalogData = ResolveCatalogData(item.CatalogId, allowRemoteCatalogLookup);
+        var colorList = !string.IsNullOrWhiteSpace(catalogData.Colors)
+          ? catalogData.Colors.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).ToList()
+          : new List<string>();
+        return new CardEntry(
+          item.CatalogId,
+          catalogData.Name,
+          item.Quantity,
+          catalogData.Cmc,
+          colorList,
+          catalogData.Types,
+          catalogData.Rarity);
+      })
       .ToList();
 
   private static CatalogData ResolveCatalogData(
@@ -461,13 +662,21 @@ public sealed class CollectionDeckService(
     {
       return new CatalogData(
         catalogId.ToString(CultureInfo.InvariantCulture),
-        null);
+        0,
+        null,
+        new List<string>(),
+        "common");
     }
 
     try
     {
       Card card = CollectionManager.GetCard(catalogId);
-      var catalog = new CatalogData(card.Name, card.Colors);
+      var catalog = new CatalogData(
+        card.Name,
+        card.ConvertedManaCost,
+        card.Colors,
+        card.Types?.ToList() ?? new List<string>(),
+        card.Rarity ?? "common");
       s_catalog.TryAdd(catalogId, catalog);
       return catalog;
     }
@@ -477,7 +686,12 @@ public sealed class CollectionDeckService(
         "Could not resolve catalog ID {CatalogId} while replaying a deck revision: {Message}",
         catalogId,
         ex.Message);
-      return new CatalogData(catalogId.ToString(CultureInfo.InvariantCulture), null);
+      return new CatalogData(
+        catalogId.ToString(CultureInfo.InvariantCulture),
+        0,
+        null,
+        new List<string>(),
+        "common");
     }
   }
 
@@ -539,7 +753,10 @@ public sealed class CollectionDeckService(
               string.IsNullOrWhiteSpace(card.Name)
                 ? card.Id.ToString(CultureInfo.InvariantCulture)
                 : card.Name,
-              card.Colors));
+              0,
+              card.Colors,
+              new List<string>(),
+              "common"));
         }
       }
       catch (Exception ex)
