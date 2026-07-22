@@ -333,7 +333,7 @@ export default function Layout() {
   const currentBreadcrumbHref = isApiDocsPage ? getApiUrl("/docs") : undefined;
 
   return (
-    <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
+    <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
       <EventsProvider>
         <SidebarProvider>
           <AppSidebar />

@@ -51,6 +51,11 @@ public partial class HostForm : Form
   private readonly InvisibleResizePanel[] _resizePanels;
   private bool _hasUpdatedTitleBarColor;
   private SplashForm? _splashForm;
+  private int _navigationRetryAttempts;
+  private DateTime _lastNavigationErrorLog = DateTime.MinValue;
+
+  private const int NavigationRetryDelayMs = 250;
+  private const int MaxNavigationRetries = 40;
 
   public HostForm(ApplicationOptions options)
   {
@@ -130,10 +135,15 @@ public partial class HostForm : Form
       this.webView21.Dock = DockStyle.Fill;
     }
 
-    // Initialize the WebView2 environment.
-    WebView.CreateEnvironment(options.UserDataFolder);
     WebView.CoreWebView2InitializationCompleted += (sender, e) =>
     {
+      if (!e.IsSuccess)
+      {
+        Log.Error(e.InitializationException,
+          "WebView2 initialization failed (HRESULT={0}).", e.InitializationException?.HResult);
+        return;
+      }
+
       WebView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
       WebView.CoreWebView2.Settings.IsPinchZoomEnabled = false;
       WebView.CoreWebView2.Settings.IsStatusBarEnabled = false;
@@ -162,6 +172,10 @@ public partial class HostForm : Form
 
     WebView.NavigationCompleted += OnNavigationCompleted;
 
+    // Initialize the WebView2 environment after subscribing to completion
+    // so startup failures and successful initialization remain observable.
+    WebView.CreateEnvironment(options.UserDataFolder, options.WebView2BrowserArguments);
+
     // Initialize Splash Screen
     InitializeSplashScreen();
   }
@@ -170,6 +184,49 @@ public partial class HostForm : Form
     object? sender,
     CoreWebView2NavigationCompletedEventArgs e)
   {
+    if (!e.IsSuccess)
+    {
+      var now = DateTime.UtcNow;
+      if (now - _lastNavigationErrorLog >= TimeSpan.FromSeconds(1))
+      {
+        Log.Error("WebView2 navigation failed: {0} ({1}); retry {2}/{3}.",
+          e.WebErrorStatus, e.NavigationId,
+          Math.Min(_navigationRetryAttempts + 1, MaxNavigationRetries),
+          MaxNavigationRetries);
+        _lastNavigationErrorLog = now;
+      }
+
+      if (_navigationRetryAttempts >= MaxNavigationRetries)
+      {
+        Log.Error("WebView2 navigation retry limit reached; leaving the error page visible.");
+        return;
+      }
+
+      _navigationRetryAttempts++;
+      //
+      // The API thread starts concurrently with the WinForms UI.
+      //
+      // As a result, a first navigation can therefore race Kestrel startup;
+      // instead we retry while this handler remains subscribed instead of
+      // leaving the host surface blank.
+      //
+      try
+      {
+        await Task.Delay(NavigationRetryDelayMs);
+        if (!IsDisposed && WebView.CoreWebView2 is not null)
+        {
+          WebView.Reload();
+        }
+      }
+      catch (Exception ex)
+      {
+        Log.Error(ex, "Failed to retry WebView2 navigation.");
+      }
+      return;
+    }
+
+    _navigationRetryAttempts = 0;
+
     var title = WebView.CoreWebView2.DocumentTitle;
     if (string.IsNullOrEmpty(title)) return;
 

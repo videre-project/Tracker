@@ -15,15 +15,18 @@ public static class WebViewExtensions
   /// Explicitly creates the WebView2 environment.
   /// </summary>
   /// <param name="webView">The WebView2 control.</param>
-  /// <param name="options">The environment options.</param>
+  /// <param name="additionalBrowserArguments">Additional Chromium arguments.</param>
   public static void CreateEnvironment(this WebView2 webView,
     string userDataFolder = default!,
-    CoreWebView2EnvironmentOptions options = default!)
+    string additionalBrowserArguments = default!)
   {
     var envOptions = CoreWebView2Environment.CreateAsync(
       browserExecutableFolder: null, // Use the installed WebView2 version.
       userDataFolder,
-      options
+      new CoreWebView2EnvironmentOptions
+      {
+        AdditionalBrowserArguments = additionalBrowserArguments
+      }
     );
     webView.EnsureCoreWebView2Async(envOptions.GetAwaiter().GetResult());
   }
