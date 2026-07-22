@@ -260,12 +260,16 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
   
   // Dirty flag to track if we need to update React state
   const isDirtyRef = useRef(false)
+  const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const transitionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const updateGamesState = useCallback(() => {
     const allGames = Array.from(gamesMapRef.current.values())
 
     // Reconcile state/status inconsistencies before filtering
     const now = Date.now()
+    let nextTransitionMs = Infinity
+
     for (const game of allGames) {
       game.format = normalizeFormatName(game.format)
       if (game.state === "Finished" && game.status !== "completed") {
@@ -279,6 +283,9 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
         const start = new Date(game._rawStartTime).getTime()
         if (now >= start) {
           game.status = "active"
+        } else {
+          const diff = start - now
+          if (diff > 0 && diff < nextTransitionMs) nextTransitionMs = diff
         }
       }
       // Demote active events whose end time has passed
@@ -286,6 +293,9 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
         const end = new Date(game._rawEndTime).getTime()
         if (now > end) {
           game.status = "completed"
+        } else {
+          const diff = end - now
+          if (diff > 0 && diff < nextTransitionMs) nextTransitionMs = diff
         }
       }
     }
@@ -311,30 +321,47 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
     
     // Reset dirty flag
     isDirtyRef.current = false
+
+    // Schedule targeted timer for the next closest status transition
+    if (transitionTimerRef.current) {
+      clearTimeout(transitionTimerRef.current)
+      transitionTimerRef.current = null
+    }
+    if (nextTransitionMs < Infinity) {
+      const delay = Math.min(nextTransitionMs + 100, 2147483647)
+      transitionTimerRef.current = setTimeout(() => {
+        transitionTimerRef.current = null
+        isDirtyRef.current = true
+        updateGamesState()
+      }, delay)
+    }
   }, [])
 
-  // Poll for updates to prevent render flooding
-  useEffect(() => {
-    const interval = setInterval(() => {
+  const markDirtyAndScheduleFlush = useCallback(() => {
+    isDirtyRef.current = true
+    if (flushTimerRef.current !== null) return
+
+    flushTimerRef.current = setTimeout(() => {
+      flushTimerRef.current = null
       if (isDirtyRef.current) {
         updateGamesState()
       }
-    }, 200) // Update UI at most 5 times per second
-
-    // Periodic time-based reconciliation (every 30s) to catch
-    // scheduled→active and active→completed transitions
-    const reconcileInterval = setInterval(() => {
-      updateGamesState()
-    }, 30_000)
-
-    return () => { clearInterval(interval); clearInterval(reconcileInterval) }
+    }, 200)
   }, [updateGamesState])
+
+  // Clean up any pending timers on unmount
+  useEffect(() => {
+    return () => {
+      if (flushTimerRef.current) clearTimeout(flushTimerRef.current)
+      if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current)
+    }
+  }, [])
 
   const applyTournamentUpdate = useCallback((t: ITournament) => {
     const game = mapTournamentToActiveGame(t)
     if (!shouldIncludeEvent(game)) {
       gamesMapRef.current.delete(game.id)
-      isDirtyRef.current = true
+      markDirtyAndScheduleFlush()
       return
     }
 
@@ -382,9 +409,9 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
     }
 
     gamesMapRef.current.set(game.id, game)
-    isDirtyRef.current = true
+    markDirtyAndScheduleFlush()
     setLoading(false)
-  }, [])
+  }, [markDirtyAndScheduleFlush])
 
   const applyTournamentMessage = useCallback((message: ITournament | ITournament[]) => {
     const tournaments = Array.isArray(message) ? message : [message]
@@ -438,7 +465,7 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
 
         if (item.totalRounds < 3) {
           gamesMapRef.current.delete(eventId)
-          isDirtyRef.current = true
+          markDirtyAndScheduleFlush()
           continue
         }
 
@@ -453,7 +480,7 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
           game._rawEndTime = item.endTime
           game.endTime = formatTimeShort(item.endTime)
           
-          isDirtyRef.current = true
+          markDirtyAndScheduleFlush()
         }
       }
     },

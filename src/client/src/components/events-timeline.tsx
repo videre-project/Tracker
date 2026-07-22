@@ -225,25 +225,6 @@ export function EventsTimeline({ events, focusedEventId, activeEventIds, onEvent
   const timelineWidth = hourSlots.length * PX_PER_HOUR
   const formatGroups = useMemo(() => groupByFormat(events), [events])
 
-  // Track scroll container width
-  useEffect(() => {
-    const el = scrollRef.current
-    if (!el) return
-    const ro = new ResizeObserver(() => setViewportWidth(el.clientWidth))
-    setViewportWidth(el.clientWidth)
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [])
-
-  // Measure label text widths before first paint
-  const setLabelRef = useCallback((el: HTMLDivElement | null, i: number) => {
-    dayLabelRefs.current[i] = el
-  }, [])
-
-  useLayoutEffect(() => {
-    setLabelWidths(dayLabelRefs.current.map(el => el?.offsetWidth ?? 0))
-  }, [daySpans])
-
   // Current time marker
   useEffect(() => {
     const update = () => setTimeOffset(getCurrentTimeOffset(range.start, range.end))
@@ -252,23 +233,27 @@ export function EventsTimeline({ events, focusedEventId, activeEventIds, onEvent
     return () => clearInterval(id)
   }, [range])
 
-  // Initial positioning: jump (no animation) to the selected event so the
-  // timeline matches the table's initial state, or to the current time /
-  // earliest event when nothing is selected. Later focused-event scrolls
-  // (hover/selection) remain smooth — see the effect below.
-  useEffect(() => {
+  const lastFocusedEventIdRef = useRef<string | null>(null)
+
+  // Initial positioning: jump (no animation) to the selected/upcoming event on initial layout
+  useLayoutEffect(() => {
     if (!scrollRef.current || hasScrolled.current || formatGroups.length === 0) return
     const container = scrollRef.current
 
-    let target: number
-    const selected = focusedEventId
+    const now = Date.now()
+    const targetEvent = (focusedEventId
       ? events.find(e => e.id === focusedEventId)
-      : null
-    if (selected?._rawStartTime && selected?._rawEndTime) {
-      const pos = eventToPosition(selected, range.start)
-      target = pos.left + pos.width / 2
+      : null) ??
+      events.find(e => (e.status === "scheduled" || e.status === "active") && e._rawStartTime && new Date(e._rawStartTime).getTime() >= now) ??
+      events.find(e => e.status === "scheduled" || e.status === "active") ??
+      events[0]
+
+    let targetLeft: number
+    if (targetEvent?._rawStartTime && targetEvent?._rawEndTime) {
+      const pos = eventToPosition(targetEvent, range.start)
+      targetLeft = Math.max(0, pos.left + pos.width / 2 - container.clientWidth / 2)
     } else if (timeOffset !== null) {
-      target = timeOffset
+      targetLeft = Math.max(0, timeOffset - container.clientWidth / 2)
     } else {
       let minLeft = timelineWidth
       for (const { lanes } of formatGroups) {
@@ -277,21 +262,23 @@ export function EventsTimeline({ events, focusedEventId, activeEventIds, onEvent
           if (left < minLeft) minLeft = left
         }
       }
-      target = minLeft
+      targetLeft = Math.max(0, minLeft - container.clientWidth / 3)
     }
-    container.scrollLeft = Math.max(0, target - container.clientWidth / 3)
+
+    container.scrollLeft = targetLeft
     hasScrolled.current = true
   }, [formatGroups, timeOffset, range, timelineWidth, focusedEventId, events])
 
-  // Scroll to focused event when hovering a table row (debounced to avoid animation queue)
+  // Scroll to focused event when hovering/selecting a table row
   useEffect(() => {
     if (!focusedEventId || !scrollRef.current) return
+    const isInitialFocus = lastFocusedEventIdRef.current === null
+    const focusChanged = lastFocusedEventIdRef.current !== focusedEventId
+    lastFocusedEventIdRef.current = focusedEventId
 
     const timer = setTimeout(() => {
       const el = scrollRef.current
       if (!el) return
-      const bar = el.querySelector(`[data-event-id="${focusedEventId}"]`) as HTMLElement | null
-      if (!bar) return
 
       const event = events.find(e => e.id === focusedEventId)
       if (!event?._rawStartTime || !event._rawEndTime) return
@@ -300,14 +287,26 @@ export function EventsTimeline({ events, focusedEventId, activeEventIds, onEvent
       const centerX = pos.left + pos.width / 2
       const targetLeft = Math.max(0, centerX - el.clientWidth / 2)
 
-      const scrollRect = el.getBoundingClientRect()
-      const barRect = bar.getBoundingClientRect()
-      const barTopInScroll = barRect.top - scrollRect.top + el.scrollTop
-      const barCenterY = barTopInScroll + barRect.height / 2
-      const targetTop = Math.max(0, barCenterY - el.clientHeight / 2)
+      const bar = el.querySelector(`[data-event-id="${focusedEventId}"]`) as HTMLElement | null
+      let targetTop = el.scrollTop
+      if (bar) {
+        const scrollRect = el.getBoundingClientRect()
+        const barRect = bar.getBoundingClientRect()
+        const barTopInScroll = barRect.top - scrollRect.top + el.scrollTop
+        const barCenterY = barTopInScroll + barRect.height / 2
+        targetTop = Math.max(0, barCenterY - el.clientHeight / 2)
+      }
 
-      el.scrollTo({ left: targetLeft, top: targetTop, behavior: "smooth" })
-    }, 80)
+      if (isInitialFocus || !focusChanged || !hasScrolled.current) {
+        // Stream data/range update or initial focus: instant reposition without smooth scroll animation
+        el.scrollLeft = targetLeft
+        el.scrollTop = targetTop
+        hasScrolled.current = true
+      } else {
+        // User changed focused event: smooth scroll to new event
+        el.scrollTo({ left: targetLeft, top: targetTop, behavior: "smooth" })
+      }
+    }, isInitialFocus ? 0 : 40)
 
     return () => clearTimeout(timer)
   }, [focusedEventId, events, range])
@@ -351,23 +350,17 @@ export function EventsTimeline({ events, focusedEventId, activeEventIds, onEvent
         <div style={{ width: timelineWidth }}>
           {/* Sticky two-tier header */}
         <div className="sticky top-0 z-20 bg-background">
-          {/* Day spans row — labels sticky-center */}
+          {/* Day spans row */}
           <div className="flex border-b border-border">
             {daySpans.map((day, i) => {
               const spanWidth = day.hourCount * PX_PER_HOUR
-              const tw = labelWidths[i] ?? 0
-              const stickyLeft = viewportWidth > 0 ? (viewportWidth - tw) / 2 : 0
               return (
                 <div
                   key={i}
-                  className={cn("px-3", i > 0 && "border-l border-border")}
+                  className={cn("px-3 text-center", i > 0 && "border-l border-border")}
                   style={{ width: spanWidth }}
                 >
-                  <div
-                    ref={el => setLabelRef(el, i)}
-                    className="sticky w-fit text-[13px] font-medium text-muted-foreground whitespace-nowrap pt-0.5 pb-2.5"
-                    style={{ left: stickyLeft }}
-                  >
+                  <div className="sticky left-0 right-0 text-[13px] font-medium text-muted-foreground whitespace-nowrap pt-0.5 pb-2.5">
                     {day.label}
                   </div>
                 </div>
@@ -380,19 +373,16 @@ export function EventsTimeline({ events, focusedEventId, activeEventIds, onEvent
                 <div
                   key={i}
                   className="relative text-center text-[11px] text-muted-foreground/80 py-1 select-none shrink-0 border-r border-border/50"
-                  style={{ width: PX_PER_HOUR, minWidth: PX_PER_HOUR }}
+                  style={{
+                    width: PX_PER_HOUR,
+                    minWidth: PX_PER_HOUR,
+                    backgroundImage: 'linear-gradient(to right, transparent 24%, hsl(var(--border) / 0.3) 25%, transparent 26%, transparent 49%, hsl(var(--border) / 0.3) 50%, transparent 51%, transparent 74%, hsl(var(--border) / 0.3) 75%, transparent 76%)',
+                    backgroundPosition: 'bottom',
+                    backgroundSize: '100% 4px',
+                    backgroundRepeat: 'no-repeat',
+                  }}
                 >
                   {hourLabel(slot.getHours())}
-                  {/* 15-min tick marks */}
-                  <div className="absolute bottom-0 left-0 right-0 h-[4px] pointer-events-none">
-                    {[1, 2, 3].map((t) => (
-                      <div
-                        key={t}
-                        className="absolute bottom-0 w-px h-full bg-border/30"
-                        style={{ left: `${t * 25}%` }}
-                      />
-                    ))}
-                  </div>
                 </div>
             ))}
           </div>
@@ -407,24 +397,13 @@ export function EventsTimeline({ events, focusedEventId, activeEventIds, onEvent
               <div
                 key={format}
                 className="relative border-b border-border/15"
-                style={{ height }}
+                style={{
+                  height,
+                  backgroundImage: 'linear-gradient(to right, hsl(var(--border) / 0.15) 1px, transparent 1px)',
+                  backgroundSize: `${PX_PER_HOUR}px 100%`,
+                }}
               >
-                {/* Hour grid lines */}
-                {hourSlots.map((slot, i) => {
-                  const isDayBoundary = i > 0 && slot.getHours() === 0
-                  return (
-                    <div
-                      key={i}
-                      className={cn(
-                        "absolute top-0 bottom-0",
-                        isDayBoundary
-                          ? "border-l border-border/40"
-                          : "border-l border-border/10",
-                      )}
-                      style={{ left: i * PX_PER_HOUR }}
-                    />
-                  )
-                })}
+                {/* Event bars */}
 
                 {/* Event bars */}
                 {lanes.map(({ event, lane }) => {

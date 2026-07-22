@@ -97,8 +97,6 @@ function EntryFeeCell({ event, enabled }: { event: ActiveGame; enabled: boolean 
 
 export default function Events() {
   const { activeGames, upcomingGames, completedGames, loading, error, hoveredEventId, setHoveredEventId, selectedEventId, setSelectedEventId } = useEvents()
-  const tableAreaRef = useRef<HTMLDivElement>(null)
-  const [areaHeight, setAreaHeight] = useState<number | undefined>()
   const [currentPageEventIds, setCurrentPageEventIds] = useState<Set<string>>(() => new Set())
   const [timelineScrollKey, setTimelineScrollKey] = useState(0)
 
@@ -130,24 +128,21 @@ export default function Events() {
     new Set(activeGames.map(e => e.id)),
   [activeGames])
 
-  // Measure remaining height from table area to scroll container bottom
+  // Auto-select soonest upcoming event on initial load
+  const hasAutoSelectedRef = useRef(false)
   useEffect(() => {
-    const el = tableAreaRef.current
-    if (!el) return
-    const scrollAncestor = el.closest(".overflow-y-auto") as HTMLElement | null
-    const update = () => {
-      const bottom = scrollAncestor
-        ? scrollAncestor.getBoundingClientRect().bottom
-        : window.innerHeight
-      setAreaHeight(bottom - el.getBoundingClientRect().top)
+    if (hasAutoSelectedRef.current || selectedEventId != null || events.length === 0) return
+    const now = Date.now()
+    const soonestUpcoming =
+      events.find(e => (e.status === "scheduled" || e.status === "active") && getEventStartTime(e) >= now) ??
+      events.find(e => e.status === "scheduled" || e.status === "active") ??
+      events[0]
+
+    if (soonestUpcoming) {
+      hasAutoSelectedRef.current = true
+      setSelectedEventId(soonestUpcoming.id)
     }
-    update()
-    window.addEventListener("resize", update)
-    const ro = new ResizeObserver(update)
-    ro.observe(el)
-    if (scrollAncestor) ro.observe(scrollAncestor)
-    return () => { window.removeEventListener("resize", update); ro.disconnect() }
-  }, [])
+  }, [events, selectedEventId, setSelectedEventId])
 
   const handleRowClick = useCallback((event: ActiveGame) => {
     setSelectedEventId(selectedEventId === event.id ? null : event.id)
@@ -240,12 +235,12 @@ export default function Events() {
   ], [currentPageEventIds, playersDigitsWidth])
 
   return (
-    <div className="-mt-10">
+    <div className="-mt-10 flex flex-col h-[calc(100vh-1rem)] overflow-hidden">
       <EventsTimeline events={timelineEvents} focusedEventId={hoveredEventId ?? selectedEvent?.id ?? null} activeEventIds={activeEventIdSet} onEventClick={handleTimelineEventClick} />
 
-      <div ref={tableAreaRef} className="flex" style={areaHeight ? { height: areaHeight } : undefined}>
+      <div className="flex flex-1 min-h-0 min-w-0">
         {/* Table area */}
-        <div className="flex min-h-0 flex-1 min-w-0 flex-col gap-4 overflow-hidden px-4 pt-2 pb-4">
+        <div className="flex min-h-0 flex-1 min-w-0 flex-col gap-4 overflow-hidden px-4 pt-2 pb-1.5">
           {error && (
             <div className="bg-destructive/15 text-destructive px-4 py-3 rounded-md text-sm font-medium">
               Error loading events: {error}

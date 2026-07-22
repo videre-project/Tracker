@@ -91,9 +91,14 @@ export function DataTable<TData, TValue>({
   })
   const paginationRows = table.getPaginationRowModel().rows
   const previousPageRowsRef = useRef<TData[]>([])
+  const onPageRowsChangeRef = useRef(onPageRowsChange)
 
   useEffect(() => {
-    if (!onPageRowsChange) return
+    onPageRowsChangeRef.current = onPageRowsChange
+  }, [onPageRowsChange])
+
+  useEffect(() => {
+    if (!onPageRowsChangeRef.current) return
 
     const rows = paginationRows.map(row => row.original)
     const previousRows = previousPageRowsRef.current
@@ -102,8 +107,8 @@ export function DataTable<TData, TValue>({
     if (unchanged) return
 
     previousPageRowsRef.current = rows
-    onPageRowsChange(rows)
-  })
+    onPageRowsChangeRef.current(rows)
+  }, [paginationRows])
 
   useEffect(() => {
     if (!bodyWrapperClassName) return
