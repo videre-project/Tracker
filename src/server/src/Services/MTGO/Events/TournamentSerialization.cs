@@ -53,6 +53,7 @@ internal static class TournamentSerialization
       dto.State,
       RoundNumber = roundNumber,
       dto.RoundEndTime,
+      RoundDurationMs = (int)dto.TotalRoundDuration.TotalMilliseconds,
       dto.InPlayoffs,
       ActivePlayerNames = GetActivePlayerNames(tournament),
       PlayerNamesWithMatchesInProgress =

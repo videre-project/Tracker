@@ -92,7 +92,14 @@ export function EventDetailPanel({ event, loadDetails = true, onClose }: EventDe
           </div>
           <div>
             <div className="text-xs text-muted-foreground mb-0.5">Rounds</div>
-            <div>{event.totalRounds ?? "—"}</div>
+            <div>
+              {event.totalSwissRounds || event.totalRounds || "—"}
+              {(event.hasPlayoffs ||
+                (event.eventStructure && typeof event.eventStructure === 'object' && event.eventStructure.hasPlayoffs) ||
+                (event.totalSwissRounds && event.totalRounds && event.totalSwissRounds !== event.totalRounds)) ? (
+                <span className="ml-1 text-xs text-muted-foreground font-normal">(with top 8)</span>
+              ) : null}
+            </div>
           </div>
           <div>
             <div className="text-xs text-muted-foreground mb-0.5">Entry Fee</div>

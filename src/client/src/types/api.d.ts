@@ -2926,6 +2926,8 @@ export interface components {
             readonly roundNumber?: number;
             /** Format: date-time */
             readonly roundEndTime?: string;
+            /** Format: date-span */
+            readonly totalRoundDuration?: string;
             readonly inPlayoffs?: boolean;
         };
         "Tracker.Controllers.Models.Events.ITournamentPlayerUpdate": {
@@ -2946,6 +2948,8 @@ export interface components {
             readonly roundNumber?: number;
             /** Format: date-time */
             readonly roundEndTime?: string;
+            /** Format: date-span */
+            readonly totalRoundDuration?: string;
             readonly inPlayoffs?: boolean;
             readonly activePlayerNames?: string[] | null;
             readonly playerNamesWithMatchesInProgress?: string[] | null;

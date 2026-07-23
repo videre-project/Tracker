@@ -27,5 +27,6 @@ public interface ITournament
   TournamentState State { get; }
   int RoundNumber { get; }
   DateTime RoundEndTime { get; }
+  TimeSpan TotalRoundDuration { get; }
   bool InPlayoffs { get; }
 }

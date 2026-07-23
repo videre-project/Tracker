@@ -61,7 +61,10 @@ export interface ActiveGame {
   totalPlayers?: number;
   minimumPlayers?: number;
   roundEndTime?: string;
+  roundDurationMs?: number;
   inPlayoffs?: boolean;
+  hasPlayoffs?: boolean;
+  eventStructure?: any;
   activePlayerNames?: string[];
   playerNamesWithMatchesInProgress?: string[];
   // Tournament state
@@ -213,8 +216,10 @@ function mapTournamentToActiveGame(t: ITournament): ActiveGameWithRawTimes {
     _rawEndTime: t.endTime,
     // Pass through eventStructure for playoff/top 8 display
     eventStructure: (t as any).eventStructure,
+    hasPlayoffs: (t as any).hasPlayoffs,
     roundNumber: (t as any).roundNumber,
     roundEndTime: getRoundEndTimeForState(state, roundEndTime),
+    roundDurationMs: (t as any).roundDurationMs,
     inPlayoffs: (t as any).inPlayoffs,
     activePlayerNames: (t as any).activePlayerNames,
     playerNamesWithMatchesInProgress:

@@ -94,7 +94,90 @@ function EntryFeeCell({ event, enabled, onFeeFetched }: { event: ActiveGame; ena
   return <span className="text-muted-foreground">{fee ?? "..."}</span>
 }
 
-// --- Page ---
+const DEFAULT_ROUND_DURATION_MS = 50 * 60 * 1000
+
+function getEventRoundProgress(event: ActiveGame, now: number) {
+  const totalRounds = event.totalSwissRounds || event.totalRounds || 0
+  const isCompleted = event.status === "completed" || event.state === "Finished"
+  const hasStarted = isCompleted || event.status === "active" || (event.roundNumber != null && event.roundNumber > 0)
+
+  if (!hasStarted) {
+    return { hasStarted: false, currentRound: 0, totalRounds, progress: 0 }
+  }
+
+  if (isCompleted) {
+    return { hasStarted: true, currentRound: totalRounds, totalRounds, progress: 1 }
+  }
+
+  const currentRound = event.roundNumber ?? 1
+  let inRoundProgress = 0
+
+  if (event.state === "RoundInProgress" && event.roundEndTime) {
+    const end = new Date(event.roundEndTime).getTime()
+    if (!isNaN(end)) {
+      const durationMs = event.roundDurationMs ?? DEFAULT_ROUND_DURATION_MS
+      const timeRemaining = Math.max(0, end - now)
+      const elapsed = Math.max(0, durationMs - timeRemaining)
+      inRoundProgress = Math.min(1, elapsed / durationMs)
+    }
+  }
+
+  const effectiveTotalRounds = totalRounds > 0 ? totalRounds : Math.max(1, currentRound)
+  const completedBeforeCurrent = Math.max(0, currentRound - 1)
+  const progress = Math.min(1, (completedBeforeCurrent + inRoundProgress) / effectiveTotalRounds)
+
+  return {
+    hasStarted: true,
+    currentRound,
+    totalRounds,
+    progress,
+  }
+}
+
+function RoundsCell({ event, roundsDigitsWidth }: { event: ActiveGame; roundsDigitsWidth: number }) {
+  const [now, setNow] = useState(Date.now)
+  const isLiveActive = event.status === "active" && event.state === "RoundInProgress" && Boolean(event.roundEndTime)
+
+  useEffect(() => {
+    if (!isLiveActive) return
+    const interval = setInterval(() => {
+      setNow(Date.now())
+    }, 5000)
+    return () => clearInterval(interval)
+  }, [isLiveActive])
+
+  const { hasStarted, currentRound, totalRounds, progress } = getEventRoundProgress(event, now)
+
+  if (!hasStarted) {
+    return (
+      <span className="inline-flex items-center gap-1.5">
+        <span className="tabular-nums text-right text-muted-foreground" style={{ width: `${roundsDigitsWidth}ch` }}>
+          {totalRounds > 0 ? totalRounds : "–"}
+        </span>
+      </span>
+    )
+  }
+
+  const r = 6
+  const circ = 2 * Math.PI * r
+  const filled = circ * progress
+
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className="tabular-nums text-right" style={{ width: `${roundsDigitsWidth}ch` }}>
+        {currentRound}
+      </span>
+      {totalRounds > 0 ? <span className="text-muted-foreground">/ {totalRounds}</span> : null}
+      <svg width="16" height="16" className="shrink-0 -rotate-90">
+        <circle cx="8" cy="8" r={r} fill="none" stroke="currentColor" strokeWidth="2" className="text-border" />
+        <circle cx="8" cy="8" r={r} fill="none" stroke="currentColor" strokeWidth="2"
+          strokeDasharray={`${filled} ${circ - filled}`}
+          className={progress >= 1 ? "text-green-500" : progress >= 0.5 ? "text-blue-500" : "text-muted-foreground"}
+        />
+      </svg>
+    </span>
+  )
+}
 
 export default function Events() {
   const { activeGames, upcomingGames, completedGames, loading, error, hoveredEventId, setHoveredEventId, selectedEventId, setSelectedEventId } = useEvents()
@@ -133,6 +216,10 @@ export default function Events() {
 
   const playersDigitsWidth = useMemo(() => {
     return Math.max(1, ...events.map(event => String(event.totalPlayers ?? 0).length))
+  }, [events])
+
+  const roundsDigitsWidth = useMemo(() => {
+    return Math.max(1, ...events.map(event => String(event.roundNumber ?? event.totalRounds ?? 0).length))
   }, [events])
 
   const selectedEvent = useMemo(() => {
@@ -251,9 +338,12 @@ export default function Events() {
     {
       accessorKey: "totalRounds",
       header: "Rounds",
-      size: 56,
+      size: 84,
+      cell: ({ row }) => (
+        <RoundsCell event={row.original} roundsDigitsWidth={roundsDigitsWidth} />
+      ),
     },
-  ], [currentPageEventIds, playersDigitsWidth, handleFeeFetched])
+  ], [currentPageEventIds, playersDigitsWidth, roundsDigitsWidth, handleFeeFetched])
 
   return (
     <div className="-mt-10 flex flex-col h-[calc(100vh-1rem)] overflow-hidden">
