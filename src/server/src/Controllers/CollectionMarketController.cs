@@ -159,6 +159,15 @@ public sealed class CollectionMarketController(
     var card = await videreAPIClient.GetCardDetailsAsync(catalogId, cancellationToken);
     if (card is null)
     {
+      var nonFoilCatalogId = await videreAPIClient.FindNonFoilCatalogIdAsync(catalogId, cancellationToken);
+      if (nonFoilCatalogId is not null && nonFoilCatalogId > 0)
+      {
+        card = await videreAPIClient.GetCardDetailsAsync(nonFoilCatalogId.Value, cancellationToken);
+      }
+    }
+
+    if (card is null)
+    {
       return null;
     }
 

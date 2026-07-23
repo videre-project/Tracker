@@ -16,10 +16,11 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Text.RegularExpressions;
+
+using MTGOSDK.API.Collection;
 
 using Tracker.Controllers.Models.Decks;
-
-using Generated = Tracker.Services.Videre.Generated;
 
 
 namespace Tracker.Services.Videre;
@@ -320,17 +321,89 @@ public sealed class VidereAPIClient
 
     var foil = await GetCardDetailsAsync(catalogId, cancellationToken);
     var nonFoil = await GetCardDetailsAsync(catalogId - 1, cancellationToken);
-    if (foil is null || nonFoil is null) return null;
+    if (nonFoil is null) return null;
 
-    return IsSamePrint(foil, nonFoil) ? nonFoil.Id : null;
+    if (foil is not null)
+    {
+      return IsSamePrint(foil, nonFoil) ? nonFoil.Id : null;
+    }
+
+    // If Videre API returns 404 for the foil catalog ID (e.g. 129940 or 129942),
+    // verify the non-foil candidate against MTGO's local card catalog
+    try
+    {
+      var mtgoCard = CollectionManager.GetCard(catalogId);
+      if (mtgoCard is not null)
+      {
+        if (IsCardNameMatch(mtgoCard.Name, nonFoil.Name))
+        {
+          return nonFoil.Id;
+        }
+        return null;
+      }
+    }
+    catch
+    {
+      // MTGO client offline / CollectionManager unavailable
+    }
+
+    return nonFoil.Id;
   }
 
   private static bool IsSamePrint(
     VidereCardDetailResult first,
     VidereCardDetailResult second) =>
-    HasSameValue(first.Name, second.Name) &&
+    IsCardNameMatch(first.Name, second.Name) &&
     HasSameValue(first.SetCode, second.SetCode) &&
     HasSameValue(first.CollectorNumber, second.CollectorNumber);
+
+  private static bool IsCardNameMatch(string? name1, string? name2)
+  {
+    if (string.IsNullOrWhiteSpace(name1) || string.IsNullOrWhiteSpace(name2))
+    {
+      return false;
+    }
+
+    string clean1 = NormalizeCardNameForComparison(name1);
+    string clean2 = NormalizeCardNameForComparison(name2);
+
+    if (string.Equals(clean1, clean2, StringComparison.OrdinalIgnoreCase))
+    {
+      return true;
+    }
+
+    var faces1 = name1.Split("//", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    var faces2 = name2.Split("//", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    foreach (var f1 in faces1)
+    {
+      foreach (var f2 in faces2)
+      {
+        if (string.Equals(
+              NormalizeCardNameForComparison(f1),
+              NormalizeCardNameForComparison(f2),
+              StringComparison.OrdinalIgnoreCase))
+        {
+          return true;
+        }
+      }
+    }
+
+    if (clean1.StartsWith(clean2, StringComparison.OrdinalIgnoreCase) ||
+        clean2.StartsWith(clean1, StringComparison.OrdinalIgnoreCase))
+    {
+      return true;
+    }
+
+    return false;
+  }
+
+  private static string NormalizeCardNameForComparison(string name)
+  {
+    string clean = Regex.Replace(name, @"\s*\([^)]*\)", "").Trim();
+    clean = Regex.Replace(clean, @"[^\w\s]", "");
+    return Regex.Replace(clean, @"\s+", " ").Trim();
+  }
 
   private static bool HasSameValue(string? first, string? second) =>
     !string.IsNullOrWhiteSpace(first) &&
