@@ -31,4 +31,5 @@ public class CollectionCardDetailDTO
   public string? Defense { get; set; }
   public string? Artist { get; set; }
   public string? PromoLabel { get; set; }
+  public int? OtherFaceCatalogId { get; set; }
 }

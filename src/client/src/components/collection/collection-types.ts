@@ -67,4 +67,5 @@ export type CollectionCardDetail = {
   defense?: string | null
   artist?: string | null
   promoLabel?: string | null
+  otherFaceCatalogId?: number | null
 }

@@ -13,10 +13,12 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
+using MTGOSDK.API.Collection;
 using MTGOSDK.Core.Logging;
 
 using Tracker.Controllers.Base;
 using Tracker.Controllers.Models.Collection;
+using Tracker.Services.MTGO;
 using Tracker.Services.Videre;
 
 
@@ -25,6 +27,7 @@ namespace Tracker.Controllers;
 [ApiController]
 [Route("api/collection")]
 public sealed class CollectionMarketController(
+  IClientAPIProvider clientProvider,
   VidereAPIClient videreAPIClient) : APIController
 {
   private static readonly object s_collectionPriceHistoryCacheSync = new();
@@ -171,6 +174,28 @@ public sealed class CollectionMarketController(
       return null;
     }
 
+    int? otherFaceCatalogId = null;
+    if (clientProvider.IsReady)
+    {
+      try
+      {
+        dynamic? sdkCard = CollectionManager.GetCard(catalogId);
+        if (sdkCard != null)
+        {
+          dynamic? otherFace = sdkCard.Unbind()?.OtherFaceCard;
+          if (otherFace != null)
+          {
+            int otherId = (int)otherFace.Id;
+            if (otherId > 0 && otherId != catalogId)
+            {
+              otherFaceCatalogId = otherId;
+            }
+          }
+        }
+      }
+      catch { }
+    }
+
     return new CollectionCardDetailDTO
     {
       CatalogId = card.Id,
@@ -197,7 +222,8 @@ public sealed class CollectionMarketController(
       Loyalty = card.Loyalty,
       Defense = card.Defense,
       Artist = card.Artist,
-      PromoLabel = card.PromoLabel
+      PromoLabel = card.PromoLabel,
+      OtherFaceCatalogId = otherFaceCatalogId
     };
   }
 

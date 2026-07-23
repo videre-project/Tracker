@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { type CardSearchResult, useDeckCardSearch } from "@/hooks/use-deck-card-search"
 import { CardImage } from "@/components/card-image"
+import { useCardTooltipHover } from "@/components/card-tooltip"
 import type { DeckHistoryChange, DeckHistoryData } from "@/hooks/use-deck-history"
 import { cn } from "@/lib/utils"
 import { GameLogText } from "@/utils/parse-game-log"
@@ -38,6 +39,135 @@ function formatHistoryTime(dateString?: string) {
     hour: "numeric",
     minute: "2-digit",
   })
+}
+
+function SearchResultCardRow({
+  card,
+  selected,
+  onSelect,
+}: {
+  card: CardSearchResult
+  selected: boolean
+  onSelect: () => void
+}) {
+  const tooltipHandlers = useCardTooltipHover({
+    catalogId: card.mtgoId,
+    name: card.name,
+  })
+
+  const normalizedText = card.text
+    ? card.text.replace(/\r\n/g, "\n").replace(/\\n/g, "\n")
+    : ""
+  const powerText = getCardStatText(card)
+
+  return (
+    <button
+      {...tooltipHandlers}
+      type="button"
+      onClick={onSelect}
+      aria-expanded={selected}
+      className={cn(
+        "relative block w-full rounded-md border border-transparent px-2.5 py-2 text-left ring-1 ring-inset transition-colors",
+        selected
+          ? "bg-secondary/70 ring-primary/70"
+          : "bg-background/50 ring-sidebar-border/60 hover:bg-background/80 hover:ring-sidebar-border"
+      )}
+    >
+      <div className="absolute right-2.5 top-2 flex shrink-0 items-center gap-0.5">
+        {getDisplayCardColors(card.colors).map(color => (
+          <img
+            key={`${card.name}-${color}`}
+            src={getManaSymbolSvgPath(color) ?? undefined}
+            alt={color}
+            className="h-4 w-4 rounded-full bg-background ring-1 ring-background"
+          />
+        ))}
+      </div>
+
+      <div className="flex min-w-0 items-center gap-2 overflow-hidden pr-8">
+        <div className="min-w-0 truncate text-sm font-medium text-foreground">
+          {card.name}
+        </div>
+        {card.setCode ? (
+          <span
+            className={cn(
+              "shrink-0 rounded-md border px-1.5 py-0.5 text-center text-[11px] font-medium uppercase",
+              "border-sidebar-border/70 bg-background/70 text-muted-foreground"
+            )}
+          >
+            {card.setCode}
+          </span>
+        ) : null}
+      </div>
+
+      {selected ? (
+        <div className="mt-1.5 min-w-0 whitespace-pre-wrap text-xs leading-5 text-muted-foreground">
+          <span className="text-foreground/80">{card.type}</span>
+          <br />
+          <GameLogText
+            text={normalizedText}
+            className="text-muted-foreground/90"
+            manaSymbolClassName="inline h-3.5 w-3.5 align-text-bottom mx-0.5"
+          />
+          {powerText ? (
+            <>
+              <span
+                className={cn(
+                  "float-right ml-1 mt-0.5 inline-flex items-center rounded-sm bg-background/70 px-1 py-0 text-[11px] font-medium leading-4 ring-1 ring-sidebar-border/65",
+                  "text-foreground/85"
+                )}
+              >
+                {powerText}
+              </span>
+              <span className="block h-0 clear-both" />
+            </>
+          ) : null}
+        </div>
+      ) : (
+        <div
+          className={cn(
+            "mt-1.5 grid min-w-0 items-center gap-x-1 text-xs text-muted-foreground",
+            powerText ? "grid-cols-[minmax(0,1fr)_auto]" : "grid-cols-1"
+          )}
+        >
+          <div className="min-w-0 truncate">
+            <span className="text-foreground/80">{card.type}</span>
+            <span className="mx-1 text-muted-foreground/60">-</span>
+            <GameLogText
+              text={normalizedText}
+              className="inline"
+              manaSymbolClassName="inline h-3.5 w-3.5 align-text-bottom mx-0.5"
+            />
+          </div>
+          {powerText ? (
+            <span className="inline-flex items-center rounded-sm bg-background/70 px-1 py-0 text-[11px] font-medium leading-4 text-muted-foreground/90 ring-1 ring-sidebar-border/65">
+              {powerText}
+            </span>
+          ) : null}
+        </div>
+      )}
+    </button>
+  )
+}
+
+function MiniDiffCardItem({ catalogId, borderClass }: { catalogId: number; borderClass: string }) {
+  const tooltipHandlers = useCardTooltipHover({ catalogId })
+
+  return (
+    <div
+      {...tooltipHandlers}
+      className={cn(
+        "relative w-full h-[26px] overflow-hidden border-t first:border-t-0 bg-black/40 cursor-pointer",
+        borderClass
+      )}
+    >
+      <CardImage
+        catalogId={catalogId}
+        alt=""
+        className="w-full h-auto object-top select-none pointer-events-none"
+      />
+    </div>
+  )
 }
 
 function MiniCardDiffColumns({ changes }: { changes: DeckHistoryChange[] }) {
@@ -79,16 +209,11 @@ function MiniCardDiffColumns({ changes }: { changes: DeckHistoryChange[] }) {
           {additions.length > 0 ? (
             <div className="flex flex-col -space-y-px rounded-t border border-b-0 border-emerald-500/40 shadow-sm overflow-hidden ring-1 ring-emerald-500/20">
               {additions.map((catalogId, idx) => (
-                <div
+                <MiniDiffCardItem
                   key={`${catalogId}-${idx}`}
-                  className="relative w-full h-[26px] overflow-hidden border-t border-emerald-500/20 first:border-t-0 bg-black/40"
-                >
-                  <CardImage
-                    catalogId={catalogId}
-                    alt=""
-                    className="w-full h-auto object-top select-none pointer-events-none"
-                  />
-                </div>
+                  catalogId={catalogId}
+                  borderClass="border-emerald-500/20"
+                />
               ))}
             </div>
           ) : (
@@ -106,16 +231,11 @@ function MiniCardDiffColumns({ changes }: { changes: DeckHistoryChange[] }) {
           {removals.length > 0 ? (
             <div className="flex flex-col -space-y-px rounded-t border border-b-0 border-rose-500/40 shadow-sm overflow-hidden ring-1 ring-rose-500/20">
               {removals.map((catalogId, idx) => (
-                <div
+                <MiniDiffCardItem
                   key={`${catalogId}-${idx}`}
-                  className="relative w-full h-[26px] overflow-hidden border-t border-rose-500/20 first:border-t-0 bg-black/40"
-                >
-                  <CardImage
-                    catalogId={catalogId}
-                    alt=""
-                    className="w-full h-auto object-top select-none pointer-events-none"
-                  />
-                </div>
+                  catalogId={catalogId}
+                  borderClass="border-rose-500/20"
+                />
               ))}
             </div>
           ) : (
@@ -461,102 +581,15 @@ export function DeckBuildSidePane({
                       </div>
                     ) : visibleSearchResults.length > 0 ? (
                       <div className="flex flex-col gap-2 px-px pb-1">
-                        {visibleSearchResults.map(card => {
-                          const selected = selectedCardName === card.name
-                          const normalizedText = card.text
-                            ? card.text.replace(/\r\n/g, "\n").replace(/\\n/g, "\n")
-                            : ""
-                          const powerText = getCardStatText(card)
 
-                          return (
-                            <button
-                              key={card.name}
-                              type="button"
-                              onClick={() => toggleCardSelection(card.name)}
-                              aria-expanded={selected}
-                              className={cn(
-                                "relative block w-full rounded-md border border-transparent px-2.5 py-2 text-left ring-1 ring-inset transition-colors",
-                                selected
-                                  ? "bg-secondary/70 ring-primary/70"
-                                  : "bg-background/50 ring-sidebar-border/60 hover:bg-background/80 hover:ring-sidebar-border"
-                              )}
-                            >
-                              <div className="absolute right-2.5 top-2 flex shrink-0 items-center gap-0.5">
-                                {getDisplayCardColors(card.colors).map(color => (
-                                  <img
-                                    key={`${card.name}-${color}`}
-                                    src={getManaSymbolSvgPath(color) ?? undefined}
-                                    alt={color}
-                                    className="h-4 w-4 rounded-full bg-background ring-1 ring-background"
-                                  />
-                                ))}
-                              </div>
-
-                              <div className="flex min-w-0 items-center gap-2 overflow-hidden pr-8">
-                                <div className="min-w-0 truncate text-sm font-medium text-foreground">
-                                  {card.name}
-                                </div>
-                                {card.setCode ? (
-                                  <span
-                                    className={cn(
-                                      "shrink-0 rounded-md border px-1.5 py-0.5 text-center text-[11px] font-medium uppercase",
-                                      "border-sidebar-border/70 bg-background/70 text-muted-foreground"
-                                    )}
-                                  >
-                                    {card.setCode}
-                                  </span>
-                                ) : null}
-                              </div>
-
-                              {selected ? (
-                                <div className="mt-1.5 min-w-0 whitespace-pre-wrap text-xs leading-5 text-muted-foreground">
-                                  <span className="text-foreground/80">{card.type}</span>
-                                  <br />
-                                  <GameLogText
-                                    text={normalizedText}
-                                    className="text-muted-foreground/90"
-                                    manaSymbolClassName="inline h-3.5 w-3.5 align-text-bottom mx-0.5"
-                                  />
-                                  {powerText ? (
-                                    <>
-                                      <span
-                                        className={cn(
-                                          "float-right ml-1 mt-0.5 inline-flex items-center rounded-sm bg-background/70 px-1 py-0 text-[11px] font-medium leading-4 ring-1 ring-sidebar-border/65",
-                                          "text-foreground/85"
-                                        )}
-                                      >
-                                        {powerText}
-                                      </span>
-                                      <span className="block h-0 clear-both" />
-                                    </>
-                                  ) : null}
-                                </div>
-                              ) : (
-                                <div
-                                  className={cn(
-                                    "mt-1.5 grid min-w-0 items-center gap-x-1 text-xs text-muted-foreground",
-                                    powerText ? "grid-cols-[minmax(0,1fr)_auto]" : "grid-cols-1"
-                                  )}
-                                >
-                                  <div className="min-w-0 truncate">
-                                    <span className="text-foreground/80">{card.type}</span>
-                                    <span className="mx-1 text-muted-foreground/60">-</span>
-                                    <GameLogText
-                                      text={normalizedText}
-                                      className="inline"
-                                      manaSymbolClassName="inline h-3.5 w-3.5 align-text-bottom mx-0.5"
-                                    />
-                                  </div>
-                                  {powerText ? (
-                                    <span className="inline-flex items-center rounded-sm bg-background/70 px-1 py-0 text-[11px] font-medium leading-4 text-muted-foreground/90 ring-1 ring-sidebar-border/65">
-                                      {powerText}
-                                    </span>
-                                  ) : null}
-                                </div>
-                              )}
-                            </button>
-                          )
-                        })}
+                        {visibleSearchResults.map(card => (
+                          <SearchResultCardRow
+                            key={card.name}
+                            card={card}
+                            selected={selectedCardName === card.name}
+                            onSelect={() => toggleCardSelection(card.name)}
+                          />
+                        ))}
                       </div>
                     ) : (
                       <div className="mx-px rounded-md border border-transparent bg-background/45 p-4 text-center text-xs text-muted-foreground ring-1 ring-inset ring-sidebar-border/60">

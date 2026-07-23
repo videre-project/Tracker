@@ -20,6 +20,8 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar"
 
+import { CardTooltipProvider } from "@/components/card-tooltip"
+
 import { routes } from "@/router";
 import { EventsProvider } from "@/hooks/use-events";
 import { getApiUrl } from "@/utils/api-config"
@@ -335,43 +337,45 @@ export default function Layout() {
   return (
     <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
       <EventsProvider>
-        <SidebarProvider>
-          <AppSidebar />
-          <SidebarInset className="min-w-0 relative">
-            <header className={cn("absolute top-0 left-0 right-0 z-30 h-14 pointer-events-none", location.pathname === "/events" ? "" : "bg-background")}>
-              {location.pathname === "/events" && (
+        <CardTooltipProvider>
+          <SidebarProvider>
+            <AppSidebar />
+            <SidebarInset className="min-w-0 relative">
+              <header className={cn("absolute top-0 left-0 right-0 z-30 h-14 pointer-events-none", location.pathname === "/events" ? "" : "bg-background")}>
+                {location.pathname === "/events" && (
+                  <div
+                    className="absolute top-3 left-0 h-8"
+                    style={{
+                      width: 200,
+                      background: 'linear-gradient(to right, hsl(var(--background)) 120px, transparent)',
+                    }}
+                  />
+                )}
+              <div className="relative h-full flex items-center gap-2 px-4 pointer-events-auto w-fit">
+                <SidebarTrigger className="-ml-1" />
+                <Separator orientation="vertical" className="mr-2 h-4" />
+                <div className="inline-flex items-center rounded-sm">
+                  <RouteBreadcrumb currentHref={currentBreadcrumbHref} items={displayBreadcrumbsWithReplay} />
+                </div>
                 <div
-                  className="absolute top-3 left-0 h-8"
-                  style={{
-                    width: 200,
-                    background: 'linear-gradient(to right, hsl(var(--background)) 120px, transparent)',
-                  }}
+                  id="page-header-context"
+                  className="ml-5 hidden items-center self-center pt-px md:flex"
                 />
-              )}
-            <div className="relative h-full flex items-center gap-2 px-4 pointer-events-auto w-fit">
-              <SidebarTrigger className="-ml-1" />
-              <Separator orientation="vertical" className="mr-2 h-4" />
-              <div className="inline-flex items-center rounded-sm">
-                <RouteBreadcrumb currentHref={currentBreadcrumbHref} items={displayBreadcrumbsWithReplay} />
               </div>
               <div
-                id="page-header-context"
-                className="ml-5 hidden items-center self-center pt-px md:flex"
+                id="page-header-end"
+                className="pointer-events-auto absolute right-4 top-0 hidden h-full items-center md:flex"
               />
-            </div>
-            <div
-              id="page-header-end"
-              className="pointer-events-auto absolute right-4 top-0 hidden h-full items-center md:flex"
-            />
-            </header>
-            <div className="flex-1 min-h-0 overflow-y-auto">
-              <div className="h-14" />
-              <Suspense>
-                <Outlet />
-              </Suspense>
-            </div>
-          </SidebarInset>
-        </SidebarProvider>
+              </header>
+              <div className="flex-1 min-h-0 overflow-y-auto">
+                <div className="h-14" />
+                <Suspense>
+                  <Outlet />
+                </Suspense>
+              </div>
+            </SidebarInset>
+          </SidebarProvider>
+        </CardTooltipProvider>
       </EventsProvider>
     </ThemeProvider>
   )

@@ -14,6 +14,7 @@ import {
 import { Loader2 } from "lucide-react"
 
 import { useCardImage } from "@/hooks/use-card-image"
+import { useCardTooltipHover } from "@/components/card-tooltip"
 import type { CollectionCardEntry, CollectionProductEntry } from "@/hooks/use-collection"
 import { cn } from "@/lib/utils"
 import { getApiUrl } from "@/utils/api-config"
@@ -148,6 +149,11 @@ function CollectionCardTile({
   onSelect: () => void
   position: CSSProperties
 }) {
+  const tooltipHandlers = useCardTooltipHover({
+    catalogId: card.catalogId,
+    name: card.name,
+  })
+
   const priceLabel = showPrice ? formatCollectionPrice(card.price) : null
   const totalPriceLabel = showPrice && typeof card.price === "number" && Number.isFinite(card.price)
     ? formatCollectionPrice(card.price * card.quantity)
@@ -155,6 +161,7 @@ function CollectionCardTile({
 
   return (
     <button
+      {...tooltipHandlers}
       type="button"
       onClick={onSelect}
       className={cn(

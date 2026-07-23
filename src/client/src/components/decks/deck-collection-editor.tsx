@@ -17,6 +17,7 @@ import { GripVertical, LayoutGrid, Loader2, PanelRightClose, PanelRightOpen } fr
 
 import { Button } from "@/components/ui/button"
 import { CardImage } from "@/components/card-image"
+import { useCardTooltipHover } from "@/components/card-tooltip"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useDeckIdentifiers } from "@/hooks/use-decks"
@@ -81,8 +82,14 @@ function SheetCard({
   const isAdded = diffDelta != null && diffDelta > 0
   const isRemoved = diffDelta != null && diffDelta < 0
 
+  const tooltipHandlers = useCardTooltipHover({
+    catalogId,
+    enabled: !isDragging,
+  })
+
   return (
     <div
+      {...tooltipHandlers}
       className={cn(
         "absolute cursor-grab select-none rounded-lg overflow-hidden",
         isDragging ? "cursor-grabbing shadow-xl ring-2 ring-primary/50" : "hover:ring-1 hover:ring-primary/30"

@@ -15,6 +15,7 @@ import { ArrowDownRight, ArrowUpRight, Loader2, X } from "lucide-react"
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 
 import { Button } from "@/components/ui/button"
+import { useCardTooltipHover } from "@/components/card-tooltip"
 import type { CollectionProductEntry } from "@/hooks/use-collection"
 import { cn } from "@/lib/utils"
 import { getApiUrl } from "@/utils/api-config"
@@ -163,6 +164,23 @@ function getCollectionRarityClass(rarity?: string | null) {
   return normalizedRarity
     ? CARD_RARITY_CLASSES[normalizedRarity]
     : "border-sidebar-border/70 bg-background/70 text-muted-foreground"
+}
+
+function DetailPreviewImage({ catalogId, name, otherFaceCatalogId }: { catalogId: number; name: string; otherFaceCatalogId?: number | null }) {
+  const tooltipHandlers = useCardTooltipHover({
+    catalogId,
+    name,
+    otherFaceCatalogId,
+  })
+
+  return (
+    <div
+      {...tooltipHandlers}
+      className="h-[122px] w-[88px] overflow-hidden rounded border border-sidebar-border/60 bg-muted/30 cursor-pointer"
+    >
+      <CollectionCardImage catalogId={catalogId} name={name} />
+    </div>
+  )
 }
 
 export function CollectionPriceHistoryPanel({
@@ -448,12 +466,15 @@ export function CollectionPriceHistoryPanel({
   return (
     <aside className="flex h-full min-h-0 w-96 shrink-0 flex-col overflow-hidden rounded-lg border border-sidebar-border/60 bg-card">
       <div className="relative h-[13rem] shrink-0 overflow-hidden border-b border-sidebar-border/60 p-3">
+
         {viewMode === "cards" ? (
           <div className="grid h-full grid-cols-[88px_minmax(0,1fr)] gap-x-3">
             <div className="min-w-0">
-              <div className="h-[122px] w-[88px] overflow-hidden rounded border border-sidebar-border/60 bg-muted/30">
-                <CollectionCardImage catalogId={item.catalogId} name={cardDetail?.name ?? item.name} />
-              </div>
+              <DetailPreviewImage
+                catalogId={item.catalogId}
+                name={cardDetail?.name ?? item.name}
+                otherFaceCatalogId={cardDetail?.otherFaceCatalogId}
+              />
               <div className="mt-1.5 text-left text-[11px] font-medium leading-none text-muted-foreground">
                 {item.quantity.toLocaleString()} owned
               </div>

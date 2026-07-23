@@ -2688,6 +2688,8 @@ export interface components {
             defense?: string | null;
             artist?: string | null;
             promoLabel?: string | null;
+            /** Format: int32 */
+            otherFaceCatalogId?: number | null;
         };
         "Tracker.Controllers.Models.Collection.CollectionPriceHistoryDTO": {
             /** Format: int32 */
