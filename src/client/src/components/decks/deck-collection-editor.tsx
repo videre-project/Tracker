@@ -59,6 +59,7 @@ interface SheetCardProps {
   position: Position
   onDragStart: (index: number, e: React.MouseEvent | React.TouchEvent) => void
   isDragging: boolean
+  isAnyDragging?: boolean
   zIndex: number
   diffDelta?: number
   suppressBottomBorder?: boolean
@@ -73,6 +74,7 @@ function SheetCard({
   position,
   onDragStart,
   isDragging,
+  isAnyDragging,
   zIndex,
   diffDelta,
   suppressBottomBorder,
@@ -84,7 +86,7 @@ function SheetCard({
 
   const tooltipHandlers = useCardTooltipHover({
     catalogId,
-    enabled: !isDragging,
+    enabled: !isDragging && !isAnyDragging,
   })
 
   return (
@@ -727,6 +729,7 @@ function DeckGrid({
                   position={pos}
                   onDragStart={handleDragStart}
                   isDragging={draggingIndex === cardIndex}
+                  isAnyDragging={draggingIndex !== null}
                   zIndex={zIndex}
                   diffDelta={diff?.delta}
                   suppressBottomBorder={suppressBottomBorder}

@@ -66,6 +66,24 @@ export function CardTooltipProvider({ children }: { children: ReactNode }) {
     setFetchedOtherFaceId(null)
   }, [])
 
+  // Hide active tooltip whenever user presses a mouse button or starts dragging anywhere
+  useEffect(() => {
+    const handleDismiss = () => {
+      hideTooltip()
+    }
+    window.addEventListener("pointerdown", handleDismiss, { capture: true })
+    window.addEventListener("mousedown", handleDismiss, { capture: true })
+    window.addEventListener("dragstart", handleDismiss, { capture: true })
+    window.addEventListener("wheel", handleDismiss, { capture: true, passive: true })
+
+    return () => {
+      window.removeEventListener("pointerdown", handleDismiss, { capture: true })
+      window.removeEventListener("mousedown", handleDismiss, { capture: true })
+      window.removeEventListener("dragstart", handleDismiss, { capture: true })
+      window.removeEventListener("wheel", handleDismiss, { capture: true })
+    }
+  }, [hideTooltip])
+
   // On-demand detail lookup for double-sided back-face catalog IDs
   useEffect(() => {
     if (!activeCard || activeCard.catalogId <= 0) return
@@ -206,9 +224,15 @@ export function useCardTooltipHover({
 }) {
   const context = useContext(CardTooltipContext)
 
+  useEffect(() => {
+    if (!enabled && context) {
+      context.hideTooltip()
+    }
+  }, [enabled, context])
+
   const onMouseEnter = useCallback(
     (e: ReactMouseEvent) => {
-      if (!context || !enabled || !catalogId || catalogId <= 0) return
+      if (!context || !enabled || !catalogId || catalogId <= 0 || e.buttons !== 0) return
       context.showTooltip({ catalogId, name, otherFaceCatalogId }, { x: e.clientX, y: e.clientY })
     },
     [context, enabled, catalogId, name, otherFaceCatalogId]
@@ -217,6 +241,10 @@ export function useCardTooltipHover({
   const onMouseMove = useCallback(
     (e: ReactMouseEvent) => {
       if (!context || !enabled || !catalogId || catalogId <= 0) return
+      if (e.buttons !== 0) {
+        context.hideTooltip()
+        return
+      }
       context.updatePosition({ x: e.clientX, y: e.clientY })
     },
     [context, enabled, catalogId]
@@ -227,9 +255,15 @@ export function useCardTooltipHover({
     context.hideTooltip()
   }, [context])
 
+  const onMouseDown = useCallback(() => {
+    if (!context) return
+    context.hideTooltip()
+  }, [context])
+
   return {
     onMouseEnter: context && enabled && catalogId ? onMouseEnter : undefined,
     onMouseMove: context && enabled && catalogId ? onMouseMove : undefined,
     onMouseLeave: context && enabled && catalogId ? onMouseLeave : undefined,
+    onMouseDown: context && enabled && catalogId ? onMouseDown : undefined,
   }
 }
