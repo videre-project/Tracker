@@ -47,7 +47,7 @@ function isRecentCompletedEvent(event: ActiveGame) {
   return getEventEndTime(event) >= completedCutoff
 }
 
-function useEntryFee(eventId: string, enabled: boolean) {
+function useEntryFee(eventId: string, enabled: boolean, onFeeFetched?: () => void) {
   const [fee, setFee] = useState(() => enabled ? entryFeeCache.get(eventId) : undefined)
 
   useEffect(() => {
@@ -75,21 +75,22 @@ function useEntryFee(eventId: string, enabled: boolean) {
 
     entryFeeRequests.set(eventId, request)
     request.then(value => {
-      if (!cancelled) setFee(value)
+      if (!cancelled) {
+        setFee(value)
+        onFeeFetched?.()
+      }
     })
 
     return () => {
       cancelled = true
     }
-  }, [eventId, enabled])
+  }, [eventId, enabled, onFeeFetched])
 
   return fee
 }
 
-function EntryFeeCell({ event, enabled }: { event: ActiveGame; enabled: boolean }) {
-  const shouldFetch = enabled && event.status !== "completed"
-  const fee = useEntryFee(event.id, shouldFetch)
-  if (event.status === "completed") return <span className="text-muted-foreground">-</span>
+function EntryFeeCell({ event, enabled, onFeeFetched }: { event: ActiveGame; enabled: boolean; onFeeFetched?: () => void }) {
+  const fee = useEntryFee(event.id, enabled, onFeeFetched)
   return <span className="text-muted-foreground">{fee ?? "..."}</span>
 }
 
@@ -100,11 +101,26 @@ export default function Events() {
   const [currentPageEventIds, setCurrentPageEventIds] = useState<Set<string>>(() => new Set())
   const [timelineScrollKey, setTimelineScrollKey] = useState(0)
 
+  const [feeCacheVersion, setFeeCacheVersion] = useState(0)
+
   const events = useMemo(() => {
+    const now = Date.now()
     return [...activeGames, ...upcomingGames, ...completedGames]
       .filter(isRecentCompletedEvent)
+      .filter(event => {
+        const isPast = event.status === "completed" || (getEventStartTime(event) > 0 && getEventStartTime(event) < now)
+        if (isPast && (event.minimumPlayers ?? 0) === 0) {
+          return false
+        }
+
+        const cached = entryFeeCache.get(event.id)
+        if (cached !== undefined && (!cached || cached === "-" || cached.trim() === "")) {
+          return false
+        }
+        return true
+      })
       .sort((a, b) => getEventStartTime(a) - getEventStartTime(b))
-  }, [activeGames, upcomingGames, completedGames])
+  }, [activeGames, upcomingGames, completedGames, feeCacheVersion])
 
   const timelineEvents = useMemo(() => {
     const completedCutoff = Date.now() - TIMELINE_COMPLETED_EVENT_WINDOW_MS
@@ -166,6 +182,10 @@ export default function Events() {
     })
   }, [])
 
+  const handleFeeFetched = useCallback(() => {
+    setFeeCacheVersion(v => v + 1)
+  }, [])
+
   const columns: ColumnDef<ActiveGame>[] = useMemo(() => [
     {
       accessorKey: "name",
@@ -197,6 +217,7 @@ export default function Events() {
           <EntryFeeCell
             event={row.original}
             enabled={currentPageEventIds.has(row.original.id)}
+            onFeeFetched={handleFeeFetched}
           />
         )
       },
@@ -232,7 +253,7 @@ export default function Events() {
       header: "Rounds",
       size: 56,
     },
-  ], [currentPageEventIds, playersDigitsWidth])
+  ], [currentPageEventIds, playersDigitsWidth, handleFeeFetched])
 
   return (
     <div className="-mt-10 flex flex-col h-[calc(100vh-1rem)] overflow-hidden">

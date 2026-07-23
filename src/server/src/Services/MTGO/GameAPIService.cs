@@ -152,6 +152,18 @@ public static class GameAPIService
 
   private static bool CacheDiscoveredTournament(Tournament tournament)
   {
+    try
+    {
+      if (tournament.EntryFee == null || tournament.EntryFee.Count == 0)
+      {
+        return false;
+      }
+    }
+    catch
+    {
+      return false;
+    }
+
     int tournamentId = tournament.Id;
     bool added = DiscoveredTournaments.TryAdd(tournamentId, tournament);
     if (!added)

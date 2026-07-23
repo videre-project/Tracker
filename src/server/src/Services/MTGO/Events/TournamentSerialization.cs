@@ -164,6 +164,11 @@ internal static class TournamentSerialization
   {
     try
     {
+      if (tournament.EntryFee == null || tournament.EntryFee.Count == 0)
+      {
+        return null;
+      }
+
       var dto = tournament.SerializeAs<ITournament>();
       int roundNumber = ResolveRoundNumber(dto.RoundNumber, roundNumberOverride);
 
