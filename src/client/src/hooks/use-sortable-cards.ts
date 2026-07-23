@@ -142,9 +142,8 @@ export function getSortModeColumns(
         : columns
     }
     case 'rarity':
-      return cards.some(card => normalizeCardRarity(card.rarity) === null)
-        ? [...RARITY_COLUMNS, UNKNOWN_GROUP]
-        : RARITY_COLUMNS
+      return [...RARITY_COLUMNS, UNKNOWN_GROUP]
+        .filter(column => groups.has(column))
   }
 }
 
