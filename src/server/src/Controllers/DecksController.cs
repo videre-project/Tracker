@@ -259,6 +259,8 @@ public class DecksController : APIController
       Name = deck.Name,
       Format = deck.Format,
       Timestamp = deck.Timestamp,
+      Archetype = deck.Archetype,
+      Colors = deck.Colors,
       Mainboard = deck.Mainboard,
       Sideboard = deck.Sideboard
     });
@@ -666,6 +668,41 @@ public class DecksController : APIController
   }
 
   /// <summary>
+  /// Request body for updating a deck or opponent archetype
+  /// </summary>
+  public sealed record UpdateArchetypeRequest(string Archetype);
+
+  /// <summary>
+  /// Manually update archetype information for a deck
+  /// </summary>
+  /// <param name="revisionId">Collection-history deck revision ID</param>
+  /// <param name="request">Request containing new archetype name</param>
+  /// <returns>Updated archetype info</returns>
+  [HttpPut("/api/decks/{revisionId:long}/archetype")]
+  [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+  [ProducesResponseType(StatusCodes.Status404NotFound)]
+  public async Task<ActionResult<object>> UpdateArchetype(
+    long revisionId,
+    [FromBody] UpdateArchetypeRequest request,
+    CancellationToken cancellationToken)
+  {
+    var deck = await deckService.GetRevisionAsync(revisionId, cancellationToken);
+    if (deck == null)
+    {
+      return NotFound(new { error = $"Deck revision {revisionId} not found" });
+    }
+
+    string? newArchetype = string.IsNullOrWhiteSpace(request.Archetype) ? null : request.Archetype.Trim();
+    await deckService.SetEnrichmentAsync(
+      revisionId,
+      newArchetype,
+      deck.FeaturedCard,
+      cancellationToken);
+
+    return Ok(new { revisionId, archetype = newArchetype });
+  }
+
+  /// <summary>
   /// Get the colors of a deck by analyzing all cards in the mainboard
   /// </summary>
   /// <param name="revisionId">Collection-history deck revision ID</param>
@@ -689,7 +726,7 @@ public class DecksController : APIController
     });
   }
 
-  private static (string? Archetype, string? FeaturedCard) ParseArchetype(
+  public static (string? Archetype, string? FeaturedCard) ParseArchetype(
     JsonElement response)
   {
     if (!response.TryGetProperty("data", out var data))

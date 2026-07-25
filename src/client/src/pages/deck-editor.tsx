@@ -21,6 +21,8 @@ import {
   ClipboardCheck,
   Download,
   Pencil,
+  Check,
+  X,
   PanelRightClose,
   PanelRightOpen,
   Tags,
@@ -36,6 +38,11 @@ import {
 import { useDeckHistory } from "@/hooks/use-deck-history"
 import type { SortMode } from "@/hooks/use-sortable-cards"
 import { Button } from "@/components/ui/button"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 import {
   Select,
   SelectContent,
@@ -55,11 +62,16 @@ import type {
 import {
   useDeckDetail,
   useDecks,
+  updateDeckArchetype,
 } from "@/hooks/use-decks"
 type DeckRouteState = {
   deckName?: string
   deckFormat?: string
   deckColors?: string[]
+  deckArchetype?: string
+  deckTimestamp?: string
+  deckMainCount?: number
+  deckSideCount?: number
 }
 
 
@@ -75,7 +87,11 @@ function formatDate(value?: string) {
   })
 }
 
-function getDeckCounts(summary?: DeckSummary, detail?: DeckDetail | null) {
+function getDeckCounts(
+  summary?: DeckSummary,
+  detail?: DeckDetail | null,
+  routeState?: DeckRouteState | null
+) {
   if (summary) {
     return {
       main: summary.mainboardCount,
@@ -83,9 +99,23 @@ function getDeckCounts(summary?: DeckSummary, detail?: DeckDetail | null) {
     }
   }
 
+  if (detail) {
+    return {
+      main: detail.mainboard.reduce((total, card) => total + card.quantity, 0),
+      side: detail.sideboard.reduce((total, card) => total + card.quantity, 0),
+    }
+  }
+
+  if (routeState?.deckMainCount !== undefined) {
+    return {
+      main: routeState.deckMainCount,
+      side: routeState.deckSideCount ?? 0,
+    }
+  }
+
   return {
-    main: detail?.mainboard.reduce((total, card) => total + card.quantity, 0) ?? 0,
-    side: detail?.sideboard.reduce((total, card) => total + card.quantity, 0) ?? 0,
+    main: 0,
+    side: 0,
   }
 }
 
@@ -137,6 +167,10 @@ export default function DeckEditor() {
   const [isSideboardCollapsed, setIsSideboardCollapsed] = useState(true)
   const [isDeckToolsCollapsed, setIsDeckToolsCollapsed] = useState(false)
   const [splitEditorHeaderControls, setSplitEditorHeaderControls] = useState(false)
+  const [customArchetype, setCustomArchetype] = useState<string | null>(null)
+  const [isEditingArchetype, setIsEditingArchetype] = useState(false)
+  const [archetypeInput, setArchetypeInput] = useState("")
+  const [isSavingArchetype, setIsSavingArchetype] = useState(false)
   const editorHeaderRef = useRef<HTMLDivElement>(null)
   const editorHeaderSingleRowProbeRef = useRef<HTMLDivElement>(null)
 
@@ -163,16 +197,35 @@ export default function DeckEditor() {
   )
 
   const deckName = summary?.name ?? detail?.name ?? routeState?.deckName ?? "Deck"
-  const archetype = summary?.archetype || "Unclassified deck"
+  const rawArchetype = customArchetype ?? summary?.archetype ?? detail?.archetype ?? routeState?.deckArchetype
+
+  const handleSaveArchetype = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!deckRevisionId) return
+    setIsSavingArchetype(true)
+    try {
+      await updateDeckArchetype(deckRevisionId, archetypeInput.trim())
+      setCustomArchetype(archetypeInput.trim() || null)
+      setIsEditingArchetype(false)
+    } catch (err) {
+      console.error("Failed to update archetype:", err)
+    } finally {
+      setIsSavingArchetype(false)
+    }
+  }
   const colors = getDisplayCardColors(
-    summary?.colors?.length ? summary.colors : routeState?.deckColors,
+    summary?.colors?.length ? summary.colors : detail?.colors?.length ? detail.colors : routeState?.deckColors,
   )
-  const timestamp = summary?.timestamp ?? detail?.timestamp
-  const counts = getDeckCounts(summary, detail)
+  const timestamp = summary?.timestamp ?? detail?.timestamp ?? routeState?.deckTimestamp
+  const counts = getDeckCounts(summary, detail, routeState)
   const deckListText = useMemo(() => buildDeckListText(detail), [detail])
   const canExportDeckList = Boolean(detail)
   const hasHeaderData = Boolean(summary || detail || routeState?.deckName)
-  const loadingHeader = (summariesLoading || detailLoading) && !hasHeaderData
+  const isArchetypeLoading = rawArchetype === undefined && (summariesLoading || detailLoading)
+  const isDateLoading = timestamp === undefined && (summariesLoading || detailLoading)
+  const isCountsLoading = !summary && !detail && routeState?.deckMainCount === undefined && (summariesLoading || detailLoading)
+  const loadingHeader = ((summariesLoading || detailLoading) && !hasHeaderData) || isArchetypeLoading || isDateLoading || isCountsLoading
+  const archetype = rawArchetype ?? (loadingHeader ? "" : "Unclassified deck")
   const canNavigateBack = location.key !== "default"
 
   const navigateBack = useCallback(() => {
@@ -349,7 +402,7 @@ export default function DeckEditor() {
     if (loadingHeader) return null
 
     return (
-      <div className="group inline-flex items-center gap-1.5">
+      <div className="group inline-flex items-center gap-2.5">
         <BreadcrumbManaSymbols colors={colors} />
         <Button
           variant="ghost"
@@ -437,7 +490,39 @@ export default function DeckEditor() {
                     label="Archetype"
                     className="max-w-[20rem]"
                   >
-                    {archetype}
+                    <Popover open={isEditingArchetype} onOpenChange={setIsEditingArchetype}>
+                      <PopoverTrigger asChild>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setArchetypeInput(archetype === "Unclassified deck" ? "" : archetype)
+                          }}
+                          className="group/arch inline-flex max-w-full items-center gap-2 text-foreground focus:outline-none"
+                          title="Edit deck archetype"
+                        >
+                          <span className="truncate">{archetype}</span>
+                          <Pencil className="h-3 w-3 shrink-0 text-muted-foreground/50 transition-colors group-hover/arch:text-foreground" />
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent align="start" className="w-64 p-3 shadow-lg">
+                        <form onSubmit={handleSaveArchetype} className="space-y-2.5">
+                          <div className="text-xs font-medium text-muted-foreground">Edit Archetype</div>
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              type="text"
+                              value={archetypeInput}
+                              onChange={e => setArchetypeInput(e.target.value)}
+                              placeholder="e.g. Dimir Murktide"
+                              autoFocus
+                              className="h-7 flex-1 rounded border border-input bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                            />
+                            <Button size="sm" type="submit" disabled={isSavingArchetype} className="h-7 px-2.5 text-xs">
+                              Save
+                            </Button>
+                          </div>
+                        </form>
+                      </PopoverContent>
+                    </Popover>
                   </HeaderMeta>
                   <HeaderMeta icon={CalendarClock} label="Updated">
                     {formatDate(timestamp)}

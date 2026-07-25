@@ -30,6 +30,8 @@ export interface DeckDetail {
   name: string
   format: string
   timestamp: string
+  archetype?: string
+  colors?: string[]
   mainboard: CardEntry[]
   sideboard: CardEntry[]
 }
@@ -307,4 +309,17 @@ export function useDeckIdentifiers() {
   }, [])
 
   return { identifiers, loading, error }
+}
+
+export async function updateDeckArchetype(
+  revisionId: number | string,
+  archetype: string
+): Promise<{ revisionId: number; archetype: string | null }> {
+  const res = await fetch(getApiUrl(`/api/decks/${revisionId}/archetype`), {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ archetype }),
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
 }

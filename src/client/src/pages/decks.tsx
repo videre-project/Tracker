@@ -385,6 +385,10 @@ function DeckTile({
         deckName: deck.name,
         deckFormat: deck.format,
         deckColors: deck.colors,
+        deckArchetype: deck.archetype,
+        deckTimestamp: deck.timestamp,
+        deckMainCount: deck.mainboardCount,
+        deckSideCount: deck.sideboardCount,
       }}
       className="group/editor block min-w-0 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
       aria-label={`Open ${deck.name} in deck editor`}

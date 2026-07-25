@@ -18,6 +18,8 @@ public class DeckDetailDTO
   public required string Name { get; set; }
   public required string Format { get; set; }
   public required DateTime Timestamp { get; set; }
+  public string? Archetype { get; set; }
+  public List<string>? Colors { get; set; }
   public required List<CardEntry> Mainboard { get; set; }
   public required List<CardEntry> Sideboard { get; set; }
 }
