@@ -4,6 +4,7 @@
 **/
 
 import {
+  Fragment,
   type ReactNode,
   useCallback,
   useEffect,
@@ -651,53 +652,55 @@ export function CollectionPriceHistoryPanel({
               No price history.
             </div>
           )}
-          <div className="pointer-events-none absolute inset-x-3 top-3 grid grid-cols-[5rem_minmax(6.25rem,1fr)_9rem] grid-rows-[0.625rem_auto] items-start gap-x-4 gap-y-2">
-            <div className="col-start-1 row-start-1 text-[10px] font-medium uppercase leading-none text-muted-foreground">Market Price</div>
-            <div className="col-start-1 row-start-2 flex min-w-0 items-baseline gap-1.5">
-              <span className="text-[1.625rem] font-semibold leading-[1.75rem] tabular-nums text-foreground">
-                {marketPrice ?? "-"}
-              </span>
-              <span className="text-xs font-medium text-muted-foreground">tix</span>
-            </div>
-            <div className="col-start-2 row-start-2 flex min-w-0 flex-col gap-1 text-[11px] leading-none">
-              <div className="grid grid-cols-[2.25rem_minmax(0,1fr)] items-baseline gap-x-1">
-                <span className="text-muted-foreground">Avg</span>
-                <span className="truncate font-semibold tabular-nums text-foreground">{averagePrice ?? "-"}</span>
+          <div className="pointer-events-none absolute inset-x-3 top-3 flex items-start justify-between gap-x-2">
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[10px] font-medium uppercase leading-none text-muted-foreground">Market Price</span>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-[1.625rem] font-semibold leading-[1.75rem] tabular-nums text-foreground">
+                  {marketPrice ?? "-"}
+                </span>
+                <span className="text-xs font-medium text-muted-foreground">tix</span>
               </div>
-              <div className="grid grid-cols-[2.25rem_minmax(0,1fr)] items-baseline gap-x-1">
+            </div>
+            <div className="flex min-w-0 flex-col gap-1 text-[11px] leading-none pt-4">
+              <div className="flex items-baseline gap-x-1">
+                <span className="text-muted-foreground">Avg</span>
+                <span className="font-semibold tabular-nums text-foreground">{averagePrice ?? "-"}</span>
+              </div>
+              <div className="flex items-baseline gap-x-1">
                 <span className="text-muted-foreground">Range</span>
-                <span className="truncate font-semibold tabular-nums text-foreground">{rangePrice ?? "-"}</span>
+                <span className="font-semibold tabular-nums text-foreground">{rangePrice ?? "-"}</span>
               </div>
             </div>
             {priceStats ? (
-              <div className="col-start-3 row-start-2 flex min-w-0 flex-col gap-1 text-[11px] leading-none">
+              <div className="flex min-w-[7.5rem] flex-col gap-1 text-[11px] leading-none pt-4">
                 {trendDisplayRows.map(row => (
-                  <div key={row.label} className="grid grid-cols-[1.25rem_minmax(0,1fr)] items-center gap-x-1">
-                    <span className="text-right text-muted-foreground">{row.label}</span>
+                  <div key={row.label} className="flex items-center gap-x-1 whitespace-nowrap">
+                    <span className="w-5 shrink-0 text-right text-muted-foreground">{row.label}</span>
                     <span className={cn(
-                      "grid min-w-0 grid-cols-[0.75rem_2.35rem_3.25rem] items-center gap-0.5 rounded-sm px-1.5 py-px text-[10px] font-medium leading-none tabular-nums ring-1 ring-white/5",
+                      "flex flex-1 items-center gap-1 rounded-sm px-1.5 py-px text-[10px] font-medium leading-none tabular-nums ring-1 ring-white/5",
                       row.direction === "up"
                         ? "bg-emerald-500/10 text-emerald-400"
                         : row.direction === "down"
                           ? "bg-red-500/10 text-red-400"
                           : "bg-muted/55 text-muted-foreground"
                     )}>
-                      <span className="flex h-2.5 w-2.5 items-center justify-center">
-                        {row.direction === "up" ? (
-                          <ArrowUpRight className="h-2.5 w-2.5 shrink-0" />
-                        ) : row.direction === "down" ? (
-                          <ArrowDownRight className="h-2.5 w-2.5 shrink-0" />
-                        ) : null}
-                      </span>
                       {row.deltaLabel ? (
                         <>
-                          <span className="text-right">{row.deltaLabel}</span>
-                          <span className="text-right text-current/70">
+                          <span className="flex h-2.5 w-2.5 shrink-0 items-center justify-center">
+                            {row.direction === "up" ? (
+                              <ArrowUpRight className="h-2.5 w-2.5 shrink-0" />
+                            ) : row.direction === "down" ? (
+                              <ArrowDownRight className="h-2.5 w-2.5 shrink-0" />
+                            ) : null}
+                          </span>
+                          <span className="min-w-[2.25rem] text-right">{row.deltaLabel}</span>
+                          <span className="min-w-[3rem] text-current/70">
                             {row.percentLabel ? `(${row.percentLabel})` : ""}
                           </span>
                         </>
                       ) : (
-                        <span className="col-span-2 text-center">-</span>
+                        <span className="flex-1 text-right">-</span>
                       )}
                     </span>
                   </div>
