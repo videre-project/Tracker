@@ -35,6 +35,7 @@ public class GameTracker : IDisposable
   private readonly Game _game;
   private readonly BlockingCollection<GameLogEntry> _eventLog;
   private readonly EventDatabaseWriter _dbWriter;
+  private readonly DateTime _trackerStartTime = DateTime.Now;
 
   // State tracking
   private readonly HashSet<int> _seenCardIds = new();
@@ -886,10 +887,32 @@ public class GameTracker : IDisposable
 
   private void OnGameResultsChanged(IList<GamePlayerResult> results)
   {
-    if (_dbWriter.TryUpdateGameResults(_game, results))
+    TimeSpan actualDuration;
+    if (_game.CompletedDuration.HasValue && _game.CompletedDuration.Value > TimeSpan.Zero)
+    {
+      actualDuration = _game.CompletedDuration.Value;
+    }
+    else if (_pendingLogs.Count >= 2)
+    {
+      var minLog = _pendingLogs.Min(l => l.Timestamp);
+      var maxLog = _pendingLogs.Max(l => l.Timestamp);
+      actualDuration = maxLog - minLog;
+    }
+    else
+    {
+      actualDuration = DateTime.Now - _trackerStartTime;
+    }
+
+    if (actualDuration < TimeSpan.Zero) actualDuration = TimeSpan.Zero;
+
+    var computedResults = results.Select(r => new GamePlayerResult(
+      r.Player, r.PlayDraw, r.Result, actualDuration
+    )).ToList();
+
+    if (_dbWriter.TryUpdateGameResults(_game, computedResults))
     {
       _resultsWritten = true;
-      string jsonRes = JsonSerializer.Serialize(results);
+      string jsonRes = JsonSerializer.Serialize(computedResults);
       Log.Debug("Updated game results for {Id}: {Results}", _game.Id, jsonRes);
     }
   }
