@@ -130,6 +130,9 @@ function ZoneBrowsePanel({
                   <div className="rounded-md overflow-hidden border border-sidebar-border/60 bg-muted/20" style={{ aspectRatio: "5/7" }}>
                     <CardImg
                       catalogId={card.catalogId}
+                      textureId={card.textureId}
+                      name={card.name}
+                      initialName={card.initialName}
                       alt={card.name}
                       fallback={<div className="w-full h-full flex items-center justify-center p-1"><span className="text-[8px] text-muted-foreground text-center leading-tight break-words">{card.name}</span></div>}
                     />
@@ -193,6 +196,9 @@ export function BottomZoneBar({
                         <div className="w-full h-full">
                           <CardImg
                             catalogId={card.catalogId}
+                            textureId={card.textureId}
+                            name={card.name}
+                            initialName={card.initialName}
                             alt={card.name}
                             fallback={<div className="w-full h-full bg-muted/80 flex items-center justify-center p-1"><span className="text-[8px] text-muted-foreground text-center leading-tight break-words">{card.name}</span></div>}
                           />
@@ -238,6 +244,9 @@ export function BottomZoneBar({
                   <motion.div layoutId={`card-${zone.topCard.lineageId}`} layout transition={CARD_TRANSITION} className="absolute inset-0">
                     <CardImg
                       catalogId={zone.topCard.catalogId}
+                      textureId={zone.topCard.textureId}
+                      name={zone.topCard.name}
+                      initialName={zone.topCard.initialName}
                       alt={zone.topCard.name}
                       fallback={<div className="w-full h-full flex items-center justify-center p-1"><span className="text-[8px] text-muted-foreground text-center leading-tight break-words">{zone.topCard.name}</span></div>}
                     />
@@ -339,6 +348,9 @@ export function TopZoneBar({
                             <div className="w-full h-full">
                               <CardImg
                                 catalogId={card.catalogId}
+                                textureId={card.textureId}
+                                name={card.name}
+                                initialName={card.initialName}
                                 alt={card.name}
                                 fallback={<div className="w-full h-full bg-muted/80 flex items-center justify-center p-1"><span className="text-[8px] text-muted-foreground text-center leading-tight break-words">{card.name}</span></div>}
                               />
@@ -405,6 +417,9 @@ export function TopZoneBar({
                       <motion.div layoutId={`${idPrefix}-${zone.topCard.lineageId}`} layout transition={CARD_TRANSITION} className="absolute inset-0">
                         <CardImg
                           catalogId={zone.topCard.catalogId}
+                          textureId={zone.topCard.textureId}
+                          name={zone.topCard.name}
+                          initialName={zone.topCard.initialName}
                           alt={zone.topCard.name}
                           fallback={<div className="w-full h-full flex items-center justify-center p-1"><span className="text-[8px] text-muted-foreground text-center leading-tight break-words">{zone.topCard.name}</span></div>}
                         />

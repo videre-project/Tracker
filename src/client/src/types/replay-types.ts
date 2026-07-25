@@ -131,9 +131,11 @@ export interface CardState {
   /** Stable identity across zone changes — the root ancestor cardId. */
   lineageId: number
   name: string
+  initialName?: string
   rulesText: string | null
   manaCost: string | null
   catalogId: number | null
+  textureId?: number | null
   zone: string
   power: string | null
   toughness: string | null

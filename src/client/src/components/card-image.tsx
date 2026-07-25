@@ -18,13 +18,23 @@ import { getApiUrl } from "@/utils/api-config"
 export interface CardImageProps
   extends Omit<ImgHTMLAttributes<HTMLImageElement>, "src"> {
   catalogId: number | null
+  textureId?: number | null
+  name?: string
+  initialName?: string
   fallback?: React.ReactNode
 }
+
+interface BackFaceInfo {
+  catalogId: number
+  name: string
+}
+
+const s_faceCatalogIdCache = new Map<number, BackFaceInfo | null>()
 
 /**
  * Renders a card image with zero blank/broken-icon frames.
  * 
- * We do this by tracking the last uRL that was fully decoded and safe to paint,
+ * We do this by tracking the last URL that was fully decoded and safe to paint,
  * and only swapping to a new URL once it has been decoded off-screen.
  * 
  * This prevents the native browser broken-image icon from appearing when a CDN
@@ -33,19 +43,69 @@ export interface CardImageProps
  */
 export function CardImage({
   catalogId,
+  textureId,
+  name,
+  initialName,
   fallback,
   onError,
   style,
   className,
   ...props
 }: CardImageProps) {
-  const cdnSrc = getCardImageSync(catalogId)
-  const fallbackSrc = catalogId != null && catalogId > 0
-    ? getApiUrl(`/api/collection/cards/${catalogId}/image`)
+  const [backFaceInfo, setBackFaceInfo] = useState<BackFaceInfo | null>(() => {
+    if (!catalogId) return null
+    return s_faceCatalogIdCache.get(catalogId) ?? null
+  })
+
+  useEffect(() => {
+    if (!catalogId) return
+    if (s_faceCatalogIdCache.has(catalogId)) {
+      setBackFaceInfo(s_faceCatalogIdCache.get(catalogId) ?? null)
+      return
+    }
+
+    let isMounted = true
+    fetch(getApiUrl(`/api/collection/cards/${catalogId}/face`))
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => {
+        if (!isMounted) return
+        const info: BackFaceInfo | null =
+          data?.catalogId != null
+            ? { catalogId: data.catalogId as number, name: (data.name as string) ?? "" }
+            : null
+        s_faceCatalogIdCache.set(catalogId, info)
+        setBackFaceInfo(info)
+      })
+      .catch(() => {
+        if (!isMounted) return
+        s_faceCatalogIdCache.set(catalogId, null)
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [catalogId])
+
+  // A card uses the resolved back-face catalog ID if its current name matches the back face name
+  const isMatchingBackFace = Boolean(
+    name &&
+      backFaceInfo?.name &&
+      name.trim().toLowerCase() === backFaceInfo.name.trim().toLowerCase()
+  )
+  const activeCatalogId = isMatchingBackFace ? backFaceInfo!.catalogId : catalogId
+
+  const textureSrc = textureId != null && textureId > 0
+    ? getApiUrl(`/api/collection/cards/texture/${textureId}/image`)
     : null
 
-  // The best URL to try first for this catalogId (skips CDN if known-failed)
-  const targetSrc = getBestImageUrl(catalogId, fallbackSrc)
+  const fallbackSrc = activeCatalogId != null && activeCatalogId > 0
+    ? getApiUrl(`/api/collection/cards/${activeCatalogId}/image`)
+    : name
+    ? getApiUrl(`/api/collection/cards/${encodeURIComponent(name)}/image`)
+    : null
+
+  // Prioritize activeCatalogId CDN for exact printing; fallback to textureSrc if CDN fails.
+  const targetSrc = getBestImageUrl(activeCatalogId, textureSrc ?? fallbackSrc)
 
   // The URL currently painted on screen. null = nothing committed yet.
   // Initialize synchronously: if this URL is already decoded, show it immediately.
@@ -53,13 +113,17 @@ export function CardImage({
     targetSrc && isUrlDecoded(targetSrc) ? targetSrc : null
   )
 
-  // Track what catalogId we computed committedSrc for (for synchronous reset)
-  const [prevCatalogId, setPrevCatalogId] = useState(catalogId)
+  // Track what catalogId, textureId, and name we computed committedSrc for (for synchronous reset)
+  const [prevCatalogId, setPrevCatalogId] = useState(activeCatalogId)
+  const [prevTextureId, setPrevTextureId] = useState(textureId)
+  const [prevName, setPrevName] = useState(name)
 
-  // Synchronous catalogId-change handler (React docs pattern for derived state)
-  if (catalogId !== prevCatalogId) {
-    setPrevCatalogId(catalogId)
-    const newTarget = getBestImageUrl(catalogId, fallbackSrc)
+  // Synchronous catalogId/textureId/name-change handler (React docs pattern for derived state)
+  if (activeCatalogId !== prevCatalogId || textureId !== prevTextureId || name !== prevName) {
+    setPrevCatalogId(activeCatalogId)
+    setPrevTextureId(textureId)
+    setPrevName(name)
+    const newTarget = getBestImageUrl(activeCatalogId, textureSrc ?? fallbackSrc)
     // If already decoded, commit immediately — zero blank frame
     setCommittedSrc(newTarget && isUrlDecoded(newTarget) ? newTarget : null)
   }

@@ -28,6 +28,8 @@ export class ReplayStateEngine {
   private parentMap = new Map<number, number>()
   /** Tracks ability supersessions: newCardId → retiredCardId, for backward stepping. */
   private supersededAbilities = new Map<number, number>()
+  /** Tracks card name history across snapshot steps: snapshotIndex → (cardId → previousName). */
+  private cardNameHistory = new Map<number, Map<number, string>>()
 
   constructor(data: ReplayData) {
     this.data = data
@@ -170,6 +172,7 @@ export class ReplayStateEngine {
           cardId: card.cardId,
           lineageId: this.lineageMap.get(card.cardId) ?? card.cardId,
           name: card.name,
+          initialName: card.name,
           rulesText: card.rulesText,
           manaCost: card.manaCost,
           catalogId: card.catalogId,
@@ -241,10 +244,16 @@ export class ReplayStateEngine {
     for (const pc of snapshot.playerChanges) {
       this.applyPlayerChange(pc, true)
     }
+
+    // Apply snapshot log events (e.g. card transformations)
+    this.applySnapshotLogs(snapshot, true)
   }
 
   private applyBackward(snapshotIndex: number): void {
     const snapshot = this.data.snapshots[snapshotIndex]
+
+    // Reverse snapshot log events (e.g. card transformations)
+    this.applySnapshotLogs(snapshot, false)
 
     // Reverse player changes
     for (const pc of [...snapshot.playerChanges].reverse()) {
@@ -485,6 +494,36 @@ export class ReplayStateEngine {
     const card = this.cards.get(cc.cardId)
     if (!card) return
 
+    // Track and update card name changes (e.g. Delver of Secrets -> Insectile Aberration transformation)
+    const targetName = (cc.property === "Name" || cc.property === "CardName")
+      ? (forward ? cc.newValue : cc.oldValue)
+      : (forward ? cc.cardName : null)
+
+    if (forward && targetName && targetName !== card.name) {
+      // If the card has transformed to a back-face name (e.g. "Insectile Aberration"),
+      // ignore MTGO property updates that continue passing the front-face name ("Delver of Secrets").
+      const isAlreadyTransformed = card.initialName && card.name !== card.initialName
+      if (!isAlreadyTransformed) {
+        let snapHistory = this.cardNameHistory.get(this._currentIndex)
+        if (!snapHistory) {
+          snapHistory = new Map<number, string>()
+          this.cardNameHistory.set(this._currentIndex, snapHistory)
+        }
+        if (!snapHistory.has(card.cardId)) {
+          snapHistory.set(card.cardId, card.name)
+        }
+        card.name = targetName
+      }
+    } else if (!forward) {
+      const snapHistory = this.cardNameHistory.get(this._currentIndex)
+      const prevName = snapHistory?.get(card.cardId)
+      if (prevName) {
+        card.name = prevName
+      } else if (cc.property === "Name" || cc.property === "CardName") {
+        if (cc.oldValue) card.name = cc.oldValue
+      }
+    }
+
     const value = forward ? cc.newValue : cc.oldValue
 
     switch (cc.property) {
@@ -594,6 +633,53 @@ export class ReplayStateEngine {
           player.counters = {}
         }
         break
+    }
+  }
+
+  private static TRANSFORM_REGEX = /@P@\[([^@]+)@:(\d+),(\d+):@\] transforms into @\[([^@]+)@:(\d+),\d+:@\]/
+
+  /** Tracks card transforms: snapshotIndex → (cardId → { textureId?: number | null; name: string }). */
+  private cardTransformHistory = new Map<number, Map<number, { textureId?: number | null; name: string }>>()
+
+  private applySnapshotLogs(snapshot: ReplaySnapshot, forward: boolean): void {
+    if (!snapshot.logs) return
+
+    for (const log of snapshot.logs) {
+      if (!log.data || !log.data.includes("transforms into")) continue
+
+      const match = ReplayStateEngine.TRANSFORM_REGEX.exec(log.data)
+      if (!match) continue
+
+      const frontName = match[1]
+      const cardId = parseInt(match[3], 10)
+      const backName = match[4]
+      const backTextureId = parseInt(match[5], 10)
+
+      const card = this.cards.get(cardId)
+      if (!card) continue
+
+      if (forward) {
+        let snapHistory = this.cardTransformHistory.get(this._currentIndex)
+        if (!snapHistory) {
+          snapHistory = new Map()
+          this.cardTransformHistory.set(this._currentIndex, snapHistory)
+        }
+        if (!snapHistory.has(cardId)) {
+          snapHistory.set(cardId, { textureId: card.textureId, name: card.name })
+        }
+        card.textureId = backTextureId
+        card.name = backName
+      } else {
+        const snapHistory = this.cardTransformHistory.get(this._currentIndex)
+        const prev = snapHistory?.get(cardId)
+        if (prev) {
+          card.textureId = prev.textureId
+          card.name = prev.name
+        } else {
+          card.textureId = undefined
+          card.name = frontName
+        }
+      }
     }
   }
 

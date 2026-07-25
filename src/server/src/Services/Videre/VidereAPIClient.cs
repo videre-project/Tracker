@@ -77,6 +77,50 @@ public sealed class VidereAPIClient
     }
   }
 
+  internal async Task<(int catalogId, string name)?> GetOtherFaceCatalogIdAsync(
+    int catalogId,
+    CancellationToken cancellationToken = default)
+  {
+    if (catalogId <= 0) return null;
+
+    try
+    {
+      var uri = BuildUri($"cards/{catalogId}");
+      var responseContent = await SendAsync(HttpMethod.Get, uri, null, cancellationToken);
+      if (responseContent is null) return null;
+
+      using var doc = JsonDocument.Parse(responseContent);
+      if (!doc.RootElement.TryGetProperty("data", out var dataEl) ||
+          dataEl.ValueKind != JsonValueKind.Array ||
+          dataEl.GetArrayLength() == 0)
+      {
+        return null;
+      }
+
+      var cardEl = dataEl[0];
+      if (cardEl.TryGetProperty("faces", out var facesEl) && facesEl.ValueKind == JsonValueKind.Array)
+      {
+        foreach (var face in facesEl.EnumerateArray())
+        {
+          if (face.TryGetProperty("source_catalog_id", out var sourceCatalogIdEl) &&
+              sourceCatalogIdEl.TryGetInt32(out var sourceCatalogId) &&
+              sourceCatalogId > 0 &&
+              sourceCatalogId != catalogId)
+          {
+            string name = face.TryGetProperty("name", out var nameEl) ? (nameEl.GetString() ?? "") : "";
+            return (sourceCatalogId, name);
+          }
+        }
+      }
+    }
+    catch (Exception ex)
+    {
+      MTGOSDK.Core.Logging.Log.Warning(ex, "Failed to resolve other face catalog ID for catalogId={CatalogId}", catalogId);
+    }
+
+    return null;
+  }
+
   internal async Task<IReadOnlyDictionary<int, VidereProductResult>> GetCollectionProductsAsync(
     IReadOnlyCollection<int> collectionIds,
     CancellationToken cancellationToken = default)

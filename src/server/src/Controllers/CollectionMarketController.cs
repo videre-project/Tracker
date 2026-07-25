@@ -174,27 +174,8 @@ public sealed class CollectionMarketController(
       return null;
     }
 
-    int? otherFaceCatalogId = null;
-    if (clientProvider.IsReady)
-    {
-      try
-      {
-        dynamic? sdkCard = CollectionManager.GetCard(catalogId);
-        if (sdkCard != null)
-        {
-          dynamic? otherFace = sdkCard.Unbind()?.OtherFaceCard;
-          if (otherFace != null)
-          {
-            int otherId = (int)otherFace.Id;
-            if (otherId > 0 && otherId != catalogId)
-            {
-              otherFaceCatalogId = otherId;
-            }
-          }
-        }
-      }
-      catch { }
-    }
+    var otherFace = await videreAPIClient.GetOtherFaceCatalogIdAsync(catalogId, cancellationToken);
+    int? otherFaceCatalogId = otherFace?.catalogId;
 
     return new CollectionCardDetailDTO
     {

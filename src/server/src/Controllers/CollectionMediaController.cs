@@ -167,26 +167,32 @@ public sealed class CollectionMediaController(
 
     try
     {
-      var card = CollectionManager.GetCard(id);
+      Card? card = null;
+      try { card = CollectionManager.GetCard(id); } catch {}
       if (card == null)
       {
-        Log.Debug("GetCardImageById: catalog ID {Id} not found in collection", id);
+        try { card = CollectionManager.GetCardByTextureId(id); } catch {}
+      }
+
+      if (card == null)
+      {
+        Log.Debug("GetCardImageById: catalog or texture ID {Id} not found in collection", id);
         var fallback = await TryRedirectToNonFoilImageAsync(id, cancellationToken);
         if (fallback is not null) return fallback;
         return NotFound(new { error = $"Card with ID {id} not found" });
       }
 
-      var base64 = CardRenderer.RenderCard(id);
+      var base64 = CardRenderer.RenderCard(card.Id);
       if (string.IsNullOrEmpty(base64))
       {
-        Log.Warning("GetCardImageById: render returned empty result for catalog ID {Id}", id);
+        Log.Warning("GetCardImageById: render returned empty result for ID {Id} ({Name})", id, card.Name);
         var fallback = await TryRedirectToNonFoilImageAsync(id, cancellationToken);
         if (fallback is not null) return fallback;
         return NotFound(new { error = $"Failed to render card ID {id}" });
       }
 
       s_imageCache[cacheKey] = base64;
-      Log.Debug("GetCardImageById: rendered catalog ID {Id} ({Name})", id, card.Name);
+      Log.Debug("GetCardImageById: rendered ID {Id} ({Name})", id, card.Name);
       return File(Convert.FromBase64String(base64), "image/png", $"{id}.png");
     }
     catch (KeyNotFoundException)
@@ -194,15 +200,94 @@ public sealed class CollectionMediaController(
       Log.Debug("GetCardImageById: catalog ID {Id} not found (KeyNotFoundException)", id);
       var fallback = await TryRedirectToNonFoilImageAsync(id, cancellationToken);
       if (fallback is not null) return fallback;
-      return NotFound(new { error = $"Card with ID {id} not found in collection" });
+      return StatusCode(StatusCodes.Status500InternalServerError, new { error = "An error occurred while rendering the card" });
     }
-    catch (Exception ex)
+  }
+
+  /// <summary>
+  /// Get a card image by its MTGO texture ID (CTN)
+  /// </summary>
+  /// <param name="textureId">MTGO Texture ID</param>
+  /// <returns>PNG image data</returns>
+  [HttpGet("cards/texture/{textureId:int}/image")] // GET /api/collection/cards/texture/84884/image
+  [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
+  [ProducesResponseType(StatusCodes.Status404NotFound)]
+  [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+  public ActionResult GetCardImageByTextureId(int textureId)
+  {
+    if (!clientProvider.IsReady)
     {
-      Log.Error(ex, "GetCardImageById: unexpected error for catalog ID {Id}", id);
-      var fallback = await TryRedirectToNonFoilImageAsync(id, cancellationToken);
-      if (fallback is not null) return fallback;
-      return StatusCode(StatusCodes.Status500InternalServerError, new { error = ex.Message });
+      return StatusCode(StatusCodes.Status503ServiceUnavailable, new
+      {
+        error = "MTGO client not ready",
+        hint = "Please wait for the client to fully initialize and log in"
+      });
     }
+
+    var cacheKey = $"texture:{textureId}";
+    if (s_imageCache.TryGetValue(cacheKey, out var cachedBase64))
+      return File(Convert.FromBase64String(cachedBase64), "image/png", $"{textureId}.png");
+
+    try
+    {
+      var card = CollectionManager.GetCardByTextureId(textureId);
+      if (card == null)
+      {
+        return NotFound(new { error = $"Texture ID #{textureId} not found" });
+      }
+
+      var base64 = CardRenderer.RenderCard(card.Id);
+      if (string.IsNullOrEmpty(base64))
+      {
+        return NotFound(new { error = $"Failed to render texture ID #{textureId}" });
+      }
+
+      s_imageCache[cacheKey] = base64;
+      Log.Debug("GetCardImageByTextureId: rendered texture ID #{TextureId} ({Name}, catalogId={CatalogId})", textureId, card.Name, card.Id);
+      return File(Convert.FromBase64String(base64), "image/png", $"{textureId}.png");
+    }
+    catch (KeyNotFoundException)
+    {
+      return NotFound(new { error = $"Texture ID #{textureId} not found" });
+    }
+  }
+
+  private static readonly ConcurrentDictionary<int, (int catalogId, string name)?> s_otherFaceCatalogIdCache = new();
+
+  /// <summary>
+  /// Get the source catalog ID for a double-faced card's back face by front catalog ID.
+  /// </summary>
+  [HttpGet("cards/{catalogId:int}/face")] // GET /api/collection/cards/42436/face
+  [ProducesResponseType(StatusCodes.Status200OK)]
+  [ProducesResponseType(StatusCodes.Status400BadRequest)]
+  [ProducesResponseType(StatusCodes.Status404NotFound)]
+  public async Task<ActionResult> GetCardFaceCatalogId(
+    int catalogId,
+    CancellationToken cancellationToken)
+  {
+    if (catalogId <= 0)
+    {
+      return BadRequest(new { error = "catalogId is required" });
+    }
+
+    if (s_otherFaceCatalogIdCache.TryGetValue(catalogId, out var cached))
+    {
+      if (cached.HasValue)
+      {
+        return Ok(new { catalogId = cached.Value.catalogId, name = cached.Value.name });
+      }
+      return NotFound(new { error = $"Other face not found for catalog ID {catalogId}" });
+    }
+
+    var resolved = await videreAPIClient.GetOtherFaceCatalogIdAsync(catalogId, cancellationToken);
+    s_otherFaceCatalogIdCache[catalogId] = resolved;
+
+    if (resolved.HasValue)
+    {
+      return Ok(new { catalogId = resolved.Value.catalogId, name = resolved.Value.name });
+    }
+
+    return NotFound(new { error = $"Other face not found for catalog ID {catalogId}" });
   }
 
   private async Task<ActionResult?> TryRedirectToNonFoilImageAsync(

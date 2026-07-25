@@ -44,18 +44,35 @@ export const TOP_BAR_FULL = 180
  */
 export function CardImg({
   catalogId,
+  textureId,
+  name,
+  initialName,
   alt,
   className = "w-full h-full object-cover",
   style,
   fallback,
 }: {
   catalogId: number | null
+  textureId?: number | null
+  name?: string
+  initialName?: string
   alt: string
   className?: string
   style?: React.CSSProperties
   fallback?: React.ReactNode
 }) {
-  return <SharedCardImage catalogId={catalogId} alt={alt} className={className} style={style} fallback={fallback} />
+  return (
+    <SharedCardImage
+      catalogId={catalogId}
+      textureId={textureId}
+      name={name ?? alt}
+      initialName={initialName}
+      alt={alt}
+      className={className}
+      style={style}
+      fallback={fallback}
+    />
+  )
 }
 
 
@@ -102,6 +119,9 @@ export function RevealedCardCell({ card, colIdx, rowIdx }: { card: CardState; co
             <div className="w-full h-full bg-muted">
               <CardImg
                 catalogId={card.catalogId}
+                textureId={card.textureId}
+                name={card.name}
+                initialName={card.initialName}
                 alt={card.name}
                 fallback={
                   <div className="w-full h-full flex items-center justify-center p-1">
@@ -519,6 +539,9 @@ export function CardImage({
             >
               <CardImg
                 catalogId={card.catalogId}
+                textureId={card.textureId}
+                name={card.name}
+                initialName={card.initialName}
                 alt={card.name}
                 fallback={
                   <div className="w-full h-full bg-muted/80 flex items-center justify-center p-1">
