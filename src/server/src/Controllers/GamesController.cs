@@ -4,21 +4,29 @@
 **/
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
+using MTGOSDK.API.Collection;
 using MTGOSDK.API.Play;
 using MTGOSDK.API.Play.Games;
+using MTGOSDK.Core.Logging;
 
 using Tracker.Controllers.Base;
+using Tracker.Controllers.Models.Decks;
 using Tracker.Database;
+using Tracker.Database.Models.Events;
 using Tracker.Controllers.Models.Games;
 using Tracker.Services.MTGO;
 using Tracker.Services.MTGO.Collection;
+using Tracker.Services.Videre;
 using static Tracker.Services.MTGO.Events.MatchHistorySerialization;
 
 
@@ -31,15 +39,19 @@ public class GamesController : APIController
   private readonly EventContext context;
   private readonly IClientAPIProvider clientProvider;
   private readonly CollectionDeckService deckService;
+  private readonly INBACArchetypeClient nbacArchetypeClient;
+  private static readonly ConcurrentDictionary<string, string> s_cardNameColorCache = new(StringComparer.OrdinalIgnoreCase);
 
   public GamesController(
     EventContext context,
     IClientAPIProvider clientProvider,
-    CollectionDeckService deckService)
+    CollectionDeckService deckService,
+    INBACArchetypeClient nbacArchetypeClient)
   {
     this.context = context;
     this.clientProvider = clientProvider;
     this.deckService = deckService;
+    this.nbacArchetypeClient = nbacArchetypeClient;
   }
 
   [HttpGet("history")]
@@ -118,10 +130,7 @@ public class GamesController : APIController
       foreach (var game in match.Games)
       {
          var gameResult = game.GamePlayerResults.FirstOrDefault(p => p.Player == currentUser);
-         if (gameResult != null)
-         {
-           matchDuration += gameResult.Clock;
-         }
+         matchDuration += GetGameDuration(game, gameResult);
       }
 
       int wins = 0;
@@ -148,7 +157,9 @@ public class GamesController : APIController
         DeckRevisionId = match.Event.DeckRevisionId,
         DeckName = deck?.Name,
         DeckColors = deck?.Colors,
-        OpponentName = GetOpponentName(match, currentUser)
+        OpponentName = GetOpponentName(match, currentUser),
+        OpponentDeckArchetype = match.OpponentDeckArchetype,
+        OpponentDeckColors = match.OpponentDeckColors
       });
     }
 
@@ -428,20 +439,21 @@ public class GamesController : APIController
     foreach (var game in match.Games)
     {
       var gameResult = game.GamePlayerResults.FirstOrDefault(p => p.Player == currentUser);
+      TimeSpan dur = GetGameDuration(game, gameResult);
       if (gameResult != null)
       {
         if (gameResult.Result == GameResult.Win) wins++;
         else if (gameResult.Result == GameResult.Loss) losses++;
-        matchDuration += gameResult.Clock;
       }
+      matchDuration += dur;
 
       var gameDTO = new GameDetailsDTO
       {
         Id = game.Id,
         GameNumber = match.Games.IndexOf(game) + 1,
         Result = gameResult?.Result.ToString() ?? "Unknown",
-        Duration = gameResult != null ? FormatDuration(gameResult.Clock) : "0m 0s",
-        PlayDraw = gameResult?.PlayDraw.ToString() ?? "Unknown",
+        Duration = FormatDuration(dur),
+        PlayDraw = ResolvePlayDraw(game, currentUser, gameResult?.PlayDraw),
         SideboardChanges = match.SideboardChanges
           .GetValueOrDefault(game.Id, [])
           .Select(change => new SideboardChangeDTO
@@ -454,6 +466,11 @@ public class GamesController : APIController
         Logs = BuildGameLogs(game)
       };
       gameDetails.Add(gameDTO);
+    }
+
+    if (string.IsNullOrEmpty(match.OpponentDeckArchetype))
+    {
+      await DetectAndPersistOpponentArchetypeAsync(match, currentUser);
     }
 
     return Ok(new MatchDetailsDTO
@@ -471,9 +488,193 @@ public class GamesController : APIController
       DeckArchetype = deck?.Archetype,
       DeckColors = deck?.Colors,
       OpponentName = GetOpponentName(match, currentUser),
+      OpponentDeckArchetype = match.OpponentDeckArchetype,
+      OpponentDeckColors = match.OpponentDeckColors,
       IsActive = isActive,
       Games = gameDetails
     });
+  }
+
+  /// <summary>
+  /// Manually update opponent archetype for a match
+  /// </summary>
+  [HttpPut("match/{matchId:int}/opponent-archetype")]
+  [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+  [ProducesResponseType(StatusCodes.Status404NotFound)]
+  public async Task<ActionResult<object>> UpdateOpponentArchetype(
+    int matchId,
+    [FromBody] DecksController.UpdateArchetypeRequest request)
+  {
+    if (!clientProvider.TryGetCurrentUsername(out var currentUser))
+    {
+      return BadRequest("Client not ready or user not logged in.");
+    }
+
+    var match = await context.Matches.FirstOrDefaultAsync(m => m.Id == matchId);
+    if (match == null) return NotFound($"Match {matchId} not found.");
+
+    string? newArchetype = string.IsNullOrWhiteSpace(request.Archetype) ? null : request.Archetype.Trim();
+    match.OpponentDeckArchetype = newArchetype;
+    await context.SaveChangesAsync();
+
+    return Ok(new { matchId, opponentDeckArchetype = newArchetype, opponentDeckColors = match.OpponentDeckColors });
+  }
+
+  private async Task<(string? Archetype, List<string>? Colors)> DetectAndPersistOpponentArchetypeAsync(
+    MatchModel match,
+    string currentUser,
+    CancellationToken cancellationToken = default)
+  {
+    bool hasArchetype = !string.IsNullOrEmpty(match.OpponentDeckArchetype);
+    bool hasColors = match.OpponentDeckColors != null && match.OpponentDeckColors.Count > 0;
+
+    if (hasArchetype && hasColors)
+    {
+      return (match.OpponentDeckArchetype, match.OpponentDeckColors);
+    }
+
+    try
+    {
+      var games = match.Games;
+      if (games == null || games.Count == 0 || games.Any(g => g.Cards == null || g.Players == null))
+      {
+        games = await context.Games
+          .Include(g => g.Cards)
+          .Include(g => g.Players)
+          .Where(g => g.MatchId == match.Id)
+          .AsNoTracking()
+          .ToListAsync(cancellationToken);
+      }
+
+      if (games.Count == 0) return (match.OpponentDeckArchetype, match.OpponentDeckColors);
+
+      var cardCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+      var catalogIds = new HashSet<int>();
+
+      foreach (var game in games)
+      {
+        var perspectivePlayer = game.Players.FirstOrDefault(p =>
+          string.Equals(p.Name, currentUser, StringComparison.OrdinalIgnoreCase));
+        int? perspectiveIdx = perspectivePlayer?.PlayerIndex;
+
+        foreach (var card in game.Cards)
+        {
+          if (perspectiveIdx.HasValue && card.OwnerId == perspectiveIdx.Value) continue;
+          if (card.IsToken || card.IsActivatedAbility || card.IsTriggeredAbility) continue;
+          if (string.IsNullOrWhiteSpace(card.Name)) continue;
+
+          cardCounts[card.Name] = cardCounts.GetValueOrDefault(card.Name, 0) + 1;
+          if (card.CatalogId.HasValue && card.CatalogId.Value > 0)
+          {
+            catalogIds.Add(card.CatalogId.Value);
+          }
+        }
+      }
+
+      if (cardCounts.Count == 0) return (match.OpponentDeckArchetype, match.OpponentDeckColors);
+
+      var detectedColorChars = new HashSet<char>();
+
+      // Look up card definitions by name in local MTGO catalog (using static cache)
+      foreach (var cardName in cardCounts.Keys)
+      {
+        if (!s_cardNameColorCache.TryGetValue(cardName, out var colorsStr))
+        {
+          try
+          {
+            var cardDef = CollectionManager.GetCard(cardName);
+            if (cardDef != null)
+            {
+              dynamic dynCard = cardDef;
+              colorsStr = dynCard?.Colors?.ToString() ?? "";
+              s_cardNameColorCache[cardName] = colorsStr;
+            }
+          }
+          catch
+          {
+            // Ignore
+          }
+        }
+
+        if (!string.IsNullOrEmpty(colorsStr))
+        {
+          foreach (char c in colorsStr)
+          {
+            if (VidereCardColors.IsCanonical(c))
+            {
+              detectedColorChars.Add(c);
+            }
+          }
+        }
+      }
+
+      // Fallback: try catalog IDs if present
+      foreach (var cid in catalogIds)
+      {
+        try
+        {
+          var cardDef = CollectionManager.GetCard(cid);
+          if (cardDef != null)
+          {
+            dynamic dynCard = cardDef;
+            string? colorsStr = dynCard?.Colors?.ToString();
+            if (!string.IsNullOrEmpty(colorsStr))
+            {
+              foreach (char c in colorsStr)
+              {
+                if (VidereCardColors.IsCanonical(c))
+                {
+                  detectedColorChars.Add(c);
+                }
+              }
+            }
+          }
+        }
+        catch
+        {
+          // Ignore
+        }
+      }
+
+      List<string> opponentColors = VidereCardColors.Normalize(detectedColorChars).ToList();
+
+      string? detectedArchetype = null;
+      if (!hasArchetype && nbacArchetypeClient != null && cardCounts.Count >= 1)
+      {
+        var nbacCards = cardCounts.Select(kvp => new NBACDeckCard(kvp.Key, kvp.Value)).ToList();
+        string format = match.Event?.Format ?? "Modern";
+        var response = await nbacArchetypeClient.DetectArchetypeAsync(nbacCards, format, cancellationToken);
+        (detectedArchetype, _) = DecksController.ParseArchetype(response);
+      }
+
+      var finalArchetype = !string.IsNullOrEmpty(match.OpponentDeckArchetype)
+        ? match.OpponentDeckArchetype
+        : detectedArchetype;
+
+      var finalColors = (match.OpponentDeckColors != null && match.OpponentDeckColors.Count > 0)
+        ? match.OpponentDeckColors
+        : opponentColors;
+
+      if (finalArchetype != match.OpponentDeckArchetype || (finalColors.Count > 0 && (match.OpponentDeckColors == null || match.OpponentDeckColors.Count == 0)))
+      {
+        var dbMatch = await context.Matches.FirstOrDefaultAsync(m => m.Id == match.Id, cancellationToken);
+        if (dbMatch != null)
+        {
+          dbMatch.OpponentDeckArchetype = finalArchetype;
+          dbMatch.OpponentDeckColors = finalColors;
+          await context.SaveChangesAsync(cancellationToken);
+        }
+        match.OpponentDeckArchetype = finalArchetype;
+        match.OpponentDeckColors = finalColors;
+      }
+
+      return (match.OpponentDeckArchetype, match.OpponentDeckColors);
+    }
+    catch (Exception ex)
+    {
+      Log.Trace($"Failed to detect opponent archetype for match {match.Id}: {ex.Message}");
+      return (match.OpponentDeckArchetype, match.OpponentDeckColors);
+    }
   }
 
   private static string FormatDuration(TimeSpan duration) =>
@@ -737,4 +938,94 @@ public class GamesController : APIController
     return Ok(trendData);
   }
 
+  private static TimeSpan GetGameDuration(GameModel game, GamePlayerResult? gameResult)
+  {
+    if (game.States != null && game.States.Count >= 2)
+    {
+      var minTime = game.States.Min(s => s.ClientTimestamp);
+      var maxTime = game.States.Max(s => s.ClientTimestamp);
+      var diff = maxTime - minTime;
+      if (diff > TimeSpan.Zero && diff < TimeSpan.FromHours(12))
+      {
+        return diff;
+      }
+    }
+
+    if (gameResult != null && gameResult.Clock > TimeSpan.Zero)
+    {
+      return gameResult.Clock;
+    }
+
+    return TimeSpan.Zero;
+  }
+
+  private static string ResolvePlayDraw(
+    GameModel game,
+    string? playerUsername,
+    PlayDrawResult? existingResult)
+  {
+    if (string.IsNullOrWhiteSpace(playerUsername))
+    {
+      playerUsername = game.GamePlayerResults.FirstOrDefault()?.Player
+        ?? game.Players.FirstOrDefault()?.Name;
+    }
+
+    if (game.States != null && !string.IsNullOrWhiteSpace(playerUsername))
+    {
+      // Scan states in reverse (latest first) so the last occurrence of
+      // "skips their draw step" / "chooses to play first" is found first.
+      // MTGO replays these log lines during each mulligan loop, so earlier
+      // occurrences can be pre-game echoes, not the real Turn 1 decision.
+      var statesReversed = game.States.OrderByDescending(s => s.Id).ToList();
+
+      foreach (var state in statesReversed)
+      {
+        if (state.Logs == null) continue;
+        foreach (var log in state.Logs.OrderByDescending(l => l.Id))
+        {
+          if (string.IsNullOrEmpty(log.Data)) continue;
+
+          // "<Player> skips their draw step." -> <Player> is on the Play
+          if (log.Data.Contains("skips their draw step", StringComparison.OrdinalIgnoreCase))
+          {
+            return log.Data.Contains(playerUsername, StringComparison.OrdinalIgnoreCase)
+              ? "Play"
+              : "Draw";
+          }
+
+          // "<Player> chooses to play first." -> <Player> is on the Play
+          if (log.Data.Contains("chooses to play first", StringComparison.OrdinalIgnoreCase))
+          {
+            return log.Data.Contains(playerUsername, StringComparison.OrdinalIgnoreCase)
+              ? "Play"
+              : "Draw";
+          }
+        }
+      }
+
+      foreach (var state in statesReversed)
+      {
+        if (!string.IsNullOrEmpty(state.PromptText))
+        {
+          if (state.PromptText.Contains("You lost the die roll", StringComparison.OrdinalIgnoreCase) &&
+              state.PromptText.Contains("decide whether or not to play first", StringComparison.OrdinalIgnoreCase))
+          {
+            return "Draw";
+          }
+          if (state.PromptText.Contains("You won the die roll", StringComparison.OrdinalIgnoreCase) ||
+              state.PromptText.Contains("decide whether or not to play first", StringComparison.OrdinalIgnoreCase))
+          {
+            return "Play";
+          }
+        }
+      }
+    }
+
+    if (existingResult.HasValue && existingResult.Value != PlayDrawResult.Unknown)
+    {
+      return existingResult.Value.ToString();
+    }
+
+    return "Unknown";
+  }
 }

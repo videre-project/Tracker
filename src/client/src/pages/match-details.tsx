@@ -3,10 +3,15 @@ import { createPortal } from "react-dom"
 import { useParams, useNavigate } from "react-router-dom"
 import { getApiUrl } from "@/utils/api-config"
 import { useClientState } from "@/hooks/use-client-state"
-import { useMatchDetails } from "@/hooks/use-match-details"
+import { useMatchDetails, updateOpponentArchetype } from "@/hooks/use-match-details"
 import { useNDJSONStream } from "@/hooks/use-ndjson-stream"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft, Clock, Calendar, Radio, Play, Layers3, FileText, UserRound } from "lucide-react"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import { ArrowLeft, Clock, Calendar, Radio, Play, Layers3, FileText, UserRound, Pencil, Check, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { GameDetailsDTO, GameLogDTO, MatchDetailsDTO } from "@/types/api"
@@ -90,24 +95,84 @@ function MatchHeaderMeta({
 }
 
 function OpponentMetaValue({
+  matchId,
   opponentName,
   opponentDeckName,
   opponentDeckArchetype,
   opponentDeckColors,
+  onArchetypeUpdated,
 }: {
+  matchId?: number | null
   opponentName?: string | null
   opponentDeckName?: string | null
   opponentDeckArchetype?: string | null
   opponentDeckColors?: string[] | null
+  onArchetypeUpdated?: (newArchetype: string) => void
 }) {
   const name = opponentName?.trim()
-  const deckLabel = opponentDeckArchetype?.trim() || opponentDeckName?.trim() || "Deck unknown"
+  const [isEditing, setIsEditing] = useState(false)
+  const [archetypeValue, setArchetypeValue] = useState(opponentDeckArchetype || "")
+  const [isSaving, setIsSaving] = useState(false)
+
+  useEffect(() => {
+    setArchetypeValue(opponentDeckArchetype || "")
+  }, [opponentDeckArchetype])
+
+  const deckLabel = archetypeValue.trim() || opponentDeckArchetype?.trim() || opponentDeckName?.trim() || "Deck unknown"
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!matchId) return
+
+    setIsSaving(true)
+    try {
+      await updateOpponentArchetype(matchId, archetypeValue.trim())
+      onArchetypeUpdated?.(archetypeValue.trim())
+      setIsEditing(false)
+    } catch (err) {
+      console.error("Failed to update opponent archetype:", err)
+    } finally {
+      setIsSaving(false)
+    }
+  }
 
   return (
     <span className="inline-flex min-w-0 items-center gap-1.5">
       <span className="truncate">{name ? `vs ${name}` : "Opponent unknown"}</span>
       <span className="text-muted-foreground/60">-</span>
-      <span className="truncate text-muted-foreground">{deckLabel}</span>
+      <Popover open={isEditing} onOpenChange={setIsEditing}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className="group/arch inline-flex max-w-full items-center gap-2 text-muted-foreground hover:text-foreground focus:outline-none"
+            title="Edit opponent archetype"
+          >
+            <span className="truncate">{deckLabel}</span>
+            {matchId && (
+              <Pencil className="h-3 w-3 shrink-0 text-muted-foreground/50 transition-colors group-hover/arch:text-foreground" />
+            )}
+          </button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-64 p-3 shadow-lg">
+          <form onSubmit={handleSave} className="space-y-2.5" onClick={e => e.stopPropagation()}>
+            <div className="text-xs font-medium text-muted-foreground">Edit Opponent Archetype</div>
+            <div className="flex items-center gap-1.5">
+              <input
+                type="text"
+                value={archetypeValue}
+                onChange={e => setArchetypeValue(e.target.value)}
+                placeholder="e.g. Dimir Murktide"
+                autoFocus
+                className="h-7 flex-1 rounded border border-input bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+              <Button size="sm" type="submit" disabled={isSaving} className="h-7 px-2.5 text-xs">
+                Save
+              </Button>
+            </div>
+          </form>
+        </PopoverContent>
+      </Popover>
       <DeckManaSymbols colors={opponentDeckColors} />
     </span>
   )
@@ -308,6 +373,10 @@ export default function MatchDetails() {
         deckName: data.deckName ?? undefined,
         deckFormat: data.format ?? undefined,
         deckColors: data.deckColors ?? undefined,
+        deckArchetype: data.deckArchetype ?? undefined,
+        deckTimestamp: deckDetail?.timestamp ?? data.startTime ?? undefined,
+        deckMainCount: deckDetail ? deckDetail.mainboard.reduce((acc, c) => acc + c.quantity, 0) : undefined,
+        deckSideCount: deckDetail ? deckDetail.sideboard.reduce((acc, c) => acc + c.quantity, 0) : undefined,
       },
     })
   }
@@ -376,10 +445,14 @@ export default function MatchDetails() {
           label="Opponent"
           value={(
             <OpponentMetaValue
+              matchId={data.id}
               opponentName={data.opponentName}
               opponentDeckName={data.opponentDeckName}
               opponentDeckArchetype={data.opponentDeckArchetype}
               opponentDeckColors={data.opponentDeckColors}
+              onArchetypeUpdated={newArch => {
+                setData(prev => prev ? { ...prev, opponentDeckArchetype: newArch } : prev)
+              }}
             />
           )}
           icon={UserRound}

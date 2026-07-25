@@ -158,6 +158,12 @@ public class EventContext(DbContextOptions<EventContext> options)
       .Metadata
         .SetValueComparer(SideboardChangesComparerExtensions.SideboardChangesComparer);
 
+    modelBuilder.Entity<MatchModel>()
+      .Property(m => m.OpponentDeckColors)
+      .HasConversion(
+          e => e != null ? JsonSerializer.Serialize(e, s_databaseJsonOptions) : null,
+          e => e != null ? JsonSerializer.Deserialize<List<string>>(e, s_databaseJsonOptions) : null);
+
     //
     // Game relationships
     //

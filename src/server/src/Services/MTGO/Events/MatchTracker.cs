@@ -288,10 +288,10 @@ public class MatchTracker: IDisposable
       var winnerNames = new HashSet<string>(
         winners?.Select(w => w.Name) ?? []);
 
-      TimeSpan elapsed = game.EndTime is DateTime endTime
-                      && endTime > game.StartTime
-        ? endTime - game.StartTime
-        : DateTime.Now - game.StartTime;
+      TimeSpan elapsed = game.CompletedDuration
+        ?? (game.EndTime is DateTime endTime && endTime > game.StartTime
+          ? endTime - game.StartTime
+          : DateTime.Now - game.StartTime);
 
       List<GamePlayerResult> results = [];
       for (int i = 0; i < players.Count; i++)

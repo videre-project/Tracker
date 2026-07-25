@@ -23,5 +23,8 @@ public class MatchModel
   public List<PlayerResult> PlayerResults { get; set; } = new();
   public Dictionary<int, List<CardEntry>> SideboardChanges { get; set; } = new();
 
+  public string? OpponentDeckArchetype { get; set; }
+  public List<string>? OpponentDeckColors { get; set; }
+
   public List<GameModel> Games { get; set; } = new();
 }

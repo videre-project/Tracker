@@ -445,6 +445,123 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    [path: `/api/collection/cards/texture/${number}/image`]: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a card image by its MTGO texture ID (CTN) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description MTGO Texture ID */
+                    textureId: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": string;
+                        "application/json": string;
+                        "text/json": string;
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": ProblemDetails;
+                        "application/json": ProblemDetails;
+                        "text/json": ProblemDetails;
+                    };
+                };
+                /** @description Service Unavailable */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    [path: `/api/collection/cards/${number}/face`]: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get the source catalog ID for a double-faced card's back face by front catalog ID. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    catalogId: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": ProblemDetails;
+                        "application/json": ProblemDetails;
+                        "text/json": ProblemDetails;
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": ProblemDetails;
+                        "application/json": ProblemDetails;
+                        "text/json": ProblemDetails;
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     [path: `/api/collection/cards/${number}/art`]: {
         parameters: {
             query?: never;
@@ -934,7 +1051,50 @@ export interface paths {
                 };
             };
         };
-        put?: never;
+        /** Manually update archetype information for a deck */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description Collection-history deck revision ID */
+                    revisionId: number;
+                };
+                cookie?: never;
+            };
+            /** @description Request containing new archetype name */
+            requestBody?: {
+                content: {
+                    "application/json": UpdateArchetypeRequest;
+                    "text/json": UpdateArchetypeRequest;
+                    "application/*+json": UpdateArchetypeRequest;
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": unknown;
+                        "application/json": unknown;
+                        "text/json": unknown;
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": ProblemDetails;
+                        "application/json": ProblemDetails;
+                        "text/json": ProblemDetails;
+                    };
+                };
+            };
+        };
         post?: never;
         delete?: never;
         options?: never;
@@ -1909,6 +2069,63 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    [path: `/api/Games/match/${number}/opponent-archetype`]: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Manually update opponent archetype for a match */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    matchId: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": UpdateArchetypeRequest;
+                    "text/json": UpdateArchetypeRequest;
+                    "application/*+json": UpdateArchetypeRequest;
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": unknown;
+                        "application/json": unknown;
+                        "text/json": unknown;
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": ProblemDetails;
+                        "application/json": ProblemDetails;
+                        "text/json": ProblemDetails;
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/games/formats": {
         parameters: {
             query?: never;
@@ -2640,6 +2857,10 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** @description Request body for updating a deck or opponent archetype */
+        "Tracker.Controllers.DecksController.UpdateArchetypeRequest": {
+            archetype?: string | null;
+        };
         "Tracker.Controllers.Models.Client.IClientState": {
             readonly isConnected?: boolean;
             readonly isInitialized?: boolean;
@@ -2811,6 +3032,8 @@ export interface components {
             format: string | null;
             /** Format: date-time */
             timestamp: string;
+            archetype?: string | null;
+            colors?: string[] | null;
             mainboard: CardEntry[] | null;
             sideboard: CardEntry[] | null;
         };
@@ -3382,6 +3605,7 @@ export type MtgosdkApiTradeTradePartner = TradePartner;
 export type MtgosdkApiUsersAvatar = Avatar;
 export type MtgosdkApiUsersUser = User;
 export type MicrosoftAspNetCoreMvcProblemDetails = ProblemDetails;
+export type TrackerControllersDecksControllerUpdateArchetypeRequest = UpdateArchetypeRequest;
 export type TrackerControllersModelsClientIClientState = IClientState;
 export type TrackerControllersModelsCollectionCollectionCardDto = CollectionCardDTO;
 export type TrackerControllersModelsCollectionCollectionCardDetailDto = CollectionCardDetailDTO;
@@ -3470,6 +3694,7 @@ export type TradePartner = components['schemas']['MTGOSDK.API.Trade.TradePartner
 export type Avatar = components['schemas']['MTGOSDK.API.Users.Avatar'];
 export type User = components['schemas']['MTGOSDK.API.Users.User'];
 export type ProblemDetails = components['schemas']['Microsoft.AspNetCore.Mvc.ProblemDetails'];
+export type UpdateArchetypeRequest = components['schemas']['Tracker.Controllers.DecksController.UpdateArchetypeRequest'];
 export type IClientState = components['schemas']['Tracker.Controllers.Models.Client.IClientState'];
 export type CollectionCardDTO = components['schemas']['Tracker.Controllers.Models.Collection.CollectionCardDTO'];
 export type CollectionCardDetailDTO = components['schemas']['Tracker.Controllers.Models.Collection.CollectionCardDetailDTO'];

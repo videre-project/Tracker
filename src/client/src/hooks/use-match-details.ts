@@ -39,3 +39,16 @@ export function useMatchDetails(matchId: number | null) {
 
   return { data, loading, error }
 }
+
+export async function updateOpponentArchetype(
+  matchId: number,
+  archetype: string
+): Promise<{ matchId: number; opponentDeckArchetype: string | null; opponentDeckColors: string[] | null }> {
+  const response = await fetch(getApiUrl(`/api/games/match/${matchId}/opponent-archetype`), {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ archetype }),
+  })
+  if (!response.ok) throw new Error(`HTTP ${response.status}`)
+  return response.json()
+}

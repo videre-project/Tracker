@@ -102,6 +102,12 @@ public static class DatabaseService
 
           await db.ExecuteSqlRawAsync("PRAGMA journal_mode=WAL;", cancellationToken);
           await db.ExecuteSqlRawAsync("PRAGMA busy_timeout=5000;", cancellationToken);
+
+          if (typeof(T).Name == "EventContext")
+          {
+            try { await db.ExecuteSqlRawAsync("ALTER TABLE Matches ADD COLUMN OpponentDeckArchetype TEXT;", cancellationToken); } catch { }
+            try { await db.ExecuteSqlRawAsync("ALTER TABLE Matches ADD COLUMN OpponentDeckColors TEXT;", cancellationToken); } catch { }
+          }
         }
 
         readiness.SetReady();
