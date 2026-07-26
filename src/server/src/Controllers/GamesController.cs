@@ -715,6 +715,9 @@ public class GamesController : APIController
       .Include(m => m.Event)
       .Include(m => m.Games)
         .ThenInclude(g => g.Players)
+      .Include(m => m.Games)
+        .ThenInclude(g => g.States)
+          .ThenInclude(s => s.Logs)
       .AsSplitQuery()
       .AsNoTracking()
       .AsQueryable();
@@ -775,23 +778,21 @@ public class GamesController : APIController
       if (firstGame != null)
       {
         var gameResult = firstGame.GamePlayerResults.FirstOrDefault(p => p.Player == currentUser);
-        if (gameResult != null)
+        var playDraw = ResolvePlayDraw(firstGame, currentUser, gameResult?.PlayDraw);
+        if (playDraw == "Play")
         {
-          if (gameResult.PlayDraw == PlayDrawResult.Play)
+          playMatches++;
+          if (playerResult.Result == MatchResult.Win)
           {
-            playMatches++;
-            if (playerResult.Result == MatchResult.Win)
-            {
-              playWins++;
-            }
+            playWins++;
           }
-          else if (gameResult.PlayDraw == PlayDrawResult.Draw)
+        }
+        else if (playDraw == "Draw")
+        {
+          drawMatches++;
+          if (playerResult.Result == MatchResult.Win)
           {
-            drawMatches++;
-            if (playerResult.Result == MatchResult.Win)
-            {
-              drawWins++;
-            }
+            drawWins++;
           }
         }
       }
@@ -999,6 +1000,15 @@ public class GamesController : APIController
             return log.Data.Contains(playerUsername, StringComparison.OrdinalIgnoreCase)
               ? "Play"
               : "Draw";
+          }
+
+          // "<Player> chooses to draw first." or "<Player> chooses to play second." -> <Player> is on the Draw
+          if (log.Data.Contains("chooses to draw first", StringComparison.OrdinalIgnoreCase) ||
+              log.Data.Contains("chooses to play second", StringComparison.OrdinalIgnoreCase))
+          {
+            return log.Data.Contains(playerUsername, StringComparison.OrdinalIgnoreCase)
+              ? "Draw"
+              : "Play";
           }
         }
       }
