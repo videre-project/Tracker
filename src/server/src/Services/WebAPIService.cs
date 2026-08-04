@@ -89,7 +89,7 @@ public static class WebAPIService
 
     // Register HttpClient factory for external API calls
     builder.Services.AddHttpClient();
-    builder.Services.AddHttpClient<INBACArchetypeClient, NBACArchetypeClient>();
+    builder.Services.AddHttpClient<IManafoldArchetypeClient, ManafoldArchetypeClient>();
     builder.Services.AddHttpClient<VidereOpenAPIClient>(ConfigureVidereAPIClient);
     builder.Services.AddHttpClient("VidereAPI", ConfigureVidereAPIClient);
     builder.Services.AddTransient(services => new VidereAPIClient(

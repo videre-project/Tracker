@@ -39,19 +39,19 @@ public class GamesController : APIController
   private readonly EventContext context;
   private readonly IClientAPIProvider clientProvider;
   private readonly CollectionDeckService deckService;
-  private readonly INBACArchetypeClient nbacArchetypeClient;
+  private readonly IManafoldArchetypeClient manafoldArchetypeClient;
   private static readonly ConcurrentDictionary<string, string> s_cardNameColorCache = new(StringComparer.OrdinalIgnoreCase);
 
   public GamesController(
     EventContext context,
     IClientAPIProvider clientProvider,
     CollectionDeckService deckService,
-    INBACArchetypeClient nbacArchetypeClient)
+    IManafoldArchetypeClient manafoldArchetypeClient)
   {
     this.context = context;
     this.clientProvider = clientProvider;
     this.deckService = deckService;
-    this.nbacArchetypeClient = nbacArchetypeClient;
+    this.manafoldArchetypeClient = manafoldArchetypeClient;
   }
 
   [HttpGet("history")]
@@ -639,11 +639,11 @@ public class GamesController : APIController
       List<string> opponentColors = VidereCardColors.Normalize(detectedColorChars).ToList();
 
       string? detectedArchetype = null;
-      if (!hasArchetype && nbacArchetypeClient != null && cardCounts.Count >= 1)
+      if (!hasArchetype && manafoldArchetypeClient != null && cardCounts.Count >= 1)
       {
-        var nbacCards = cardCounts.Select(kvp => new NBACDeckCard(kvp.Key, kvp.Value)).ToList();
+        var manafoldCards = cardCounts.Select(kvp => new ManafoldDeckCard(kvp.Key, kvp.Value)).ToList();
         string format = match.Event?.Format ?? "Modern";
-        var response = await nbacArchetypeClient.DetectArchetypeAsync(nbacCards, format, cancellationToken);
+        var response = await manafoldArchetypeClient.DetectArchetypeAsync(manafoldCards, format, cancellationToken);
         (detectedArchetype, _) = DecksController.ParseArchetype(response);
       }
 

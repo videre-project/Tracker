@@ -135,14 +135,14 @@ public class ApplicationOptions(string[] args = null!)
   public bool DisableUI { get; internal set; } = false;
 
   /// <summary>
-  /// The base URL for the NBAC (Naive Bayes Archetype Classification) API.
+  /// The base URL for the Manafold inference API.
   /// </summary>
   /// <remarks>
-  /// Defaults to the production endpoint. Can be overridden via NBAC_API_URL environment variable.
+  /// Defaults to the production endpoint. Can be overridden via MANAFOLD_API_URL environment variable.
   /// </remarks>
-  public string NbacApiUrl { get; internal set; } =
-    Environment.GetEnvironmentVariable("NBAC_API_URL")
-      ?? "https://ml.videreproject.com/nbac";
+  public string ManafoldApiUrl { get; internal set; } =
+    Environment.GetEnvironmentVariable("MANAFOLD_API_URL")
+      ?? "https://ml.videreproject.com/manafold";
 
   /// <summary>
   /// The base URL for the Videre public API.

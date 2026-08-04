@@ -13,7 +13,7 @@ This Agreement does not restrict any rights granted to you under the Apache Lice
 
 **2. Access to and Use of Services**  
 The Software may interact with Videre’s online Services, including but not limited to:  
-- The NBAC inference service for deck archetype classification.  
+- The Manafold inference service for deck archetype classification.
 - The Videre API for uploading, pulling, or syncing gameplay and related data.  
 
 Access to and use of these Services is provided “as available” and is subject to the terms of this Agreement. We may modify, suspend, or discontinue any Service features at any time without notice.

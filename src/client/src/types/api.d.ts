@@ -1007,7 +1007,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get archetype information for a deck from the NBAC API */
+        /** Get archetype information for a deck from the Manafold API */
         get: {
             parameters: {
                 query?: never;

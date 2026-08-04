@@ -46,18 +46,18 @@ public class DecksController : APIController
 {
   private readonly EventContext context;
   private readonly CollectionDeckService deckService;
-  private readonly INBACArchetypeClient nbacArchetypeClient;
+  private readonly IManafoldArchetypeClient manafoldArchetypeClient;
   private readonly IClientAPIProvider clientProvider;
 
   public DecksController(
     EventContext context,
     CollectionDeckService deckService,
-    INBACArchetypeClient nbacArchetypeClient,
+    IManafoldArchetypeClient manafoldArchetypeClient,
     IClientAPIProvider clientProvider)
   {
     this.context = context;
     this.deckService = deckService;
-    this.nbacArchetypeClient = nbacArchetypeClient;
+    this.manafoldArchetypeClient = manafoldArchetypeClient;
     this.clientProvider = clientProvider;
   }
 
@@ -605,10 +605,10 @@ public class DecksController : APIController
   }
 
   /// <summary>
-  /// Get archetype information for a deck from the NBAC API
+  /// Get archetype information for a deck from the Manafold API
   /// </summary>
   /// <param name="revisionId">Collection-history deck revision ID</param>
-  /// <returns>Raw NBAC API response</returns>
+  /// <returns>Raw Manafold API response</returns>
   [HttpGet("/api/decks/{revisionId:long}/archetype")]
   [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
   [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -625,7 +625,7 @@ public class DecksController : APIController
 
     // Build request body with card names and quantities
     var cards = deck.Mainboard
-      .Select(card => new NBACDeckCard(card.name, card.quantity))
+      .Select(card => new ManafoldDeckCard(card.name, card.quantity))
       .ToList();
 
     if (cards.Count < 2)
@@ -635,25 +635,25 @@ public class DecksController : APIController
 
     try
     {
-      var nbacResponse = await nbacArchetypeClient.DetectArchetypeAsync(
+      var manafoldResponse = await manafoldArchetypeClient.DetectArchetypeAsync(
         cards,
         deck.Format,
         cancellationToken);
-      var (archetype, featuredCard) = ParseArchetype(nbacResponse);
+      var (archetype, featuredCard) = ParseArchetype(manafoldResponse);
       await deckService.SetEnrichmentAsync(
         revisionId,
         archetype,
         featuredCard,
         cancellationToken);
-      return Ok(nbacResponse);
+      return Ok(manafoldResponse);
     }
-    catch (NBACAPIException ex)
+    catch (ManafoldAPIException ex)
     {
       if (ex.StatusCode.HasValue)
       {
         return StatusCode(StatusCodes.Status502BadGateway, new
         {
-          error = "NBAC API request failed",
+          error = "Manafold API request failed",
           statusCode = ex.StatusCode.Value,
           response = ex.Response
         });
@@ -661,7 +661,7 @@ public class DecksController : APIController
 
       return StatusCode(StatusCodes.Status502BadGateway, new
       {
-        error = "Failed to connect to NBAC API",
+        error = "Failed to connect to Manafold API",
         message = ex.Message
       });
     }
@@ -739,15 +739,23 @@ public class DecksController : APIController
       return (null, null);
 
     string? featuredCard = null;
-    if (response.TryGetProperty("explain", out var explain) &&
-        explain.TryGetProperty("archetypes", out var archetypes) &&
-        archetypes.TryGetProperty(best.Name, out var cards))
+    if (response.TryGetProperty("predictions", out var predictions) &&
+        predictions.ValueKind == JsonValueKind.Array)
     {
-      JsonElement topCard = cards.EnumerateArray().FirstOrDefault();
-      if (topCard.ValueKind != JsonValueKind.Undefined &&
-          topCard.TryGetProperty("card", out var card))
+      var prediction = predictions.EnumerateArray()
+        .FirstOrDefault(item =>
+          item.TryGetProperty("label", out var label) &&
+          string.Equals(label.GetString(), best.Name, StringComparison.Ordinal));
+      if (prediction.ValueKind != JsonValueKind.Undefined &&
+          prediction.TryGetProperty("ranking", out var ranking) &&
+          ranking.ValueKind == JsonValueKind.Array)
       {
-        featuredCard = card.GetString();
+        JsonElement topCard = ranking.EnumerateArray().FirstOrDefault();
+        if (topCard.ValueKind != JsonValueKind.Undefined &&
+            topCard.TryGetProperty("card", out var card))
+        {
+          featuredCard = card.GetString();
+        }
       }
     }
 

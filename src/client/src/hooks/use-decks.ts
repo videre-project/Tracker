@@ -36,21 +36,24 @@ export interface DeckDetail {
   sideboard: CardEntry[]
 }
 
-export interface NBACResponse {
+export interface ManafoldResponse {
   meta?: {
-    database: string
+    database: string | null
     backend: string
     exec_ms: number
-    read_count: number
     model: string
+    model_version: string
+    token_count: number
+    unknown_card_count: number
+    unknown_cards: string[]
   }
   data?: Record<string, number>
-  explain?: {
-    method: string
-    top: number
-    n: number
-    archetypes: Record<string, Array<{ card: string; quantity: number; score: number }>>
-  }
+  predictions?: Array<{
+    label_id: string
+    label: string
+    probability: number
+    ranking: Array<{ card: string; oracle_id: string; quantity: number; score: number }>
+  }>
   error?: string
   message?: string
 }
@@ -136,7 +139,7 @@ export function useDeckDetail(revisionId: string | null) {
 }
 
 export function useDeckArchetype(revisionId: string | null) {
-  const [archetype, setArchetype] = useState<NBACResponse | null>(null)
+  const [archetype, setArchetype] = useState<ManafoldResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const loadingRef = useRef(false)

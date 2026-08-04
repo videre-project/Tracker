@@ -15,19 +15,19 @@ using System.Threading.Tasks;
 
 namespace Tracker.Services.Videre;
 
-public interface INBACArchetypeClient
+public interface IManafoldArchetypeClient
 {
   Task<JsonElement> DetectArchetypeAsync(
-    IReadOnlyCollection<NBACDeckCard> cards,
+    IReadOnlyCollection<ManafoldDeckCard> cards,
     string format,
     CancellationToken cancellationToken = default);
 }
 
-public sealed record NBACDeckCard(
+public sealed record ManafoldDeckCard(
   [property: JsonPropertyName("name")] string Name,
   [property: JsonPropertyName("quantity")] int Quantity);
 
-public sealed class NBACAPIException(
+public sealed class ManafoldAPIException(
   string message,
   int? statusCode = null,
   string? response = null,
@@ -37,29 +37,30 @@ public sealed class NBACAPIException(
   public string? Response { get; } = response;
 }
 
-public sealed class NBACArchetypeClient(
+public sealed class ManafoldArchetypeClient(
   HttpClient httpClient,
-  ApplicationOptions appOptions) : INBACArchetypeClient
+  ApplicationOptions appOptions) : IManafoldArchetypeClient
 {
   public async Task<JsonElement> DetectArchetypeAsync(
-    IReadOnlyCollection<NBACDeckCard> cards,
+    IReadOnlyCollection<ManafoldDeckCard> cards,
     string format,
     CancellationToken cancellationToken = default)
   {
     var requestBody = JsonSerializer.Serialize(cards);
     using var content = new StringContent(requestBody, Encoding.UTF8, "application/json");
+    var endpoint = $"{appOptions.ManafoldApiUrl.TrimEnd('/')}/{Uri.EscapeDataString(format.Trim().ToLowerInvariant())}";
 
     try
     {
       using var response = await httpClient.PostAsync(
-        $"{appOptions.NbacApiUrl}?format={Uri.EscapeDataString(format.ToLowerInvariant())}&explain=1",
+        endpoint,
         content,
         cancellationToken);
       var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
       if (!response.IsSuccessStatusCode)
       {
-        throw new NBACAPIException(
-          "NBAC API request failed",
+        throw new ManafoldAPIException(
+          "Manafold API request failed",
           (int)response.StatusCode,
           responseContent);
       }
@@ -70,13 +71,13 @@ public sealed class NBACArchetypeClient(
     {
       throw;
     }
-    catch (NBACAPIException)
+    catch (ManafoldAPIException)
     {
       throw;
     }
     catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
     {
-      throw new NBACAPIException("Failed to connect to NBAC API", innerException: ex);
+      throw new ManafoldAPIException("Failed to connect to Manafold API", innerException: ex);
     }
   }
 }
