@@ -70,6 +70,39 @@ pnpm run build
 
 ## Usage
 
+### Run MTGO with Docker
+
+On a Wayland desktop, start MTGO with:
+
+```sh
+docker compose up mtgo-wayland
+```
+
+The `mtgo-wayland` service uses the [`videreproject/mtgo:wayland`](https://hub.docker.com/r/videreproject/mtgo) image. On its first run, it downloads and installs MTGO, then stores the Wine prefix and bootstrapper in the `mtgo-wine-data` volume for later runs.
+
+To follow the service logs or stop the container, use:
+
+```sh
+docker compose logs -f mtgo-wayland
+docker compose down
+```
+
+The service mounts the Wayland socket from the current desktop session. Docker reads its directory from `XDG_RUNTIME_DIR` and uses `wayland-0` when `WAYLAND_DISPLAY` is unset, so start it from a session where `XDG_RUNTIME_DIR` is set. It also mounts the host X11 socket for XWayland fallback and disables WPF hardware acceleration to avoid rendering MTGO windows black under Wine.
+
+### Run Tracker with MTGO under Wine
+
+The `tracker-wayland` service builds on `videreproject/mtgosdk:wayland`. Its image installs both the Visual C++ 2015–2022 runtime and Microsoft's x64 Evergreen WebView2 Runtime for the Tracker's embedded web UI.
+
+To run the Tracker through wine, first build the Windows executable on the host, then build and start the service:
+
+```sh
+pnpm run publish
+docker compose build tracker-wayland
+docker compose up tracker-wayland
+```
+
+The service starts both MTGO and the Tracker in the same container and Wine prefix so MTGOSDK can discover the MTGO process. It dalso isables Tracker's installer and starts WebView2 with GPU acceleration disabled, and generates a loopback certificate for Tracker's HTTPS server for local development. Data for the Tracker is persisted in the `tracker-wine-data` volume and is shared in the Wine environment.
+
 ### Development mode
 
 To run the Tracker in development mode (with hot reload for the client and debug configuration):
