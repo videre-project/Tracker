@@ -1,3 +1,8 @@
+/** @file
+  Copyright (c) 2026, Cory Bennett. All rights reserved.
+  SPDX-License-Identifier: Apache-2.0
+**/
+
 import * as React from "react";
 import { type RouteObject, createBrowserRouter } from "react-router-dom";
 
@@ -15,20 +20,21 @@ import {
 } from "lucide-react";
 
 import Layout from "@/layout/LayoutContent";
-import Events from "@/pages/events";
-import EventDetails from "@/pages/event-details";
-import Home from "@/pages/home";
-import SettingsPage from "@/pages/settings";
-import ApiDocs from "@/pages/api-docs";
-import Diagnostics from "@/pages/diagnostics";
-import Decks from "@/pages/decks";
-import DeckEditor from "@/pages/deck-editor";
-import Collection from "@/pages/collection";
-import History from "@/pages/history";
-import MatchDetails from "@/pages/match-details";
-import GameLog from "@/pages/game-log";
-import GameReplay from "@/pages/game-replay";
-import Trades from "@/pages/trades";
+
+const Events = React.lazy(() => import('@/pages/events'))
+const EventDetails = React.lazy(() => import('@/pages/event-details'))
+const Home = React.lazy(() => import('@/pages/home'))
+const SettingsPage = React.lazy(() => import('@/pages/settings'))
+const ApiDocs = React.lazy(() => import('@/pages/api-docs'))
+const Diagnostics = React.lazy(() => import('@/pages/diagnostics'))
+const Decks = React.lazy(() => import('@/pages/decks'))
+const DeckEditor = React.lazy(() => import('@/pages/deck-editor'))
+const Collection = React.lazy(() => import('@/pages/collection'))
+const History = React.lazy(() => import('@/pages/history'))
+const MatchDetails = React.lazy(() => import('@/pages/match-details'))
+const GameLog = React.lazy(() => import('@/pages/game-log'))
+const GameReplay = React.lazy(() => import('@/pages/game-replay'))
+const Trades = React.lazy(() => import('@/pages/trades'))
 
 export enum NavType {
   Primary,
@@ -44,20 +50,6 @@ export type RouteEntry = RouteObject & {
   icon?: LucideIcon;
   type?: NavType;
   children?: RouteEntry[];
-}
-
-export function DummyComponent() {
-  return (
-    <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-      <div className="grid auto-rows-min gap-4 md:grid-cols-3">
-        <div className="aspect-video rounded-xl bg-muted/50" />
-        <div className="aspect-video rounded-xl bg-muted/50" />
-        <div className="aspect-video rounded-xl bg-muted/50" />
-      </div>
-      <div className="min-h-[100vh] flex-1 rounded-xl bg-muted/50
-                      md:min-h-min" />
-    </div>
-  )
 }
 
 export const routes: RouteEntry[] = [
