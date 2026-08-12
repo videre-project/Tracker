@@ -1,3 +1,8 @@
+/** @file
+  Copyright (c) 2026, Cory Bennett. All rights reserved.
+  SPDX-License-Identifier: Apache-2.0
+**/
+
 // This script rewrites the generated api.d.ts file to strip namespaces from exported type names and their references.
 // Usage: node scripts/stripNamespaceFromTypes.js <input> <output>
 

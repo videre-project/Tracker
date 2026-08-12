@@ -1,3 +1,8 @@
+/** @file
+  Copyright (c) 2026, Cory Bennett. All rights reserved.
+  SPDX-License-Identifier: Apache-2.0
+**/
+
 import { useState, useCallback, useRef } from "react"
 import { getApiUrl } from "../utils/api-config"
 

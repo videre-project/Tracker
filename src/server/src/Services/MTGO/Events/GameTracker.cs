@@ -148,8 +148,8 @@ public class GameTracker : IDisposable
 
     // Subscribe to GameProcessor events (lazy activation via ProcessorEvent).
     // Registration order determines processing order within each snapshot:
-    //   RevealedZoneTracker → ZoneChangeTracker → PropertyChangeTracker →
-    //   ActionProcessor → LogMessageProcessor → PromptProcessor
+    //   RevealedZoneTracker -> ZoneChangeTracker -> PropertyChangeTracker ->
+    //   ActionProcessor -> LogMessageProcessor -> PromptProcessor
     game.OnRevealedCards += OnRevealedCards;
     game.OnZoneChanged += OnZoneChanged;
     game.OnCardChanged += OnCardChanged;
