@@ -6,6 +6,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Net;
 using System.Reflection;
 using System.Text.Encodings.Web;
 using System.Text.Json;
@@ -54,15 +55,26 @@ public static class WebAPIService
     // Register ApplicationOptions as a singleton for dependency injection
     builder.Services.AddSingleton(appOptions);
 
-    // Configure Kestrel with HTTP/2 over HTTPS (multiplexes streams over single connection)
+    // Configure Kestrel
     builder.WebHost.ConfigureKestrel(options =>
     {
+      // Always listen on HTTPS for the main API
       options.ListenLocalhost(appOptions.Url.Port, listenOptions =>
       {
         listenOptions.UseHttps();
         // Enable HTTP/2 with HTTP/1.1 fallback
         listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
       });
+
+      // In development container, also listen on HTTP for Vite proxy
+      // Listen on all interfaces (0.0.0.0) so other containers can connect
+      if (appOptions.IsDevelopment && appOptions.HttpUrl != null)
+      {
+        options.Listen(IPAddress.Any, appOptions.HttpUrl.Port, listenOptions =>
+        {
+          listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
+        });
+      }
     });
 
     // Add services to the container.

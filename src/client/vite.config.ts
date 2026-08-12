@@ -1,5 +1,5 @@
 /** @file
-  Copyright (c) 2023, Cory Bennett. All rights reserved.
+  Copyright (c) 2026, Cory Bennett. All rights reserved.
   SPDX-License-Identifier: Apache-2.0
 **/
 
@@ -24,26 +24,29 @@ const certificateName = "client";
 const certFilePath = path.join(baseFolder, `${certificateName}.pem`);
 const keyFilePath = path.join(baseFolder, `${certificateName}.key`);
 
-if (!fs.existsSync(baseFolder)) {
-  fs.mkdirSync(baseFolder, { recursive: true });
-}
-
-if (!fs.existsSync(certFilePath) || !fs.existsSync(keyFilePath)) {
-  if (0 !== child_process.spawnSync('dotnet', [
-      'dev-certs',
-      'https',
-      '--export-path',
-      certFilePath,
-      '--format',
-      'Pem',
-      '--no-password',
-  ], { stdio: 'inherit', }).status) {
-    throw new Error("Could not create certificate.");
+// Skip certificate generation in dev container (no dotnet available)
+if (!env.TRACKER_DEV_CONTAINER) {
+  if (!fs.existsSync(baseFolder)) {
+    fs.mkdirSync(baseFolder, { recursive: true });
   }
-}
 
-// Trust the dev certificate for Node.js (fixes TLS errors with self-signed certs)
-process.env.NODE_EXTRA_CA_CERTS = certFilePath;
+  if (!fs.existsSync(certFilePath) || !fs.existsSync(keyFilePath)) {
+    if (0 !== child_process.spawnSync('dotnet', [
+        'dev-certs',
+        'https',
+        '--export-path',
+        certFilePath,
+        '--format',
+        'Pem',
+        '--no-password',
+    ], { stdio: 'inherit', }).status) {
+      throw new Error("Could not create certificate.");
+    }
+  }
+
+  // Trust the dev certificate for Node.js (fixes TLS errors with self-signed certs)
+  process.env.NODE_EXTRA_CA_CERTS = certFilePath;
+}
 
 const targetOverride = env.TRACKER_BACKEND_URL || env.VITE_BACKEND_URL;
 
@@ -55,15 +58,18 @@ const aspnetcoreUrls = (env.ASPNETCORE_URLS ?? '')
 const aspnetcoreHttpsUrl = aspnetcoreUrls.find((u) => u.startsWith('https://'));
 const aspnetcoreFirstUrl = aspnetcoreUrls[0];
 
+// In dev container, use HTTP to tracker-dev service
 const target = targetOverride
   ? targetOverride
-  : env.ASPNETCORE_HTTPS_PORT
-    ? `https://localhost:${env.ASPNETCORE_HTTPS_PORT}`
-    : aspnetcoreHttpsUrl
-      ? aspnetcoreHttpsUrl
-      : aspnetcoreFirstUrl
-        ? aspnetcoreFirstUrl
-        : 'https://localhost:7101';
+  : env.TRACKER_DEV_CONTAINER
+    ? 'http://tracker-dev:5002'
+    : env.ASPNETCORE_HTTPS_PORT
+      ? `https://localhost:${env.ASPNETCORE_HTTPS_PORT}`
+      : aspnetcoreHttpsUrl
+        ? aspnetcoreHttpsUrl
+        : aspnetcoreFirstUrl
+          ? aspnetcoreFirstUrl
+          : 'https://localhost:7101';
 
 console.log(`[vite] backend proxy target: ${target}`);
 
@@ -84,10 +90,13 @@ export default defineConfig({
   server: {
     port: parseInt(env.DEV_SERVER_PORT || '5279'),
     strictPort: true,
-    https: {
+    // Use HTTP in dev container (no certs), HTTPS locally
+    https: env.TRACKER_DEV_CONTAINER ? undefined : {
       key: fs.readFileSync(keyFilePath),
       cert: fs.readFileSync(certFilePath)
     },
+    // Allow requests from container hostnames
+    allowedHosts: env.TRACKER_DEV_CONTAINER ? ['vite-dev', 'localhost', '127.0.0.1', '0.0.0.0'] : undefined,
     proxy: {
       '/api': {
         target,
