@@ -1,61 +1,55 @@
-import React, { useState, useEffect, useCallback, useRef } from "react"
+/** @file
+  Copyright (c) 2026, Cory Bennett. All rights reserved.
+  SPDX-License-Identifier: Apache-2.0
+**/
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
-import { useParams, useNavigate } from "react-router-dom"
-import { getApiUrl } from "@/utils/api-config"
+import {
+  MatchDetailsLayout,
+  type GameAction,
+  type MatchDetailsData,
+  type MatchDetailsGame,
+  type ReplayData,
+  GAME_LOG_TYPE_ORDER as TYPE_ORDER,
+} from "@videreproject/ui"
+import { ArrowLeft } from "lucide-react"
+import { useNavigate, useParams } from "react-router-dom"
+
+import { useCardArtContext } from "@/hooks/use-card-art"
+import { Button } from "@videreproject/ui"
+import { Skeleton } from "@videreproject/ui"
 import { useClientState } from "@/hooks/use-client-state"
+import { useDeckDetail, type DeckDetail } from "@/hooks/use-decks"
 import { useMatchDetails, updateOpponentArchetype } from "@/hooks/use-match-details"
 import { useNDJSONStream } from "@/hooks/use-ndjson-stream"
-import { Button } from "@/components/ui/button"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover"
-import { ArrowLeft, Clock, Calendar, Radio, Play, Layers3, FileText, UserRound, Pencil, Check, X } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
-import { Skeleton } from "@/components/ui/skeleton"
-import type { GameDetailsDTO, GameLogDTO, MatchDetailsDTO } from "@/types/api"
-import { TYPE_ORDER } from "@/utils/game-log-rendering"
-import { cn } from "@/lib/utils"
-import { useDeckDetail } from "@/hooks/use-decks"
-import type { ReplayData } from "@/types/replay-types"
-import { GameReviewPanel } from "@/components/match/game-review-panel"
-import {
-  DeckManaSymbols,
-  MatchDeckCard,
-  getDeckPreviewCards,
-} from "@/components/match/match-deck-card"
-import {
-  getCatalogIdByCardId,
-  getOpeningHandCards,
-  getSideboardingDiff,
-} from "@/components/match/match-review-model"
+import type {
+  GameDetailsDTO,
+  GameLogDTO,
+  MatchDetailsDTO,
+  SideboardChangeDTO,
+  ZoneTransferData,
+} from "@/types/api"
+import { getApiUrl } from "@/utils/api-config"
 
-function formatMatchDate(dateString?: string | null) {
-  if (!dateString) return "-"
+// -- Match DTO -> shared layout helpers --
 
-  const date = new Date(dateString)
-  if (Number.isNaN(date.getTime())) return "-"
-
-  return date.toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  })
+type ReplayCardCatalog = {
+  cards: Array<{ cardId: number; catalogId?: number | null }>
 }
 
-function getResultBadgeVariant(result?: string | null) {
-  if (result === "Win") return "default"
-  if (result === "Loss") return "destructive"
-  return "secondary"
+type OpeningHandCard = {
+  key: string
+  name: string
+  catalogId?: number | null
+  bottomed: boolean
 }
 
-function getInProgressBadgeClass(isInProgress: boolean) {
-  return isInProgress
-    ? "border-yellow-500/30 bg-yellow-500/15 text-yellow-700 dark:text-yellow-400"
-    : ""
+type SideboardingCard = {
+  key: string
+  name: string
+  quantity: number
+  catalogId?: number | null
 }
 
 function getGameKey(game: GameDetailsDTO) {
@@ -74,155 +68,334 @@ function getLatestGameKey(games: GameDetailsDTO[]) {
   return latest.id ?? latest.gameNumber ?? null
 }
 
-function MatchHeaderMeta({
-  label,
-  value,
-  icon: Icon,
-  className,
-}: {
-  label: string
-  value: React.ReactNode
-  icon: React.ComponentType<{ className?: string }>
-  className?: string
-}) {
-  return (
-    <span className={cn("inline-flex h-6 min-w-0 items-center gap-1.5 leading-none", className)}>
-      <Icon className="h-3.5 w-3.5 shrink-0 translate-y-px text-muted-foreground" />
-      <span className="shrink-0 text-xs font-medium text-muted-foreground">{label}</span>
-      <span className="min-w-0 truncate text-xs font-semibold text-foreground">{value}</span>
-    </span>
-  )
+function formatMatchDate(dateString?: string | null) {
+  if (!dateString) return "-"
+
+  const date = new Date(dateString)
+  if (Number.isNaN(date.getTime())) return "-"
+
+  return date.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  })
 }
 
-function OpponentMetaValue({
-  matchId,
-  opponentName,
-  opponentDeckName,
-  opponentDeckArchetype,
-  opponentDeckColors,
-  onArchetypeUpdated,
-}: {
-  matchId?: number | null
-  opponentName?: string | null
-  opponentDeckName?: string | null
-  opponentDeckArchetype?: string | null
-  opponentDeckColors?: string[] | null
-  onArchetypeUpdated?: (newArchetype: string) => void
-}) {
-  const name = opponentName?.trim()
-  const [isEditing, setIsEditing] = useState(false)
-  const [archetypeValue, setArchetypeValue] = useState(opponentDeckArchetype || "")
-  const [isSaving, setIsSaving] = useState(false)
+function getDeckPreviewCards(detail?: DeckDetail | null) {
+  if (!detail) return []
 
-  useEffect(() => {
-    setArchetypeValue(opponentDeckArchetype || "")
-  }, [opponentDeckArchetype])
+  return [...detail.mainboard]
+    .sort((a, b) => b.quantity - a.quantity)
+    .slice(0, 5)
+    .map(card => ({
+      catalogId: card.catalogId,
+      name: card.name,
+      quantity: card.quantity,
+    }))
+}
 
-  const deckLabel = archetypeValue.trim() || opponentDeckArchetype?.trim() || opponentDeckName?.trim() || "Deck unknown"
+function getLogTime(log: GameLogDTO) {
+  const time = log.timestamp ? new Date(log.timestamp).getTime() : 0
+  return Number.isFinite(time) ? time : 0
+}
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    if (!matchId) return
+function sortGameLogs(logs: GameLogDTO[]) {
+  return logs
+    .map((log, index) => ({ log, index }))
+    .sort((a, b) => {
+      const timeDiff = getLogTime(a.log) - getLogTime(b.log)
+      if (timeDiff !== 0) return timeDiff
 
-    setIsSaving(true)
-    try {
-      await updateOpponentArchetype(matchId, archetypeValue.trim())
-      onArchetypeUpdated?.(archetypeValue.trim())
-      setIsEditing(false)
-    } catch (err) {
-      console.error("Failed to update opponent archetype:", err)
-    } finally {
-      setIsSaving(false)
+      const aType = TYPE_ORDER[a.log.gameLogType] ?? 6
+      const bType = TYPE_ORDER[b.log.gameLogType] ?? 6
+      if (aType !== bType) return aType - bType
+
+      return a.index - b.index
+    })
+}
+
+function isOpeningKeepAction(log: GameLogDTO) {
+  if (log.gameLogType !== "GameAction") return false
+
+  try {
+    const action = JSON.parse(log.data ?? "{}") as GameAction
+    const name = action.name?.trim().toLowerCase()
+    const response = typeof action.response === "string"
+      ? action.response.trim().toLowerCase()
+      : null
+    return name === "keep" || response === "keep"
+  } catch {
+    return false
+  }
+}
+
+function transferKeys(transfer: ZoneTransferData) {
+  return [
+    transfer.cardId != null ? `card:${transfer.cardId}` : null,
+    transfer.sourceId != null ? `card:${transfer.sourceId}` : null,
+  ].filter(Boolean) as string[]
+}
+
+function applyHandTransfer(
+  hand: Map<string, OpeningHandCard>,
+  transfer: ZoneTransferData,
+  catalogIdByCardId: Map<number, number | null>,
+) {
+  const cardName = transfer.cardName?.trim()
+  if (!cardName) return
+
+  const fromHand = transfer.fromZone === "Hand"
+  const toHand = transfer.toZone === "Hand"
+
+  if (fromHand && !toHand) {
+    for (const key of transferKeys(transfer)) {
+      hand.delete(key)
+    }
+    return
+  }
+
+  if (!toHand) return
+
+  for (const key of transferKeys(transfer)) {
+    hand.delete(key)
+  }
+
+  const key = transfer.cardId != null
+    ? `card:${transfer.cardId}`
+    : transfer.sourceId != null
+      ? `card:${transfer.sourceId}`
+      : `name:${cardName}:${hand.size}`
+
+  hand.set(key, {
+    key,
+    name: cardName,
+    bottomed: false,
+    catalogId: transfer.cardId != null
+      ? catalogIdByCardId.get(transfer.cardId) ?? null
+      : transfer.sourceId != null
+        ? catalogIdByCardId.get(transfer.sourceId) ?? null
+        : null,
+  })
+}
+
+function applyHandLog(
+  hand: Map<string, OpeningHandCard>,
+  log: GameLogDTO,
+  catalogIdByCardId: Map<number, number | null>,
+) {
+  if (log.gameLogType !== "ZoneChange" && log.gameLogType !== "Reveal") return
+
+  try {
+    const transfers = JSON.parse(log.data ?? "[]") as ZoneTransferData[]
+    for (const transfer of transfers) {
+      applyHandTransfer(hand, transfer, catalogIdByCardId)
+    }
+  } catch {
+    // Ignore malformed historical log payloads.
+  }
+}
+
+function isPregameState(log: GameLogDTO) {
+  if (log.gameLogType !== "GameState") return true
+
+  try {
+    const state = JSON.parse(log.data ?? "{}") as { phase?: string }
+    return state.phase?.toLowerCase().startsWith("pregame") ?? true
+  } catch {
+    return true
+  }
+}
+
+function updateBottomedCards(hand: Map<string, OpeningHandCard>, log: GameLogDTO) {
+  if (log.gameLogType !== "ZoneChange" && log.gameLogType !== "Reveal") return
+
+  try {
+    const transfers = JSON.parse(log.data ?? "[]") as ZoneTransferData[]
+    for (const transfer of transfers) {
+      const leftHand = transfer.fromZone === "Hand" && transfer.toZone == null
+      const returnedToHand = transfer.toZone === "Hand"
+      if (!leftHand && !returnedToHand) continue
+
+      for (const key of transferKeys(transfer)) {
+        const card = hand.get(key)
+        if (card) card.bottomed = leftHand
+      }
+    }
+  } catch {
+    // Ignore malformed historical log payloads.
+  }
+}
+
+function getOpeningHandCards(
+  logs: GameLogDTO[],
+  catalogIdByCardId: Map<number, number | null>,
+) {
+  const sorted = sortGameLogs(logs)
+  const keepIndex = sorted.findIndex(entry => isOpeningKeepAction(entry.log))
+  const keepEntry = sorted[keepIndex]
+  if (!keepEntry) return []
+
+  const hand = new Map<string, OpeningHandCard>()
+  for (let index = 0; index < keepIndex; index++) {
+    applyHandLog(hand, sorted[index].log, catalogIdByCardId)
+  }
+
+  if (hand.size === 0) {
+    const keepTime = getLogTime(keepEntry.log)
+    for (const entry of sorted) {
+      if (getLogTime(entry.log) > keepTime) break
+      applyHandLog(hand, entry.log, catalogIdByCardId)
     }
   }
 
-  return (
-    <span className="inline-flex min-w-0 items-center gap-1.5">
-      <span className="truncate">{name ? `vs ${name}` : "Opponent unknown"}</span>
-      <span className="text-muted-foreground/60">-</span>
-      <Popover open={isEditing} onOpenChange={setIsEditing}>
-        <PopoverTrigger asChild>
-          <button
-            type="button"
-            className="group/arch inline-flex max-w-full items-center gap-2 text-muted-foreground hover:text-foreground focus:outline-none"
-            title="Edit opponent archetype"
-          >
-            <span className="truncate">{deckLabel}</span>
-            {matchId && (
-              <Pencil className="h-3 w-3 shrink-0 text-muted-foreground/50 transition-colors group-hover/arch:text-foreground" />
-            )}
-          </button>
-        </PopoverTrigger>
-        <PopoverContent align="start" className="w-64 p-3 shadow-lg">
-          <form onSubmit={handleSave} className="space-y-2.5" onClick={e => e.stopPropagation()}>
-            <div className="text-xs font-medium text-muted-foreground">Edit Opponent Archetype</div>
-            <div className="flex items-center gap-1.5">
-              <input
-                type="text"
-                value={archetypeValue}
-                onChange={e => setArchetypeValue(e.target.value)}
-                placeholder="e.g. Dimir Murktide"
-                autoFocus
-                className="h-7 flex-1 rounded border border-input bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-              />
-              <Button size="sm" type="submit" disabled={isSaving} className="h-7 px-2.5 text-xs">
-                Save
-              </Button>
-            </div>
-          </form>
-        </PopoverContent>
-      </Popover>
-      <DeckManaSymbols colors={opponentDeckColors} />
-    </span>
-  )
+  for (let index = keepIndex + 1; index < sorted.length; index++) {
+    const log = sorted[index].log
+    if (!isPregameState(log)) break
+    updateBottomedCards(hand, log)
+  }
+
+  return Array.from(hand.values())
 }
+
+function getCatalogIdByCardId(replay?: ReplayCardCatalog | null) {
+  const catalogIdByCardId = new Map<number, number | null>()
+  if (!replay) return catalogIdByCardId
+
+  for (const card of replay.cards) {
+    if (!catalogIdByCardId.has(card.cardId)) {
+      catalogIdByCardId.set(card.cardId, card.catalogId ?? null)
+    }
+  }
+
+  return catalogIdByCardId
+}
+
+function getSideboardingDiff(changes?: SideboardChangeDTO[] | null) {
+  const added = new Map<number, SideboardingCard>()
+  const removed = new Map<number, SideboardingCard>()
+
+  for (const change of changes ?? []) {
+    const quantity = change.quantity ?? 0
+    const catalogId = change.catalogId ?? 0
+    if (quantity === 0 || catalogId <= 0) continue
+
+    const cards = quantity > 0 ? added : removed
+    const direction = quantity > 0 ? "in" : "out"
+    const amount = Math.abs(quantity)
+    const existing = cards.get(catalogId)
+    if (existing) {
+      existing.quantity += amount
+      continue
+    }
+
+    cards.set(catalogId, {
+      key: `${direction}:${catalogId}`,
+      name: change.name?.trim() || `Card ID #${catalogId}`,
+      quantity: amount,
+      catalogId,
+    })
+  }
+
+  const byName = (a: SideboardingCard, b: SideboardingCard) =>
+    a.name.localeCompare(b.name) || (a.catalogId ?? 0) - (b.catalogId ?? 0)
+
+  return {
+    in: Array.from(added.values()).sort(byName),
+    out: Array.from(removed.values()).sort(byName),
+  }
+}
+
+function toSharedMatchDetails({
+  match,
+  deckDetail,
+  selectedGameKey,
+  selectedGameReplay,
+  deckBackgroundArtUrl,
+}: {
+  match: MatchDetailsDTO
+  deckDetail?: DeckDetail | null
+  selectedGameKey: number | null
+  selectedGameReplay?: ReplayData | null
+  deckBackgroundArtUrl?: string | null
+}): MatchDetailsData {
+  const catalogIdByCardId = getCatalogIdByCardId(selectedGameReplay)
+
+  return {
+    eventName: match.eventName || "Match",
+    result: match.result,
+    isActive: match.isActive,
+    record: match.record || "",
+    format: match.format || "-",
+    opponentName: match.opponentName,
+    opponentDeckName: match.opponentDeckName,
+    opponentDeckArchetype: match.opponentDeckArchetype,
+    opponentDeckColors: match.opponentDeckColors,
+    date: formatMatchDate(match.startTime),
+    duration: match.duration || "-",
+    deckName: match.deckName,
+    deckArchetype: match.deckArchetype,
+    deckColors: match.deckColors,
+    deckBackgroundArtUrl,
+    deckPreviewCards: getDeckPreviewCards(deckDetail),
+    games: (match.games ?? []).map((game, index) => {
+      const gameKey = getGameKey(game)
+      const sideboarding = getSideboardingDiff(game.sideboardChanges)
+      const openingHand = gameKey === selectedGameKey
+        ? getOpeningHandCards(game.logs ?? [], catalogIdByCardId)
+        : []
+
+      return {
+        id: String(gameKey),
+        gameNumber: game.gameNumber ?? index + 1,
+        result: game.result || "Unknown",
+        playDraw: game.playDraw || "-",
+        duration: game.duration || "-",
+        openingHand: openingHand.map(card => ({
+          catalogId: card.catalogId ?? 0,
+          name: card.name,
+          bottomed: card.bottomed,
+        })),
+        sideboarding: {
+          in: sideboarding.in.map(card => ({
+            catalogId: card.catalogId ?? 0,
+            name: card.name,
+            quantity: card.quantity,
+          })),
+          out: sideboarding.out.map(card => ({
+            catalogId: card.catalogId ?? 0,
+            name: card.name,
+            quantity: card.quantity,
+          })),
+        },
+      }
+    }),
+  }
+}
+
+// -- Page --
 
 export default function MatchDetails() {
   const { matchId } = useParams<{ matchId: string }>()
   const navigate = useNavigate()
   const parsedMatchId = matchId ? parseInt(matchId, 10) : null
-
   const { data: fetchedData, loading, error } = useMatchDetails(parsedMatchId)
   const { isReady: clientReady } = useClientState()
+  const { getArtUrl, prefetchCards, isReady: cardArtReady } = useCardArtContext()
 
-  // Local mutable copy of match data — receives both initial fetch and live SSE updates
   const [data, setData] = useState<MatchDetailsDTO | null>(null)
   const [liveLogCount, setLiveLogCount] = useState(0)
   const [selectedGameKey, setSelectedGameKey] = useState<number | null>(null)
   const [selectedGameReplay, setSelectedGameReplay] = useState<ReplayData | null>(null)
+  const [archetypePending, setArchetypePending] = useState(false)
+  const [archetypeError, setArchetypeError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (fetchedData) {
-      setData(fetchedData)
-      setLiveLogCount(0)
-    }
+    if (!fetchedData) return
+    setData(fetchedData)
+    setLiveLogCount(0)
   }, [fetchedData])
-
-  useEffect(() => {
-    if (!clientReady || parsedMatchId == null || selectedGameKey == null) {
-      setSelectedGameReplay(null)
-      return
-    }
-
-    const controller = new AbortController()
-    fetch(getApiUrl(`/api/games/game/${selectedGameKey}/replay`), {
-      signal: controller.signal,
-    })
-      .then(response => {
-        if (!response.ok) throw new Error(`HTTP ${response.status}`)
-        return response.json() as Promise<ReplayData>
-      })
-      .then(json => {
-        setSelectedGameReplay(json)
-      })
-      .catch(error => {
-        if (error instanceof Error && error.name === "AbortError") return
-        setSelectedGameReplay(null)
-      })
-
-    return () => controller.abort()
-  }, [clientReady, parsedMatchId, selectedGameKey])
 
   useEffect(() => {
     const games = data?.games ?? []
@@ -237,59 +410,79 @@ export default function MatchDetails() {
     }
   }, [data?.games, selectedGameKey])
 
-  // Refetch trigger for when SSE delivers a log for an unknown gameId
+  useEffect(() => {
+    if (!clientReady || parsedMatchId == null || selectedGameKey == null) {
+      setSelectedGameReplay(null)
+      return
+    }
+
+    const controller = new AbortController()
+    fetch(getApiUrl(`/api/games/game/${selectedGameKey}/replay`), { signal: controller.signal })
+      .then(response => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        return response.json() as Promise<ReplayData>
+      })
+      .then(setSelectedGameReplay)
+      .catch(requestError => {
+        if (requestError instanceof Error && requestError.name === "AbortError") return
+        setSelectedGameReplay(null)
+      })
+
+    return () => controller.abort()
+  }, [clientReady, parsedMatchId, selectedGameKey])
+
   const [refetchTrigger, setRefetchTrigger] = useState(0)
   const unknownGameIdRef = useRef(new Set<number>())
 
   useEffect(() => {
     if (refetchTrigger === 0 || !parsedMatchId || !clientReady) return
     fetch(getApiUrl(`/api/games/match/${parsedMatchId}`))
-      .then(r => r.json())
-      .then(json => { setData(json); unknownGameIdRef.current.clear() })
+      .then(response => response.json())
+      .then(json => {
+        setData(json)
+        unknownGameIdRef.current.clear()
+      })
       .catch(console.error)
   }, [refetchTrigger, parsedMatchId, clientReady])
 
-  // SSE message handler — appends new logs to the correct game
   const onSSEMessage = useCallback((dto: GameLogDTO) => {
-    setData(prev => {
-      if (!prev?.games) return prev
-      const idx = prev.games.findIndex(g => g.id === (dto.gameId ?? 0))
-      if (idx === -1) {
-        // Unknown game — trigger a full refetch
+    setData(previous => {
+      if (!previous?.games) return previous
+      const gameIndex = previous.games.findIndex(game => game.id === (dto.gameId ?? 0))
+      if (gameIndex === -1) {
         if (dto.gameId && !unknownGameIdRef.current.has(dto.gameId)) {
           unknownGameIdRef.current.add(dto.gameId)
-          setTimeout(() => setRefetchTrigger(t => t + 1), 0)
+          setTimeout(() => setRefetchTrigger(value => value + 1), 0)
         }
-        return prev
+        return previous
       }
+
       return {
-        ...prev,
-        games: prev.games.map((g, i) => {
-          if (i !== idx) return g
-          const logs = [...(g.logs ?? []), dto]
+        ...previous,
+        games: previous.games.map((game, index) => {
+          if (index !== gameIndex) return game
+          const logs = [...(game.logs ?? []), dto]
           logs.sort((a, b) => {
-            const na = a.nonce ?? 0, nb = b.nonce ?? 0
-            if (na !== 0 && nb !== 0 && na === nb) {
-              const ta = TYPE_ORDER[a.gameLogType] ?? 6
-              const tb = TYPE_ORDER[b.gameLogType] ?? 6
-              if (ta !== tb) return ta - tb
+            const nonceA = a.nonce ?? 0
+            const nonceB = b.nonce ?? 0
+            if (nonceA !== 0 && nonceB !== 0 && nonceA === nonceB) {
+              const typeA = TYPE_ORDER[a.gameLogType] ?? 6
+              const typeB = TYPE_ORDER[b.gameLogType] ?? 6
+              if (typeA !== typeB) return typeA - typeB
             }
-            return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+            const timestampA = a.timestamp ? new Date(a.timestamp).getTime() : 0
+            const timestampB = b.timestamp ? new Date(b.timestamp).getTime() : 0
+            return timestampA - timestampB
           })
-          return { ...g, logs }
+          return { ...game, logs }
         }),
       }
     })
-    setLiveLogCount(c => c + 1)
+    setLiveLogCount(count => count + 1)
   }, [])
 
-  // Connect to SSE stream (only after initial fetch completes)
-  const streamUrl = parsedMatchId
-    ? getApiUrl(`/api/games/match/${parsedMatchId}/watch`)
-    : ""
-
   useNDJSONStream<GameLogDTO>({
-    url: streamUrl,
+    url: parsedMatchId ? getApiUrl(`/api/games/match/${parsedMatchId}/watch`) : "",
     onMessage: onSSEMessage,
     enabled: clientReady && parsedMatchId != null && data != null,
     autoReconnect: true,
@@ -298,14 +491,28 @@ export default function MatchDetails() {
     useConstantRetry: true,
   })
 
-  const { detail: deckDetail, loading: deckDetailLoading } = useDeckDetail(
-    data?.deckRevisionId?.toString() ?? null
-  )
+  const { detail: deckDetail } = useDeckDetail(data?.deckRevisionId?.toString() ?? null)
+  const previewCards = useMemo(() => getDeckPreviewCards(deckDetail), [deckDetail])
+  const backgroundCard = previewCards[Math.floor(previewCards.length / 2)]
+  const deckBackgroundArtUrl = backgroundCard ? getArtUrl(backgroundCard.name) : null
+
+  useEffect(() => {
+    if (!cardArtReady || !backgroundCard?.name || deckBackgroundArtUrl) return
+    void prefetchCards([backgroundCard.name])
+  }, [backgroundCard?.name, cardArtReady, deckBackgroundArtUrl, prefetchCards])
+
+  const sharedMatch = useMemo(() => data ? toSharedMatchDetails({
+    match: data,
+    deckDetail,
+    selectedGameKey,
+    selectedGameReplay,
+    deckBackgroundArtUrl,
+  }) : null, [data, deckBackgroundArtUrl, deckDetail, selectedGameKey, selectedGameReplay])
 
   if (error) {
     return (
       <div className="mx-auto w-full max-w-7xl space-y-4 px-4 pb-4 pt-1">
-        <Button variant="ghost" onClick={() => navigate('/history')} className="-ml-3 h-8">
+        <Button variant="ghost" onClick={() => navigate("/history")} className="-ml-3 h-8">
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back
         </Button>
@@ -316,7 +523,7 @@ export default function MatchDetails() {
     )
   }
 
-  if (loading || !data) {
+  if (loading || !data || !sharedMatch) {
     return (
       <div className="mx-auto w-full max-w-7xl space-y-4 px-4 pb-4 pt-1">
         <div className="flex items-start justify-between gap-3">
@@ -351,214 +558,76 @@ export default function MatchDetails() {
     )
   }
 
-  const games = data.games ?? []
-  const isInProgress = data.isActive || data.result === "In Progress"
-  const resultVariant = isInProgress ? "secondary" : getResultBadgeVariant(data.result)
-  const resultLabel = isInProgress ? "In Progress" : data.record || data.result || "Match"
-  const selectedGame = games.find(game => getGameKey(game) === selectedGameKey) ?? games[0]
-  const selectedGameId = selectedGame ? getGameKey(selectedGame) : null
-  const latestGameId = getLatestGameKey(games)
-  const deckPreviewCards = getDeckPreviewCards(deckDetail)
-  const catalogIdByCardId = getCatalogIdByCardId(selectedGameReplay)
-  const selectedOpeningHandCards = getOpeningHandCards(selectedGame?.logs ?? [], catalogIdByCardId)
-  const selectedSideboardingDiff = getSideboardingDiff(selectedGame?.sideboardChanges)
-  const headerEndHost = typeof document === "undefined"
-    ? null
-    : document.getElementById("page-header-end")
-  const openDeckEditor = () => {
-    if (!data.deckRevisionId) return
+  const latestGameKey = getLatestGameKey(data.games ?? [])
+  const headerEndHost = typeof document === "undefined" ? null : document.getElementById("page-header-end")
 
-    navigate(`/decks/${data.deckRevisionId}`, {
-      state: {
-        deckName: data.deckName ?? undefined,
-        deckFormat: data.format ?? undefined,
-        deckColors: data.deckColors ?? undefined,
-        deckArchetype: data.deckArchetype ?? undefined,
-        deckTimestamp: deckDetail?.timestamp ?? data.startTime ?? undefined,
-        deckMainCount: deckDetail ? deckDetail.mainboard.reduce((acc, c) => acc + c.quantity, 0) : undefined,
-        deckSideCount: deckDetail ? deckDetail.sideboard.reduce((acc, c) => acc + c.quantity, 0) : undefined,
-      },
+  const navigateToGameLog = (game: MatchDetailsGame) => {
+    if (parsedMatchId == null) return
+    navigate(`/history/${parsedMatchId}/watch?gameId=${game.id}`)
+  }
+
+  const navigateToReplay = (game: MatchDetailsGame) => {
+    if (parsedMatchId == null) return
+    navigate(`/history/${parsedMatchId}/game/${game.id}/replay`, {
+      state: { eventId: data.eventId ?? null, gameNumber: game.gameNumber },
     })
   }
 
   return (
-    <div className="mx-auto flex h-[calc(100vh-2.5rem)] min-h-0 w-full max-w-7xl flex-col gap-4 overflow-hidden px-4 pb-4 pt-1">
+    <>
       {headerEndHost && data.eventId != null ? createPortal(
         <div className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
           <span>Event ID</span>
           <span className="font-semibold text-foreground">{data.eventId}</span>
         </div>,
-        headerEndHost
+        headerEndHost,
       ) : null}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex min-w-0 items-start gap-3">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => navigate('/history')}
-            className="mt-0.5 h-8 w-8 shrink-0"
-            aria-label="Back"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div className="min-w-0 pt-0.5">
-            <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <h1 className="min-w-0 truncate text-xl font-semibold leading-7 tracking-tight">
-                {data.eventName || "Match"}
-              </h1>
-              <Badge
-                variant={resultVariant}
-                className={cn("rounded-md capitalize", getInProgressBadgeClass(Boolean(isInProgress)))}
-              >
-                {resultLabel}
-              </Badge>
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {liveLogCount > 0 && (
-            <Badge variant="success" className="rounded-md text-xs">
-              +{liveLogCount} live
-            </Badge>
-          )}
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 shrink-0 gap-1.5 border-sidebar-border/60"
-            disabled={parsedMatchId == null || latestGameId == null}
-            onClick={() => {
-              if (parsedMatchId == null || latestGameId == null) return
-              navigate(`/history/${parsedMatchId}/game/${latestGameId}/replay`, {
-                state: { eventId: data.eventId ?? null },
-              })
-            }}
-          >
-            <Radio className="h-3.5 w-3.5 translate-y-px" />
-            Watch Live
-          </Button>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 rounded-md border border-sidebar-border/60 bg-card px-3 py-2">
-        <MatchHeaderMeta label="Format" value={data.format || "-"} icon={Layers3} />
-        <MatchHeaderMeta
-          label="Opponent"
-          value={(
-            <OpponentMetaValue
-              matchId={data.id}
-              opponentName={data.opponentName}
-              opponentDeckName={data.opponentDeckName}
-              opponentDeckArchetype={data.opponentDeckArchetype}
-              opponentDeckColors={data.opponentDeckColors}
-              onArchetypeUpdated={newArch => {
-                setData(prev => prev ? { ...prev, opponentDeckArchetype: newArch } : prev)
-              }}
-            />
-          )}
-          icon={UserRound}
-          className="max-w-full sm:max-w-[28rem]"
-        />
-        <MatchHeaderMeta label="Date" value={formatMatchDate(data.startTime)} icon={Calendar} />
-        <MatchHeaderMeta label="Duration" value={data.duration || "-"} icon={Clock} />
-      </div>
-
-      <section className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[18rem_minmax(0,1fr)]">
-        <div className="flex min-h-0 flex-col gap-3 overflow-visible">
-          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overflow-x-hidden">
-            <h2 className="text-sm font-medium text-foreground">Games ({games.length})</h2>
-            {games.map((game) => {
-              const gameId = game.id ?? game.gameNumber ?? 0
-              const gameResultVariant = getResultBadgeVariant(game.result)
-              const selected = selectedGameId === gameId
-              return (
-                <button
-                  key={gameId}
-                  type="button"
-                  onClick={() => setSelectedGameKey(gameId)}
-                  className={cn(
-                    "block w-full rounded-md border border-sidebar-border/60 bg-card px-3 py-2.5 text-left transition-colors hover:bg-muted/35",
-                    selected && "border-sidebar-accent/70 bg-muted/45"
-                  )}
-                >
-                  <div className="flex items-start gap-3">
-                    <div className={cn(
-                      "flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted/40 text-sm font-semibold text-foreground",
-                      selected && "bg-sidebar-accent/40"
-                    )}>
-                      {game.gameNumber ?? "-"}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex min-w-0 flex-wrap items-center gap-2">
-                        <span className="font-medium">Game {game.gameNumber ?? "-"}</span>
-                        <Badge variant={gameResultVariant} className="rounded-md capitalize">
-                          {game.result || "Unknown"}
-                        </Badge>
-                      </div>
-                      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                        <span>On the {game.playDraw || "-"}</span>
-                        <span>{game.duration || "-"}</span>
-                      </div>
-                    </div>
-                  </div>
-                </button>
-              )
-            })}
-          </div>
-          <MatchDeckCard
-            deckName={data.deckName}
-            deckRevisionId={data.deckRevisionId}
-            deckArchetype={data.deckArchetype}
-            deckColors={data.deckColors}
-            previewCards={deckPreviewCards}
-            loading={deckDetailLoading}
-            onOpen={openDeckEditor}
-          />
-        </div>
-
-        <div className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-md border border-sidebar-border/60 bg-card">
-          {selectedGame ? (
-            <>
-              <div className="min-h-0 flex-1 overflow-hidden">
-                <GameReviewPanel
-                  openingHandCards={selectedOpeningHandCards}
-                  sideboardingDiff={selectedSideboardingDiff}
-                  endContent={selectedGameId !== null ? (
-                    <>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7 shrink-0 gap-1.5 border-sidebar-border/60 px-2.5 text-xs"
-                        onClick={() => navigate(`/history/${parsedMatchId}/watch?gameId=${selectedGameId}`)}
-                      >
-                        <FileText className="h-3.5 w-3.5" />
-                        Game Log
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7 shrink-0 gap-1.5 border-sidebar-border/60 px-2.5 text-xs"
-                        onClick={() => navigate(`/history/${parsedMatchId}/game/${selectedGameId}/replay`, {
-                          state: {
-                            eventId: data.eventId ?? null,
-                            gameNumber: selectedGame?.gameNumber ?? null,
-                          },
-                        })}
-                      >
-                        <Play className="h-3.5 w-3.5 translate-y-px" />
-                        Replay
-                      </Button>
-                    </>
-                  ) : null}
-                />
-              </div>
-            </>
-          ) : (
-            <div className="flex min-h-[360px] items-center justify-center px-4 py-8 text-sm text-muted-foreground">
-              No games recorded for this match.
-            </div>
-          )}
-        </div>
-      </section>
-    </div>
+      <MatchDetailsLayout
+        className="h-[calc(100vh-2.5rem)]"
+        match={sharedMatch}
+        initialGameId={selectedGameKey == null ? undefined : String(selectedGameKey)}
+        liveUpdateCount={liveLogCount}
+        onBack={() => navigate("/history")}
+        onWatchLive={() => {
+          if (parsedMatchId == null || latestGameKey == null) return
+          navigate(`/history/${parsedMatchId}/game/${latestGameKey}/replay`, {
+            state: { eventId: data.eventId ?? null },
+          })
+        }}
+        onOpenDeck={data.deckRevisionId ? () => navigate(`/decks/${data.deckRevisionId}`, {
+          state: {
+            deckName: data.deckName ?? undefined,
+            deckFormat: data.format ?? undefined,
+            deckColors: data.deckColors ?? undefined,
+            deckArchetype: data.deckArchetype ?? undefined,
+            deckTimestamp: deckDetail?.timestamp ?? data.startTime ?? undefined,
+            deckMainCount: deckDetail?.mainboard.reduce((total, card) => total + card.quantity, 0),
+            deckSideCount: deckDetail?.sideboard.reduce((total, card) => total + card.quantity, 0),
+          },
+        }) : undefined}
+        onGameChange={game => setSelectedGameKey(Number(game.id))}
+        onGameLog={navigateToGameLog}
+        onReplay={navigateToReplay}
+        opponentArchetypePending={archetypePending}
+        opponentArchetypeError={archetypeError}
+        onOpponentArchetypeChange={parsedMatchId == null ? undefined : async archetype => {
+          setArchetypePending(true)
+          setArchetypeError(null)
+          try {
+            const updated = await updateOpponentArchetype(parsedMatchId, archetype)
+            setData(previous => previous ? {
+              ...previous,
+              opponentDeckArchetype: updated.opponentDeckArchetype,
+              opponentDeckColors: updated.opponentDeckColors,
+            } : previous)
+          } catch (requestError) {
+            setArchetypeError(requestError instanceof Error ? requestError.message : String(requestError))
+            throw requestError
+          } finally {
+            setArchetypePending(false)
+          }
+        }}
+      />
+    </>
   )
 }
