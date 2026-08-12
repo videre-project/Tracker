@@ -11,6 +11,6 @@
     "publish": "pnpm run build:client && dotnet publish src/server -o ./publish"
   },
   "devDependencies": {
-    "openapi-typescript": "^7.10.1"
+    "openapi-typescript": "^7.13.0"
   }
 }
