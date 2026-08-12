@@ -1,6 +1,13 @@
+/** @file
+  Copyright (c) 2026, Cory Bennett. All rights reserved.
+  SPDX-License-Identifier: Apache-2.0
+**/
+
 import { useState, useEffect } from "react"
 import { useClientState } from "./use-client-state"
 import { getApiUrl } from "../utils/api-config"
+import type { MatchHistoryDTO, PaginatedMatchesDTO } from "@/types/api"
+import type { MatchHistoryItem } from "@videreproject/ui"
 
 export interface DashboardStats {
   overallWinrate: number
@@ -26,6 +33,46 @@ export interface PerformanceTrend {
   ci95: number[] | null
   ci80: number[] | null
   ci50: number[] | null
+}
+
+interface PaginatedMatches {
+  items: MatchHistoryItem[]
+  totalCount: number
+  page: number
+  pageSize: number
+  totalPages: number
+}
+
+function toMatchHistoryItem(match: MatchHistoryDTO): MatchHistoryItem {
+  return {
+    id: match.id ?? 0,
+    eventId: match.eventId ?? 0,
+    eventName: match.eventName ?? "",
+    format: match.format ?? "",
+    startTime: match.startTime ?? "",
+    result: match.result ?? "",
+    record: match.record ?? "",
+    duration: match.duration ?? "",
+    deckName: match.deckName ?? undefined,
+    deckColors: match.deckColors,
+    opponentName: match.opponentName,
+    opponentDeckName: match.opponentDeckName,
+    opponentDeckArchetype: match.opponentDeckArchetype,
+    opponentDeckColors: match.opponentDeckColors,
+    isActive: match.isActive,
+    isEvent: match.isEvent,
+    matches: match.matches?.map(toMatchHistoryItem),
+  }
+}
+
+function toPaginatedMatches(response: PaginatedMatchesDTO): PaginatedMatches {
+  return {
+    items: response.items?.map(toMatchHistoryItem) ?? [],
+    totalCount: response.totalCount ?? 0,
+    page: response.page ?? 1,
+    pageSize: response.pageSize ?? 50,
+    totalPages: response.totalPages ?? 0,
+  }
 }
 
 const GAMES_CACHE: Record<string, { stats: DashboardStats; trend: PerformanceTrend[]; timestamp: number }> = {}
@@ -153,17 +200,9 @@ export function useGames(timeRange: string | DateRange | undefined, format?: str
       // actually finally is safer. 
       .finally(() => setLoading(false))
 
-  }, [rangeKey, format, clientReady, clientLoading, cacheKey]) // Use rangeKey instead of object
+  }, [rangeKey, timeRange, format, clientReady, clientLoading, cacheKey])
 
   return { formats, stats, trend, loading }
-}
-
-export interface PaginatedMatches {
-  items: any[]
-  totalCount: number
-  page: number
-  pageSize: number
-  totalPages: number
 }
 
 export function useGamesHistory(
@@ -175,7 +214,7 @@ export function useGamesHistory(
 ) {
   const [data, setData] = useState<PaginatedMatches | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<any>(null)
+  const [error, setError] = useState<string | null>(null)
 
   const { isReady: clientReady, loading: clientLoading } = useClientState()
 
@@ -227,13 +266,13 @@ export function useGamesHistory(
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`)
         return res.json()
       })
-      .then(json => {
-        setData(json)
+      .then((json: PaginatedMatchesDTO) => {
+        setData(toPaginatedMatches(json))
         setLoading(false)
       })
       .catch(err => {
         console.error("Failed to fetch game history:", err)
-        setError(err)
+        setError(err instanceof Error ? err.message : "Unknown error")
         setLoading(false)
       })
   }, [page, pageSize, timeRange, format, deckRevisionId, clientReady, clientLoading])
