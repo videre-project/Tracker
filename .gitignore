@@ -279,6 +279,9 @@ FakesAssemblies/
 # GhostDoc plugin setting file
 *.GhostDoc.xml
 
+# pnpm store
+.pnpm-store/
+
 # Node.js Tools for Visual Studio
 .ntvs_analysis.dat
 node_modules/
