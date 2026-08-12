@@ -1,3 +1,8 @@
+/** @file
+  Copyright (c) 2026, Cory Bennett. All rights reserved.
+  SPDX-License-Identifier: Apache-2.0
+**/
+
 import { useState, useEffect, useCallback, useRef } from "react"
 import { parseNDJSONStream } from "@/lib/ndjson"
 
@@ -22,7 +27,7 @@ export interface UseInfiniteScrollOptions<T> {
   /**
    * Transform function to apply to each fetched item
    */
-  transform?: (item: any) => T
+  transform?: (item: unknown) => T
 
   /**
    * Threshold in pixels from bottom to trigger next page load
@@ -59,7 +64,7 @@ export interface UseInfiniteScrollResult<T> {
  * )
  * ```
  */
-export function useInfiniteScroll<T = any>(
+export function useInfiniteScroll<T = unknown>(
   options: UseInfiniteScrollOptions<T>
 ): UseInfiniteScrollResult<T> {
   const {
@@ -110,11 +115,9 @@ export function useInfiniteScroll<T = any>(
         throw new Error("No stream reader available")
       }
 
-      const items = await parseNDJSONStream(reader)
-
-      const transformedData = transform
-        ? items.map(transform)
-        : items
+      const transformedData: T[] = transform
+        ? (await parseNDJSONStream<unknown>(reader)).map(transform)
+        : await parseNDJSONStream<T>(reader)
 
       setData(prev => [...prev, ...transformedData])
     } catch (e) {

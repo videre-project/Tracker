@@ -1,237 +1,21 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react"
+/** @file
+  Copyright (c) 2026, Cory Bennett. All rights reserved.
+  SPDX-License-Identifier: Apache-2.0
+**/
+
+import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { useParams, useNavigate, useSearchParams } from "react-router-dom"
+import {
+  GameLogLayout,
+  compareLogEntries,
+  type GameLogDTO,
+  type GameLogEntry,
+  type GameLogType,
+} from "@videreproject/ui"
 import { getApiUrl } from "@/utils/api-config"
 import { useClientState } from "@/hooks/use-client-state"
 import { useNDJSONStream } from "@/hooks/use-ndjson-stream"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, ArrowDown, Filter, Copy, Check } from "lucide-react"
-import type { GameLogDTO, GameLogType, GameStateData } from "@/types/api"
-import {
-  ALL_TYPES,
-  GameLogDataHeader,
-  TYPE_CONFIG,
-  TYPE_ORDER,
-  formatDataAsText,
-  renderData,
-} from "@/utils/game-log-rendering"
 import { useMatchDetails } from "@/hooks/use-match-details"
-
-// -- Types --
-
-interface LogEntry {
-  id: number
-  gameId: number
-  timestamp: string
-  gameLogType: GameLogType
-  data: string
-  nonce: number
-  /** Monotonic index for keying */
-  seq: number
-  /** Parsed timestamp as Date */
-  ts: Date
-  /** Delta from previous entry in ms */
-  deltaMs: number | null
-}
-
-// -- Constants --
-
-/**
- * Sort comparator for log entries that respects nonce grouping.
- * - Primary key: timestamp (chronological order across ticks)
- * - Within the same nonce AND same timestamp: type priority as tiebreaker
- *   so GameState headers precede zone/card/player changes from the same
- *   snapshot tick.
- */
-function compareLogEntries(
-  a: { nonce: number; gameLogType: string; ts: Date },
-  b: { nonce: number; gameLogType: string; ts: Date },
-): number {
-  // Same nonce — timestamp first, type priority only as tiebreaker.
-  // This ensures "entering state" events (zones from the snapshot at the
-  // state's timestamp) sort before "during state" events (player actions
-  // with later timestamps).
-  if (a.nonce !== 0 && b.nonce !== 0 && a.nonce === b.nonce) {
-    const tsDiff = a.ts.getTime() - b.ts.getTime()
-    if (tsDiff !== 0) return tsDiff
-    const ta = TYPE_ORDER[a.gameLogType] ?? 6
-    const tb = TYPE_ORDER[b.gameLogType] ?? 6
-    return ta - tb
-  }
-
-  return a.ts.getTime() - b.ts.getTime()
-}
-
-// -- Helpers --
-
-function formatTime(d: Date): string {
-  const h = d.getHours().toString().padStart(2, "0")
-  const m = d.getMinutes().toString().padStart(2, "0")
-  const s = d.getSeconds().toString().padStart(2, "0")
-  const ms = d.getMilliseconds().toString().padStart(3, "0")
-  return `${h}:${m}:${s}.${ms}`
-}
-
-function formatDelta(ms: number | null): string {
-  if (ms === null) return ""
-  const abs = Math.abs(ms)
-  const sign = ms < 0 ? "-" : "+"
-  if (abs < 1000) return `${sign}${abs}ms`
-  if (abs < 60000) return `${sign}${(abs / 1000).toFixed(1)}s`
-  return `${sign}${Math.floor(abs / 60000)}m${Math.floor((abs % 60000) / 1000)}s`
-}
-
-// -- Components --
-
-function TypeFilterBar({
-  enabled,
-  onToggle,
-}: {
-  enabled: Set<GameLogType>
-  onToggle: (type: GameLogType) => void
-}) {
-  return (
-    <div className="flex items-center gap-1.5 flex-wrap">
-      <Filter className="h-3.5 w-3.5 text-muted-foreground mr-1" />
-      {ALL_TYPES.map((type) => {
-        const cfg = TYPE_CONFIG[type]
-        const active = enabled.has(type)
-        return (
-          <button
-            key={type}
-            onClick={() => onToggle(type)}
-            aria-pressed={active}
-            title={cfg.label}
-            className={`rounded-sm border px-2 py-0.5 text-xs font-mono transition-colors ${
-              active
-                ? cfg.tone
-                : "border-sidebar-border/40 bg-background/20 text-muted-foreground/45 hover:border-sidebar-border/60 hover:bg-muted/30 hover:text-muted-foreground/75"
-            }`}
-          >
-            {cfg.short}
-          </button>
-        )
-      })}
-    </div>
-  )
-}
-
-function CopyLogButton({ entries }: { entries: LogEntry[] }) {
-  const [copied, setCopied] = useState(false)
-
-  const handleCopy = useCallback(() => {
-    const lines: string[] = []
-    let prevNonce = -1
-
-    for (const entry of entries) {
-      if (entry.nonce !== 0 && entry.nonce !== prevNonce && prevNonce !== -1) {
-        lines.push("") // blank line between nonce groups
-      }
-      prevNonce = entry.nonce
-
-      const time = formatTime(entry.ts)
-      const cfg = TYPE_CONFIG[entry.gameLogType] ?? TYPE_CONFIG.LogMessage
-      const tag = cfg.short.padEnd(6)
-      const body = formatDataAsText(entry.gameLogType, entry.data)
-
-      // Indent multi-line data under the first line
-      const bodyLines = body.split("\n")
-      lines.push(`${time}  ${tag}  ${bodyLines[0]}`)
-      for (let i = 1; i < bodyLines.length; i++) {
-        lines.push(`${"".padEnd(12)}${"".padEnd(8)}${bodyLines[i]}`)
-      }
-    }
-
-    navigator.clipboard.writeText(lines.join("\n")).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1500)
-    })
-  }, [entries])
-
-  return (
-    <button
-      onClick={handleCopy}
-      className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors shrink-0"
-      title="Copy log to clipboard"
-    >
-      {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-      {copied ? "Copied" : "Copy"}
-    </button>
-  )
-}
-
-function GameStateHeader({ entry }: { entry: LogEntry }) {
-  try {
-    const d: GameStateData = JSON.parse(entry.data)
-    return (
-      <tr className="bg-muted/30 border-t border-sidebar-border/60">
-        <td colSpan={4} className="px-3 py-1.5">
-          <div className="flex items-center gap-3 text-[11px]">
-            <span className="text-muted-foreground font-mono">{formatTime(entry.ts)}</span>
-            <span className="font-semibold text-blue-400">Turn {d.turn}</span>
-            <span className="text-blue-300/80">{d.phase}</span>
-            {d.previousTurn != null && (
-              <span className="text-muted-foreground/50 text-[10px]">
-                (from Turn {d.previousTurn} {d.previousPhase})
-              </span>
-            )}
-          </div>
-        </td>
-      </tr>
-    )
-  } catch {
-    return null
-  }
-}
-
-function NonceSeparator() {
-  return (
-    <tr aria-hidden="true">
-      <td colSpan={4} className="py-0">
-        <div className="h-px bg-sidebar-border/60" />
-      </td>
-    </tr>
-  )
-}
-
-function LogRow({ entry, expanded, onToggle }: { entry: LogEntry; expanded: boolean; onToggle: () => void }) {
-  const cfg = TYPE_CONFIG[entry.gameLogType] ?? TYPE_CONFIG.LogMessage
-
-  return (
-    <tr
-      className="hover:bg-muted/50 transition-colors cursor-pointer group"
-      onClick={onToggle}
-    >
-      {/* Timestamp */}
-      <td className="w-[110px] shrink-0 px-3 py-1.5 text-muted-foreground align-top select-none font-mono text-[11px] whitespace-nowrap">
-        {formatTime(entry.ts)}
-      </td>
-      {/* Delta */}
-      <td className="w-[70px] shrink-0 px-2 py-1.5 text-muted-foreground/60 align-top select-none font-mono text-[10px] whitespace-nowrap text-right">
-        {formatDelta(entry.deltaMs)}
-      </td>
-      {/* Type badge */}
-      <td className="w-[70px] shrink-0 px-2 py-1.5 align-top">
-        <span className={`inline-block rounded-sm border px-1.5 py-0.5 text-[10px] font-mono font-semibold ${cfg.tone}`}>
-          {cfg.short}
-        </span>
-      </td>
-      {/* Data */}
-      <td className="px-3 py-1.5 break-words text-[12px] leading-relaxed align-top">
-        {renderData(entry.gameLogType, entry.data)}
-        {expanded && (
-          <pre className="mt-1.5 p-2 rounded bg-muted/50 text-muted-foreground text-[10px] leading-snug overflow-x-auto max-w-full whitespace-pre-wrap border border-sidebar-border/60">
-            {(() => {
-              try { return JSON.stringify(JSON.parse(entry.data), null, 2) } catch { return entry.data }
-            })()}
-          </pre>
-        )}
-      </td>
-    </tr>
-  )
-}
-
-// -- Page --
 
 export default function GameLog() {
   const { matchId } = useParams<{ matchId: string }>()
@@ -240,7 +24,8 @@ export default function GameLog() {
   const parsedMatchId = matchId ? parseInt(matchId, 10) : null
   const gameIdParam = searchParams.get("gameId")
   const parsedGameId = gameIdParam == null ? null : Number.parseInt(gameIdParam, 10)
-  const selectedGameId = parsedGameId != null && Number.isFinite(parsedGameId) ? parsedGameId : null
+  const selectedGameId =
+    parsedGameId != null && Number.isFinite(parsedGameId) ? parsedGameId : null
 
   const { isReady: clientReady } = useClientState()
 
@@ -248,49 +33,43 @@ export default function GameLog() {
   const { data: matchData, loading: historyLoading } = useMatchDetails(parsedMatchId)
   const historyMergedRef = useRef(false)
 
-  // Log state
-  const [entries, setEntries] = useState<LogEntry[]>([])
+  const [entries, setEntries] = useState<GameLogEntry[]>([])
   const seqRef = useRef(0)
   const lastTsRef = useRef<Date | null>(null)
-
-  // UI state
-  const [enabledTypes, setEnabledTypes] = useState<Set<GameLogType>>(new Set(ALL_TYPES))
-  const [autoScroll, setAutoScroll] = useState(true)
-  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set())
-  const scrollRef = useRef<HTMLDivElement>(null)
   const [connected, setConnected] = useState(false)
   const [eventCount, setEventCount] = useState(0)
 
-  // Handle incoming SSE messages
-  const onMessage = useCallback((dto: GameLogDTO) => {
-    if (selectedGameId != null && (dto.gameId ?? 0) !== selectedGameId) return
+  const onMessage = useCallback(
+    (dto: GameLogDTO) => {
+      if (selectedGameId != null && (dto.gameId ?? 0) !== selectedGameId) return
 
-    const ts = new Date(dto.timestamp ?? Date.now())
-    const seq = seqRef.current++
-    const deltaMs = lastTsRef.current ? ts.getTime() - lastTsRef.current.getTime() : null
-    lastTsRef.current = ts
+      const ts = new Date(dto.timestamp ?? Date.now())
+      const seq = seqRef.current++
+      const deltaMs = lastTsRef.current ? ts.getTime() - lastTsRef.current.getTime() : null
+      lastTsRef.current = ts
 
-    const entry: LogEntry = {
-      id: dto.id ?? 0,
-      gameId: dto.gameId ?? 0,
-      timestamp: dto.timestamp ?? new Date().toISOString(),
-      gameLogType: (dto.gameLogType ?? "LogMessage") as GameLogType,
-      data: dto.data ?? "",
-      nonce: dto.nonce ?? 0,
-      seq,
-      ts,
-      deltaMs,
-    }
-    setEntries(prev => {
-      // Cap at 2000 entries for performance
-      const next = [...prev, entry]
-      next.sort(compareLogEntries)
-      return next.length > 2000 ? next.slice(-1500) : next
-    })
-    setEventCount(c => c + 1)
-  }, [selectedGameId])
+      const entry: GameLogEntry = {
+        id: dto.id ?? 0,
+        gameId: dto.gameId ?? 0,
+        timestamp: dto.timestamp ?? new Date().toISOString(),
+        gameLogType: (dto.gameLogType ?? "LogMessage") as GameLogType,
+        data: dto.data ?? "",
+        nonce: dto.nonce ?? 0,
+        seq,
+        ts,
+        deltaMs,
+      }
+      setEntries(prev => {
+        // Cap at 2000 entries for performance
+        const next = [...prev, entry]
+        next.sort(compareLogEntries)
+        return next.length > 2000 ? next.slice(-1500) : next
+      })
+      setEventCount(c => c + 1)
+    },
+    [selectedGameId],
+  )
 
-  // Connect to SSE stream
   const streamUrl = parsedMatchId
     ? getApiUrl(`/api/games/match/${parsedMatchId}/watch`)
     : ""
@@ -307,7 +86,6 @@ export default function GameLog() {
     useConstantRetry: true,
   })
 
-  // Track connection state — if we receive a message, we're connected
   useEffect(() => {
     if (eventCount > 0) setConnected(true)
   }, [eventCount])
@@ -320,8 +98,6 @@ export default function GameLog() {
     lastTsRef.current = null
     setEventCount(0)
     setConnected(false)
-    setAutoScroll(true)
-    setExpandedRows(new Set())
   }, [parsedMatchId, selectedGameId])
 
   // Merge historical logs when they arrive — prepend before any live entries
@@ -330,15 +106,13 @@ export default function GameLog() {
     historyMergedRef.current = true
 
     setEntries(prevLive => {
-      // Flatten all game logs — backend already sorted within each game by
-      // nonce/type/timestamp, and games are sequential, so just concatenate.
       const allLogs: GameLogDTO[] = (matchData.games ?? [])
         .filter(g => selectedGameId == null || (g.id ?? g.gameNumber ?? 0) === selectedGameId)
         .flatMap(g => g.logs ?? [])
 
       let seq = 0
       let prevTs: Date | null = null
-      const historical: LogEntry[] = allLogs.map(dto => {
+      const historical: GameLogEntry[] = allLogs.map(dto => {
         const ts = new Date(dto.timestamp ?? Date.now())
         const deltaMs = prevTs ? ts.getTime() - prevTs.getTime() : null
         prevTs = ts
@@ -355,16 +129,12 @@ export default function GameLog() {
         }
       })
 
-      // Re-sequence live entries to continue after historical
       const resequenced = prevLive.map((e, i) => ({
         ...e,
         seq: seq + i,
-        deltaMs: i === 0 && prevTs
-          ? e.ts.getTime() - prevTs.getTime()
-          : e.deltaMs,
+        deltaMs: i === 0 && prevTs ? e.ts.getTime() - prevTs.getTime() : e.deltaMs,
       }))
 
-      // Update refs so subsequent onMessage calls produce correct seq/delta
       seqRef.current = seq + resequenced.length
       const last = resequenced.at(-1) ?? historical.at(-1)
       if (last) lastTsRef.current = last.ts
@@ -374,166 +144,27 @@ export default function GameLog() {
     })
   }, [matchData, selectedGameId])
 
-  // Auto-scroll
-  useEffect(() => {
-    if (autoScroll && scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-    }
-  }, [entries, autoScroll])
-
-  // Detect manual scroll to pause auto-scroll
-  const handleScroll = useCallback(() => {
-    if (!scrollRef.current) return
-    const { scrollTop, scrollHeight, clientHeight } = scrollRef.current
-    const atBottom = scrollTop + clientHeight >= scrollHeight - 40
-    setAutoScroll(atBottom)
-  }, [])
-
-  // Filter entries and recompute deltas based on display order
-  const filtered = useMemo(() => {
-    const result = entries.filter(e => enabledTypes.has(e.gameLogType))
-    for (let i = 0; i < result.length; i++) {
-      result[i] = {
-        ...result[i],
-        deltaMs: i > 0 ? result[i].ts.getTime() - result[i - 1].ts.getTime() : null,
-      }
-    }
-    return result
-  }, [entries, enabledTypes])
-
-  const toggleType = useCallback((type: GameLogType) => {
-    setEnabledTypes(prev => {
-      const next = new Set(prev)
-      if (next.has(type)) next.delete(type)
-      else next.add(type)
-      return next
-    })
-  }, [])
-
-  const toggleExpand = useCallback((seq: number) => {
-    setExpandedRows(prev => {
-      const next = new Set(prev)
-      if (next.has(seq)) next.delete(seq)
-      else next.add(seq)
-      return next
-    })
-  }, [])
-
   const selectedGame = useMemo(() => {
     if (selectedGameId == null) return null
-    return (matchData?.games ?? []).find(g => (g.id ?? g.gameNumber ?? 0) === selectedGameId) ?? null
+    return (
+      (matchData?.games ?? []).find(g => (g.id ?? g.gameNumber ?? 0) === selectedGameId) ?? null
+    )
   }, [matchData, selectedGameId])
 
-  const logTitle = selectedGameId == null
-    ? "Game Log"
-    : `Game ${selectedGame?.gameNumber ?? selectedGameId} Log`
+  const logTitle =
+    selectedGameId == null
+      ? "Game Log"
+      : `Game ${selectedGame?.gameNumber ?? selectedGameId} Log`
 
   return (
-    <div className="relative mx-auto flex h-[calc(100vh-2.5rem)] min-h-0 w-full max-w-7xl flex-col gap-4 overflow-hidden px-4 pb-4 pt-1">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex min-w-0 items-start gap-3">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => navigate(-1)}
-            className="mt-0.5 h-8 w-8 shrink-0"
-            aria-label="Back"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div className="min-w-0 pt-0.5">
-            <h1 className="min-w-0 truncate text-xl font-semibold leading-7 tracking-tight">
-              {logTitle}
-              <span className="text-muted-foreground font-normal ml-2">
-                - Match #{parsedMatchId}
-              </span>
-            </h1>
-          </div>
-        </div>
-        <div className="flex h-8 items-center gap-3">
-          <Badge variant={connected ? "success" : "secondary"} className="rounded-md text-[10px] font-mono">
-            {connected ? "LIVE" : "WAITING"}
-          </Badge>
-          <span className="text-[11px] text-muted-foreground font-mono">
-            {entries.length} entries{eventCount > 0 && ` (${eventCount} live)`}
-          </span>
-        </div>
-      </div>
-
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-sidebar-border/60 bg-card">
-        {/* Filter bar */}
-        <div className="flex shrink-0 items-center gap-3 border-b border-sidebar-border/60 bg-muted/30 px-3 py-2">
-          <TypeFilterBar enabled={enabledTypes} onToggle={toggleType} />
-          <CopyLogButton entries={filtered} />
-        </div>
-
-        {/* Log table */}
-        <div
-          ref={scrollRef}
-          onScroll={handleScroll}
-          className="flex-1 overflow-auto bg-background"
-        >
-          {filtered.length === 0 ? (
-            <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-              {entries.length === 0
-                ? (historyLoading ? "Loading historical events..." : "Waiting for game events...")
-                : "No events match the current filters."}
-            </div>
-          ) : (
-            <table className="w-full min-w-[860px] font-mono">
-              <thead className="sticky top-0 z-10">
-                <tr className="bg-muted/50 border-b border-sidebar-border/60 text-[10px] text-muted-foreground font-semibold tracking-wider uppercase">
-                  <th className="w-[110px] px-3 py-1.5 text-left">Time</th>
-                  <th className="w-[70px] px-2 py-1.5 text-right">Delta</th>
-                  <th className="w-[70px] px-2 py-1.5 text-left">Type</th>
-                  <th className="px-3 py-1.5 text-left">
-                    <GameLogDataHeader />
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((entry, idx) => {
-                  const prevNonce = idx > 0 ? filtered[idx - 1].nonce : entry.nonce
-                  const nonceChanged = idx > 0 && entry.nonce !== 0 && entry.nonce !== prevNonce
-
-                  // GameState entries render as section headers
-                  if (entry.gameLogType === "GameState") {
-                    return <GameStateHeader key={entry.seq} entry={entry} />
-                  }
-
-                  // Emit a separator bar when the nonce changes and there's no GameState header
-                  return (
-                    <React.Fragment key={entry.seq}>
-                      {nonceChanged && <NonceSeparator />}
-                      <LogRow
-                        entry={entry}
-                        expanded={expandedRows.has(entry.seq)}
-                        onToggle={() => toggleExpand(entry.seq)}
-                      />
-                    </React.Fragment>
-                  )
-                })}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </div>
-
-      {/* Auto-scroll indicator */}
-      {!autoScroll && (
-        <button
-          onClick={() => {
-            setAutoScroll(true)
-            if (scrollRef.current) {
-              scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-            }
-          }}
-          className="absolute bottom-4 right-6 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-secondary border border-sidebar-border/60 text-secondary-foreground text-xs font-medium shadow-lg hover:bg-accent transition-colors z-20"
-        >
-          <ArrowDown className="h-3 w-3" />
-          Resume auto-scroll
-        </button>
-      )}
-    </div>
+    <GameLogLayout
+      entries={entries}
+      title={logTitle}
+      matchId={parsedMatchId}
+      connected={connected}
+      liveEventCount={eventCount}
+      loading={historyLoading}
+      onBack={() => navigate(-1)}
+    />
   )
 }

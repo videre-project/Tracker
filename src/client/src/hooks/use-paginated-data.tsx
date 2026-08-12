@@ -1,3 +1,8 @@
+/** @file
+  Copyright (c) 2026, Cory Bennett. All rights reserved.
+  SPDX-License-Identifier: Apache-2.0
+**/
+
 import { useState, useEffect, useCallback } from "react"
 import { parseNDJSONStream } from "@/lib/ndjson"
 
@@ -37,7 +42,7 @@ export interface UsePaginatedDataOptions<T> {
   /**
    * Transform function to apply to each fetched item
    */
-  transform?: (item: any) => T
+  transform?: (item: unknown) => T
 }
 
 export interface UsePaginatedDataResult<T> {
@@ -63,7 +68,7 @@ export interface UsePaginatedDataResult<T> {
  * })
  * ```
  */
-export function usePaginatedData<T = any>(
+export function usePaginatedData<T = unknown>(
   options: UsePaginatedDataOptions<T>
 ): UsePaginatedDataResult<T> {
   const {
@@ -118,11 +123,9 @@ export function usePaginatedData<T = any>(
         throw new Error("No stream reader available")
       }
 
-      const items = await parseNDJSONStream(reader)
-
-      const transformedData = transform
-        ? items.map(transform)
-        : items
+      const transformedData: T[] = transform
+        ? (await parseNDJSONStream<unknown>(reader)).map(transform)
+        : await parseNDJSONStream<T>(reader)
 
       setData(transformedData)
     } catch (e) {

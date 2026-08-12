@@ -1,3 +1,8 @@
+/** @file
+  Copyright (c) 2026, Cory Bennett. All rights reserved.
+  SPDX-License-Identifier: Apache-2.0
+**/
+
 import { useEffect, useRef, useCallback } from "react"
 
 export interface NDJSONStreamOptions<T> {
@@ -247,13 +252,14 @@ export function useNDJSONStream<T = unknown>(options: NDJSONStreamOptions<T>) {
         if (!reader) {
           throw new Error("No stream reader available")
         }
+        const streamReader = reader
         readerRef.current = reader
 
         let buffer = ""
         const decoder = new TextDecoder()
 
         function readStream(): Promise<void> {
-          return reader.read().then(({ done, value }) => {
+          return streamReader.read().then(({ done, value }) => {
             if (generation !== connectionGenerationRef.current || controller.signal.aborted) {
               return
             }

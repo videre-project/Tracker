@@ -1,10 +1,15 @@
+/** @file
+  Copyright (c) 2026, Cory Bennett. All rights reserved.
+  SPDX-License-Identifier: Apache-2.0
+**/
+
 /**
  * Parse an NDJSON (Newline Delimited JSON) stream
  *
  * @param reader - ReadableStreamDefaultReader from fetch response.body
  * @returns Promise that resolves to array of parsed items
  */
-export async function parseNDJSONStream<T = any>(
+export async function parseNDJSONStream<T = unknown>(
   reader: ReadableStreamDefaultReader<Uint8Array>
 ): Promise<T[]> {
   const items: T[] = []
@@ -47,7 +52,7 @@ export async function parseNDJSONStream<T = any>(
  * @param options - Fetch options (headers will include Accept: application/x-ndjson)
  * @returns Promise that resolves to array of parsed items
  */
-export async function fetchNDJSON<T = any>(
+export async function fetchNDJSON<T = unknown>(
   url: string,
   options: RequestInit = {}
 ): Promise<T[]> {
