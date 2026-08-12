@@ -1,3 +1,8 @@
+/** @file
+  Copyright (c) 2026, Cory Bennett. All rights reserved.
+  SPDX-License-Identifier: Apache-2.0
+**/
+
 // Extend the Window interface for debugging
 declare global {
   interface Window {
@@ -7,25 +12,23 @@ declare global {
   }
 }
 
-import { useEffect, useState, useRef, useCallback } from "react"
+import { useEffect, useState, useRef, useCallback, type ReactNode } from "react"
 import { useClientState } from "./use-client-state"
 import { useNDJSONStream } from "./use-ndjson-stream"
+import { EventsContext } from "./events-context"
 import { getApiUrl } from "../utils/api-config"
-import type { ITournament, IEventStructure, ITournamentPlayerUpdate } from "@/types/api"
+import { formatTimeShort, normalizeFormatName } from "../utils/event-format"
+import type {
+  IEventStructure,
+  ITournament,
+  ITournamentPlayerUpdate,
+  ITournamentStateUpdate,
+  TournamentState,
+} from "@/types/api"
 
 
 // Tournament state type (will be replaced when OpenAPI types are regenerated)
-export type TournamentState =
-  | "NotSet"
-  | "Fired"
-  | "WaitingToStart"
-  | "Drafting"
-  | "Deckbuilding"
-  | "DeckbuildingDeckSubmitted"
-  | "WaitingForFirstRoundToStart"
-  | "RoundInProgress"
-  | "BetweenRounds"
-  | "Finished"
+export type { TournamentState } from "@/types/api"
 
 const ACTIVE_TOURNAMENT_STATES: TournamentState[] = [
   "Fired",
@@ -61,10 +64,9 @@ export interface ActiveGame {
   totalPlayers?: number;
   minimumPlayers?: number;
   roundEndTime?: string;
-  roundDurationMs?: number;
   inPlayoffs?: boolean;
   hasPlayoffs?: boolean;
-  eventStructure?: any;
+  eventStructure?: IEventStructure;
   activePlayerNames?: string[];
   playerNamesWithMatchesInProgress?: string[];
   // Tournament state
@@ -106,7 +108,7 @@ function inferGameStatus(t: ITournament): GameStatus {
   const now = Date.now()
   const start = t.startTime ? new Date(t.startTime).getTime() : 0
   const end = t.endTime ? new Date(t.endTime).getTime() : 0
-  const state = (t as any).state as TournamentState | undefined
+  const state = t.state
 
   if (state) {
     if (state === "Finished") return "completed"
@@ -129,25 +131,10 @@ function inferStatusFromState(current: GameStatus, state?: TournamentState): Gam
   return current
 }
 
-export function formatTimeShort(dateStr?: string): string | undefined {
-  if (!dateStr) return undefined
-  const d = new Date(dateStr)
-  // Format as '11:00 AM' (no seconds)
-  return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
-}
-
-export function normalizeFormatName(format?: string | null): string {
-  if (!format) return ""
-  const trimmed = String(format).replace(/\0+$/g, "").trim()
-  const withoutFalseMultiplierSuffix = trimmed.replace(/(x[36])\s*[0o]$/i, "$1")
-  return withoutFalseMultiplierSuffix.replace(/^([^\d]*[A-Za-z])0$/, "$1")
-}
-
-// Patch: Add _rawStartTime and _rawEndTime for accurate duration calculation
 export interface ActiveGameWithRawTimes extends ActiveGame {
   _rawStartTime?: string;
   _rawEndTime?: string;
-  eventStructure?: any;
+  eventStructure?: IEventStructure;
   roundEndTime?: string;
   inPlayoffs?: boolean;
 }
@@ -196,14 +183,15 @@ function mergeRoundScopedMatchPlayers(
 
 function mapTournamentToActiveGame(t: ITournament): ActiveGameWithRawTimes {
   // Filter out invalid DateTime values (C# DateTime.MinValue serializes to 0001-01-01)
-  const state = (t as any).state as TournamentState | undefined
-  const roundEndTime = (t as any).roundEndTime
+  const update = t as ITournament & Partial<ITournamentStateUpdate>
+  const state = update.state
+  const roundEndTime = update.roundEndTime
   const format = normalizeFormatName(t.format)
 
   return {
     id: String(t.id),
-    name: t.description,
-    type: inferEventTypeFromStructure((t as any).eventStructure ?? format),
+    name: t.description ?? "Untitled event",
+    type: inferEventTypeFromStructure(t.eventStructure ?? format),
     status: inferGameStatus(t),
     format,
     url: `/events/${t.id}`,
@@ -215,15 +203,14 @@ function mapTournamentToActiveGame(t: ITournament): ActiveGameWithRawTimes {
     _rawStartTime: t.startTime,
     _rawEndTime: t.endTime,
     // Pass through eventStructure for playoff/top 8 display
-    eventStructure: (t as any).eventStructure,
-    hasPlayoffs: (t as any).hasPlayoffs,
-    roundNumber: (t as any).roundNumber,
+    eventStructure: t.eventStructure,
+    hasPlayoffs: t.eventStructure?.hasPlayoffs,
+    roundNumber: update.roundNumber,
     roundEndTime: getRoundEndTimeForState(state, roundEndTime),
-    roundDurationMs: (t as any).roundDurationMs,
-    inPlayoffs: (t as any).inPlayoffs,
-    activePlayerNames: (t as any).activePlayerNames,
+    inPlayoffs: update.inPlayoffs,
+    activePlayerNames: update.activePlayerNames ?? undefined,
     playerNamesWithMatchesInProgress:
-      (t as any).playerNamesWithMatchesInProgress,
+      update.playerNamesWithMatchesInProgress ?? undefined,
     state,
   }
 }
@@ -232,23 +219,7 @@ function shouldIncludeEvent(game: ActiveGameWithRawTimes) {
   return game.totalRounds == null || game.totalRounds >= 3
 }
 
-import React, { createContext, useContext } from "react"
-
-interface EventsContextType {
-  activeGames: ActiveGame[];
-  upcomingGames: ActiveGame[];
-  completedGames: ActiveGame[];
-  loading: boolean;
-  error: string | null;
-  hoveredEventId: string | null;
-  setHoveredEventId: (id: string | null) => void;
-  selectedEventId: string | null;
-  setSelectedEventId: (id: string | null) => void;
-}
-
-const EventsContext = createContext<EventsContextType | null>(null);
-
-export function EventsProvider({ children }: { children: React.ReactNode }) {
+export function EventsProvider({ children }: { children: ReactNode }) {
   const [activeGames, setActiveGames] = useState<ActiveGame[]>([])
   const [upcomingGames, setUpcomingGames] = useState<ActiveGame[]>([])
   const [completedGames, setCompletedGames] = useState<ActiveGame[]>([])
@@ -514,16 +485,4 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
       {children}
     </EventsContext.Provider>
   )
-}
-
-/**
- * Fetch all events once and return both active and upcoming games
- * This is the recommended hook to use instead of separate hooks
- */
-export function useEvents() {
-  const context = useContext(EventsContext)
-  if (!context) {
-    throw new Error("useEvents must be used within an EventsProvider")
-  }
-  return context
 }

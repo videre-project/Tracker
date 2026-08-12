@@ -1,36 +1,25 @@
+/** @file
+  Copyright (c) 2026, Cory Bennett. All rights reserved.
+  SPDX-License-Identifier: Apache-2.0
+**/
+
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { ColumnDef } from "@tanstack/react-table"
-import { DataTable } from "@/components/ui/data-table"
-import { EventsTableSkeleton } from "@/components/events-table-skeleton"
-import { EventsTimeline } from "@/components/events-timeline"
-import { EventDetailPanel } from "@/components/event-detail-panel"
-import { useEvents, ActiveGame } from "@/hooks/use-events"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import { useNavigate } from "react-router-dom"
+import {
+  EventsLayout,
+  type EventDetailExtras,
+  type TournamentEvent,
+} from "@videreproject/ui"
+import type { ActiveGame } from "@/hooks/use-events"
+import { useEvents } from "@/hooks/events-context"
 import { getApiUrl } from "@/utils/api-config"
-import { getFormatDotColor } from "@/utils/formats"
-import { cn } from "@/lib/utils"
-
-function formatTime(dateString?: string) {
-  if (!dateString) return "–"
-  return new Date(dateString).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
-}
-
-function formatSchedule(start?: string, end?: string) {
-  if (!start) return "–"
-  const startDate = new Date(start)
-  const date = startDate.toLocaleDateString(undefined, {
-    month: 'numeric',
-    day: 'numeric',
-    year: 'numeric',
-  })
-  const startTime = formatTime(start)
-  const endTime = formatTime(end)
-  return `${date}, ${startTime} – ${endTime}`
-}
 
 const entryFeeCache = new Map<string, string>()
 const entryFeeRequests = new Map<string, Promise<string>>()
+const prizesCache = new Map<string, Record<string, string> | null>()
+const prizesRequests = new Map<string, Promise<Record<string, string> | null>>()
 const TIMELINE_COMPLETED_EVENT_WINDOW_MS = 12 * 60 * 60 * 1000
 
 function getEventStartTime(event: ActiveGame) {
@@ -47,163 +36,84 @@ function isRecentCompletedEvent(event: ActiveGame) {
   return getEventEndTime(event) >= completedCutoff
 }
 
-function useEntryFee(eventId: string, enabled: boolean, onFeeFetched?: () => void) {
-  const [fee, setFee] = useState(() => enabled ? entryFeeCache.get(eventId) : undefined)
+function fetchEntryFee(eventId: string): Promise<string> {
+  const cached = entryFeeCache.get(eventId)
+  if (cached != null) return Promise.resolve(cached)
 
-  useEffect(() => {
-    if (!enabled) {
-      setFee(undefined)
-      return
-    }
+  const existing = entryFeeRequests.get(eventId)
+  if (existing) return existing
 
-    const cached = entryFeeCache.get(eventId)
-    if (cached != null) {
-      setFee(cached)
-      return
-    }
-
-    let cancelled = false
-    const request = entryFeeRequests.get(eventId) ??
-      fetch(getApiUrl(`/api/Events/GetEntryFee/${eventId}`))
-        .then(r => r.ok ? r.text() : "-")
-        .catch(() => "-")
-        .then(value => {
-          entryFeeCache.set(eventId, value)
-          entryFeeRequests.delete(eventId)
-          return value
-        })
-
-    entryFeeRequests.set(eventId, request)
-    request.then(value => {
-      if (!cancelled) {
-        setFee(value)
-        onFeeFetched?.()
-      }
+  const request = fetch(getApiUrl(`/api/Events/GetEntryFee/${eventId}`))
+    .then(r => (r.ok ? r.text() : "-"))
+    .catch(() => "-")
+    .then(value => {
+      entryFeeCache.set(eventId, value)
+      entryFeeRequests.delete(eventId)
+      return value
     })
 
-    return () => {
-      cancelled = true
-    }
-  }, [eventId, enabled, onFeeFetched])
-
-  return fee
+  entryFeeRequests.set(eventId, request)
+  return request
 }
 
-function EntryFeeCell({ event, enabled, onFeeFetched }: { event: ActiveGame; enabled: boolean; onFeeFetched?: () => void }) {
-  const fee = useEntryFee(event.id, enabled, onFeeFetched)
-  return <span className="text-muted-foreground">{fee ?? "..."}</span>
-}
-
-const DEFAULT_ROUND_DURATION_MS = 50 * 60 * 1000
-
-function getEventRoundProgress(event: ActiveGame, now: number) {
-  const totalRounds = event.totalSwissRounds || event.totalRounds || 0
-  const isCompleted = event.status === "completed" || event.state === "Finished"
-  const hasStarted = isCompleted || event.status === "active" || (event.roundNumber != null && event.roundNumber > 0)
-
-  if (!hasStarted) {
-    return { hasStarted: false, currentRound: 0, totalRounds, progress: 0 }
+function fetchPrizes(eventId: string): Promise<Record<string, string> | null> {
+  if (prizesCache.has(eventId)) {
+    return Promise.resolve(prizesCache.get(eventId) ?? null)
   }
 
-  if (isCompleted) {
-    return { hasStarted: true, currentRound: totalRounds, totalRounds, progress: 1 }
-  }
+  const existing = prizesRequests.get(eventId)
+  if (existing) return existing
 
-  const currentRound = event.roundNumber ?? 1
-  let inRoundProgress = 0
+  const request = fetch(getApiUrl(`/api/Events/GetPrizes/${eventId}`))
+    .then(r => (r.ok ? r.json() : null))
+    .catch(() => null)
+    .then((value: Record<string, string> | null) => {
+      prizesCache.set(eventId, value)
+      prizesRequests.delete(eventId)
+      return value
+    })
 
-  if (event.state === "RoundInProgress" && event.roundEndTime) {
-    const end = new Date(event.roundEndTime).getTime()
-    if (!isNaN(end)) {
-      const durationMs = event.roundDurationMs ?? DEFAULT_ROUND_DURATION_MS
-      const timeRemaining = Math.max(0, end - now)
-      const elapsed = Math.max(0, durationMs - timeRemaining)
-      inRoundProgress = Math.min(1, elapsed / durationMs)
-    }
-  }
-
-  const effectiveTotalRounds = totalRounds > 0 ? totalRounds : Math.max(1, currentRound)
-  const completedBeforeCurrent = Math.max(0, currentRound - 1)
-  const progress = Math.min(1, (completedBeforeCurrent + inRoundProgress) / effectiveTotalRounds)
-
-  return {
-    hasStarted: true,
-    currentRound,
-    totalRounds,
-    progress,
-  }
-}
-
-function RoundsCell({ event, roundsDigitsWidth }: { event: ActiveGame; roundsDigitsWidth: number }) {
-  const [now, setNow] = useState(Date.now)
-  const isLiveActive = event.status === "active" && event.state === "RoundInProgress" && Boolean(event.roundEndTime)
-
-  useEffect(() => {
-    if (!isLiveActive) return
-    const interval = setInterval(() => {
-      setNow(Date.now())
-    }, 5000)
-    return () => clearInterval(interval)
-  }, [isLiveActive])
-
-  const { hasStarted, currentRound, totalRounds, progress } = getEventRoundProgress(event, now)
-
-  if (!hasStarted) {
-    return (
-      <span className="inline-flex items-center gap-1.5">
-        <span className="tabular-nums text-right text-muted-foreground" style={{ width: `${roundsDigitsWidth}ch` }}>
-          {totalRounds > 0 ? totalRounds : "–"}
-        </span>
-      </span>
-    )
-  }
-
-  const r = 6
-  const circ = 2 * Math.PI * r
-  const filled = circ * progress
-
-  return (
-    <span className="inline-flex items-center gap-1.5">
-      <span className="tabular-nums text-right" style={{ width: `${roundsDigitsWidth}ch` }}>
-        {currentRound}
-      </span>
-      {totalRounds > 0 ? <span className="text-muted-foreground">/ {totalRounds}</span> : null}
-      <svg width="16" height="16" className="shrink-0 -rotate-90">
-        <circle cx="8" cy="8" r={r} fill="none" stroke="currentColor" strokeWidth="2" className="text-border" />
-        <circle cx="8" cy="8" r={r} fill="none" stroke="currentColor" strokeWidth="2"
-          strokeDasharray={`${filled} ${circ - filled}`}
-          className={progress >= 1 ? "text-green-500" : progress >= 0.5 ? "text-blue-500" : "text-muted-foreground"}
-        />
-      </svg>
-    </span>
-  )
+  prizesRequests.set(eventId, request)
+  return request
 }
 
 export default function Events() {
-  const { activeGames, upcomingGames, completedGames, loading, error, hoveredEventId, setHoveredEventId, selectedEventId, setSelectedEventId } = useEvents()
-  const [currentPageEventIds, setCurrentPageEventIds] = useState<Set<string>>(() => new Set())
-  const [timelineScrollKey, setTimelineScrollKey] = useState(0)
+  const navigate = useNavigate()
+  const {
+    activeGames,
+    upcomingGames,
+    completedGames,
+    loading,
+    error,
+    hoveredEventId,
+    setHoveredEventId,
+    selectedEventId,
+    setSelectedEventId,
+  } = useEvents()
 
-  const [feeCacheVersion, setFeeCacheVersion] = useState(0)
+  const [entryFees, setEntryFees] = useState<Record<string, string | undefined>>({})
+  const [selectedEventDetails, setSelectedEventDetails] = useState<EventDetailExtras | undefined>()
 
   const events = useMemo(() => {
     const now = Date.now()
     return [...activeGames, ...upcomingGames, ...completedGames]
       .filter(isRecentCompletedEvent)
       .filter(event => {
-        const isPast = event.status === "completed" || (getEventStartTime(event) > 0 && getEventStartTime(event) < now)
+        const isPast =
+          event.status === "completed" ||
+          (getEventStartTime(event) > 0 && getEventStartTime(event) < now)
         if (isPast && (event.minimumPlayers ?? 0) === 0) {
           return false
         }
 
-        const cached = entryFeeCache.get(event.id)
+        const cached = entryFees[event.id] ?? entryFeeCache.get(event.id)
         if (cached !== undefined && (!cached || cached === "-" || cached.trim() === "")) {
           return false
         }
         return true
       })
-      .sort((a, b) => getEventStartTime(a) - getEventStartTime(b))
-  }, [activeGames, upcomingGames, completedGames, feeCacheVersion])
+      .sort((a, b) => getEventStartTime(a) - getEventStartTime(b)) as TournamentEvent[]
+  }, [activeGames, upcomingGames, completedGames, entryFees])
 
   const timelineEvents = useMemo(() => {
     const completedCutoff = Date.now() - TIMELINE_COMPLETED_EVENT_WINDOW_MS
@@ -214,197 +124,90 @@ export default function Events() {
     })
   }, [events])
 
-  const playersDigitsWidth = useMemo(() => {
-    return Math.max(1, ...events.map(event => String(event.totalPlayers ?? 0).length))
-  }, [events])
+  const activeEventIds = useMemo(
+    () => new Set(activeGames.map(e => e.id)),
+    [activeGames],
+  )
 
-  const roundsDigitsWidth = useMemo(() => {
-    return Math.max(1, ...events.map(event => String(event.roundNumber ?? event.totalRounds ?? 0).length))
-  }, [events])
-
-  const selectedEvent = useMemo(() => {
-    if (!selectedEventId) return null
-    return events.find(e => e.id === selectedEventId) ?? null
-  }, [selectedEventId, events])
-
-  const activeEventIdSet = useMemo(() =>
-    new Set(activeGames.map(e => e.id)),
-  [activeGames])
-
-  // Auto-select soonest upcoming event on initial load
-  const hasAutoSelectedRef = useRef(false)
-  useEffect(() => {
-    if (hasAutoSelectedRef.current || selectedEventId != null || events.length === 0) return
-    const now = Date.now()
-    const soonestUpcoming =
-      events.find(e => (e.status === "scheduled" || e.status === "active") && getEventStartTime(e) >= now) ??
-      events.find(e => e.status === "scheduled" || e.status === "active") ??
-      events[0]
-
-    if (soonestUpcoming) {
-      hasAutoSelectedRef.current = true
-      setSelectedEventId(soonestUpcoming.id)
+  const handlePageRowsChange = useCallback((rows: TournamentEvent[]) => {
+    const missing = rows.filter(row => !entryFeeCache.has(row.id))
+    if (missing.length === 0) {
+      // Sync known cache into state for visible rows
+      setEntryFees(current => {
+        let changed = false
+        const next = { ...current }
+        for (const row of rows) {
+          const fee = entryFeeCache.get(row.id)
+          if (fee !== undefined && next[row.id] !== fee) {
+            next[row.id] = fee
+            changed = true
+          }
+        }
+        return changed ? next : current
+      })
+      return
     }
-  }, [events, selectedEventId, setSelectedEventId])
 
-  const handleRowClick = useCallback((event: ActiveGame) => {
-    setSelectedEventId(selectedEventId === event.id ? null : event.id)
-  }, [selectedEventId, setSelectedEventId])
-
-  const handleTimelineEventClick = useCallback((event: ActiveGame) => {
-    setSelectedEventId(event.id)
-    setTimelineScrollKey(key => key + 1)
-  }, [setSelectedEventId])
-
-  const handlePageRowsChange = useCallback((rows: ActiveGame[]) => {
-    setCurrentPageEventIds((current) => {
-      const next = new Set(rows.map(row => row.id))
-      if (
-        next.size === current.size &&
-        Array.from(next).every(id => current.has(id))
-      ) {
-        return current
-      }
-      return next
+    void Promise.all(
+      missing.map(async row => {
+        const fee = await fetchEntryFee(row.id)
+        return [row.id, fee] as const
+      }),
+    ).then(results => {
+      setEntryFees(current => {
+        const next = { ...current }
+        for (const [id, fee] of results) {
+          next[id] = fee
+        }
+        return next
+      })
     })
   }, [])
 
-  const handleFeeFetched = useCallback(() => {
-    setFeeCacheVersion(v => v + 1)
-  }, [])
+  // Fetch detail extras for the selected event (panel)
+  useEffect(() => {
+    if (!selectedEventId) {
+      setSelectedEventDetails(undefined)
+      return
+    }
 
-  const columns: ColumnDef<ActiveGame>[] = useMemo(() => [
-    {
-      accessorKey: "name",
-      header: "Name",
-    },
-    {
-      id: "schedule",
-      header: "Schedule",
-      size: 176,
-      cell: ({ row }) => formatSchedule(row.original._rawStartTime, row.original._rawEndTime),
-    },
-    {
-      accessorKey: "format",
-      header: "Format",
-      size: 112,
-      cell: ({ row }) => (
-        <span className="inline-flex items-center gap-1.5">
-          <span className={cn("w-2 h-2 rounded-full shrink-0 translate-y-px", getFormatDotColor(row.original.format))} />
-          {row.original.format}
-        </span>
-      ),
-    },
-    {
-      id: "entryFee",
-      header: "Entry Fee",
-      size: 86,
-      cell: ({ row }) => {
-        return (
-          <EntryFeeCell
-            event={row.original}
-            enabled={currentPageEventIds.has(row.original.id)}
-            onFeeFetched={handleFeeFetched}
-          />
+    let cancelled = false
+    setSelectedEventDetails({ loading: true })
+
+    Promise.all([fetchEntryFee(selectedEventId), fetchPrizes(selectedEventId)]).then(
+      ([fee, prizes]) => {
+        if (cancelled) return
+        setSelectedEventDetails({
+          entryFee: fee,
+          prizes,
+          loading: false,
+        })
+        setEntryFees(current =>
+          current[selectedEventId] === fee ? current : { ...current, [selectedEventId]: fee },
         )
       },
-    },
-    {
-      accessorKey: "totalPlayers",
-      header: "Players",
-      size: 84,
-      cell: ({ row }) => {
-        const total = row.original.totalPlayers ?? 0
-        const min = row.original.minimumPlayers ?? 0
-        const pct = min > 0 ? Math.min(1, total / min) : 0
-        const r = 6
-        const circ = 2 * Math.PI * r
-        const filled = circ * pct
-        return (
-          <span className="inline-flex items-center gap-1.5">
-            <span className="tabular-nums text-right" style={{ width: `${playersDigitsWidth}ch` }}>{total}</span>
-            <span className="text-muted-foreground">/ {min}</span>
-            <svg width="16" height="16" className="shrink-0 -rotate-90">
-              <circle cx="8" cy="8" r={r} fill="none" stroke="currentColor" strokeWidth="2" className="text-border" />
-              <circle cx="8" cy="8" r={r} fill="none" stroke="currentColor" strokeWidth="2"
-                strokeDasharray={`${filled} ${circ - filled}`}
-                className={pct >= 1 ? "text-green-500" : pct >= 0.5 ? "text-blue-500" : "text-muted-foreground"}
-              />
-            </svg>
-          </span>
-        )
-      }
-    },
-    {
-      accessorKey: "totalRounds",
-      header: "Rounds",
-      size: 84,
-      cell: ({ row }) => (
-        <RoundsCell event={row.original} roundsDigitsWidth={roundsDigitsWidth} />
-      ),
-    },
-  ], [currentPageEventIds, playersDigitsWidth, roundsDigitsWidth, handleFeeFetched])
+    )
+
+    return () => {
+      cancelled = true
+    }
+  }, [selectedEventId])
 
   return (
-    <div className="-mt-10 flex flex-col h-[calc(100vh-1rem)] overflow-hidden">
-      <EventsTimeline events={timelineEvents} focusedEventId={hoveredEventId ?? selectedEvent?.id ?? null} activeEventIds={activeEventIdSet} onEventClick={handleTimelineEventClick} />
-
-      <div className="flex flex-1 min-h-0 min-w-0">
-        {/* Table area */}
-        <div className="flex min-h-0 flex-1 min-w-0 flex-col gap-4 overflow-hidden px-4 pt-2 pb-1.5">
-          {error && (
-            <div className="bg-destructive/15 text-destructive px-4 py-3 rounded-md text-sm font-medium">
-              Error loading events: {error}
-            </div>
-          )}
-
-          {loading && events.length === 0 ? (
-            <div className="rounded-md">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-sidebar-border/60 bg-muted/50">
-                    {columns.map((col, i) => (
-                      <th key={i} className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">
-                        {typeof col.header === 'string' ? col.header : ''}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  <EventsTableSkeleton rows={10} columns={columns.length} />
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <DataTable
-              columns={columns}
-              data={events}
-              autoResetPageIndex={false}
-              containerClassName="flex min-h-0 flex-1 flex-col"
-              tableContainerClassName="flex min-h-0 flex-1 flex-col overflow-visible"
-              bodyWrapperClassName="min-h-0 flex-1 overflow-y-auto overflow-x-hidden"
-              onRowHover={(event: ActiveGame) => setHoveredEventId(event.id)}
-              onRowLeave={() => setHoveredEventId(null)}
-              onRowClick={handleRowClick}
-              onPageRowsChange={handlePageRowsChange}
-              getRowClassName={(event: ActiveGame) => cn(
-                event.id !== selectedEventId && event._rawStartTime && new Date(event._rawStartTime).getTime() < Date.now() && "opacity-60",
-                selectedEvent?.id === event.id && "outline outline-1 outline-white/80 -outline-offset-1 bg-muted/50",
-              )}
-              activeRowId={selectedEvent?.id ?? null}
-              activeRowScrollKey={timelineScrollKey}
-              getRowId={(event: ActiveGame) => event.id}
-            />
-          )}
-        </div>
-
-        {/* Detail panel — appears on row click */}
-        <EventDetailPanel
-          event={selectedEvent}
-          loadDetails={Boolean(selectedEvent)}
-          onClose={() => setSelectedEventId(null)}
-        />
-      </div>
-    </div>
+    <EventsLayout
+      events={events}
+      timelineEvents={timelineEvents}
+      loading={loading}
+      error={error}
+      selectedEventId={selectedEventId}
+      onSelectedEventIdChange={setSelectedEventId}
+      hoveredEventId={hoveredEventId}
+      onHoveredEventIdChange={setHoveredEventId}
+      activeEventIds={activeEventIds}
+      entryFees={entryFees}
+      onPageRowsChange={handlePageRowsChange}
+      selectedEventDetails={selectedEventDetails}
+      onViewTournament={event => navigate(`/events/${event.id}`)}
+    />
   )
 }
