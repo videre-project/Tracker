@@ -1,17 +1,26 @@
-import React, { useState, useEffect, useCallback, useRef } from "react"
+/** @file
+  Copyright (c) 2026, Cory Bennett. All rights reserved.
+  SPDX-License-Identifier: Apache-2.0
+**/
+
+import { useState, useEffect, useCallback, useRef } from "react"
 import { createPortal } from "react-dom"
 import { useParams, useNavigate, useLocation } from "react-router-dom"
 import { getApiUrl } from "@/utils/api-config"
 import { useClientState } from "@/hooks/use-client-state"
 import { useNDJSONStream } from "@/hooks/use-ndjson-stream"
 import { ArrowLeft } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import {
+  EMPTY_TRANSITION,
+  ReplayLayout,
+  ReplayStateEngine,
+  computeBoardTransition,
+  type BoardState,
+  type BoardTransition,
+  type ReplayData,
+} from "@videreproject/ui"
+import { Button } from "@videreproject/ui"
 import type { GameLogDTO, MatchDetailsDTO } from "@/types/api"
-import type { ReplayData, BoardState, BoardTransition } from "@/types/replay-types"
-import { computeBoardTransition, EMPTY_TRANSITION } from "@/types/replay-types"
-import { ReplayStateEngine } from "@/components/replay/ReplayStateEngine"
-import { BoardView } from "@/components/replay/BoardView"
-import { ReplayTimeline } from "@/components/replay/ReplayTimeline"
 
 interface ReplayRouteState {
   eventId?: number | null
@@ -107,7 +116,7 @@ export default function GameReplay() {
       })
 
     return () => controller.abort()
-  }, [clientReady, parsedMatchId])
+  }, [clientReady, parsedMatchId, gameId])
 
   useEffect(() => {
     if (!gameId) return
@@ -163,7 +172,7 @@ export default function GameReplay() {
       })
 
     return () => controller.abort()
-  }, [gameId, refreshKey])
+  }, [engine, gameId, refreshKey])
 
   const handleStepTo = useCallback((index: number) => {
     if (!engine.current) return
@@ -175,7 +184,7 @@ export default function GameReplay() {
     currentIndexRef.current = engine.current.currentIndex
     setCurrentIndex(engine.current.currentIndex)
     wasAtLatestRef.current = engine.current.currentIndex >= snapshotCountRef.current - 1
-  }, [])
+  }, [engine])
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -197,7 +206,7 @@ export default function GameReplay() {
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
-  }, [currentIndex, replayData, handleStepTo])
+  }, [currentIndex, engine, replayData, handleStepTo])
 
   const snapshot =
     replayData && currentIndex >= 0 && currentIndex < replayData.snapshots.length
@@ -270,33 +279,22 @@ export default function GameReplay() {
     }
 
     return (
-      <>
-        {/* Board — fills all remaining space */}
-        <div className="flex-1 min-h-0">
-          <BoardView
-            board={board}
-            transition={transition}
-            perspectivePlayer={replayData.perspectivePlayerIndex ?? undefined}
-            promptText={snapshot?.promptText}
-            promptOptions={snapshot?.promptOptions}
-            headerContent={headerContent}
-          />
-        </div>
-
-        {/* Timeline — fixed at bottom */}
-        <div className="shrink-0">
-          <ReplayTimeline
-            snapshots={replayData.snapshots}
-            currentIndex={currentIndex}
-            onStepTo={handleStepTo}
-          />
-        </div>
-      </>
+      <ReplayLayout
+        board={board}
+        transition={transition}
+        snapshots={replayData.snapshots}
+        currentIndex={currentIndex}
+        onStepTo={handleStepTo}
+        perspectivePlayer={replayData.perspectivePlayerIndex ?? undefined}
+        promptText={snapshot?.promptText}
+        promptOptions={snapshot?.promptOptions}
+        headerContent={headerContent}
+      />
     )
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-3.5rem)]">
+    <div className="flex h-[calc(100vh-3.5rem)] min-w-0 flex-col">
       {headerEndHost && eventId != null ? createPortal(
         <div className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
           <span>Event ID</span>
