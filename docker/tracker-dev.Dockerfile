@@ -1,4 +1,7 @@
-FROM videreproject/mtgosdk:wayland AS tracker-prereqs
+# Development Dockerfile for Tracker with Vite HMR and .NET SpaProxy
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS dotnet-sdk
+
+FROM videreproject/mtgosdk:wayland AS tracker-dev-base
 
 ARG WEBVIEW2_RUNTIME_URL=https://go.microsoft.com/fwlink/?linkid=2124701
 ENV PATH="/opt/wine/bin:${PATH}"
@@ -11,7 +14,19 @@ RUN apt-get update \
       libgl1 \
       libgles2 \
       libgl1-mesa-dri \
+      curl \
+      gnupg \
+      socat \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Node.js 22
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install pnpm
+RUN npm install -g pnpm
 
 USER wine
 
@@ -22,7 +37,35 @@ RUN xvfb-run -a winetricks -q --force vcrun2022
 # Tracker-specific prefix as Windows 10 before running Microsoft's installer.
 RUN xvfb-run -a winetricks -q win10
 
-FROM tracker-prereqs
+# Install .NET Desktop Runtime 10.0 for Windows Forms support
+RUN xvfb-run -a winetricks -q dotnetdesktop10
+
+USER root
+COPY --from=dotnet-sdk /usr/share/dotnet /opt/dotnet
+RUN ln -sf /opt/dotnet/dotnet /usr/local/bin/dotnet
+USER wine
+
+# Compose mounts a persistent Wine prefix over the image's prefix. Preserve a
+# stable runtime outside it so old volumes cannot downgrade build or startup.
+ARG DOTNET_RUNTIME_VERSION=10.0.0
+RUN cp -a '/home/wine/.wine/drive_c/Program Files/dotnet' /home/wine/windows-dotnet
+
+RUN curl --fail --location --retry 3 \
+      --output /tmp/aspnetcore-runtime.zip \
+      "https://builds.dotnet.microsoft.com/dotnet/aspnetcore/Runtime/${DOTNET_RUNTIME_VERSION}/aspnetcore-runtime-${DOTNET_RUNTIME_VERSION}-win-x64.zip" \
+    && unzip -qo /tmp/aspnetcore-runtime.zip -d /home/wine/windows-dotnet \
+    && rm /tmp/aspnetcore-runtime.zip
+
+# Keep the NSwag shim outside the mutable Wine prefix mounted by Compose.
+RUN wine /home/wine/.wine/drive_c/dotnet/dotnet.exe tool install \
+      nswag.consolecore \
+      --tool-path 'Z:\home\wine\tracker-tools' \
+    && wine /home/wine/.wine/drive_c/dotnet/dotnet.exe tool install \
+      swashbuckle.aspnetcore.cli \
+      --version 10.1.0 \
+      --tool-path 'Z:\home\wine\tracker-tools'
+
+FROM tracker-dev-base AS tracker-dev
 
 ARG WEBVIEW2_RUNTIME_URL=https://go.microsoft.com/fwlink/?linkid=2124701
 
@@ -40,7 +83,7 @@ RUN curl --fail --location --retry 3 \
     && rm /tmp/MicrosoftEdgeWebView2RuntimeInstallerX64.exe
 
 USER root
-COPY --chmod=755 docker/run-tracker-wine.sh /usr/local/bin/run-tracker-wine
+COPY --chmod=755 docker/run-tracker-dev.sh /usr/local/bin/run-tracker-dev
 
 # Kestrel needs an explicit certificate because Wine does not provide the
 # ASP.NET Core development certificate that UseHttps() normally discovers.
@@ -58,6 +101,12 @@ RUN mkdir -p /opt/tracker \
       -passout pass:tracker-localhost \
     && chmod 0444 /opt/tracker/localhost.pfx \
     && rm /tmp/tracker-localhost.key /tmp/tracker-localhost.crt
-USER wine
 
-CMD ["run-tracker-wine"]
+# Create workspace directory and set permissions
+RUN mkdir -p /workspace/src/client /workspace/src/server \
+    && chown -R wine:wine /workspace
+
+USER wine
+WORKDIR /workspace
+
+CMD ["run-tracker-dev"]

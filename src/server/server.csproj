@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <TargetFramework>net10.0-windows7.0</TargetFramework>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <AssemblyName>Videre Tracker</AssemblyName>
     <RootNamespace>Tracker</RootNamespace>
@@ -21,22 +21,31 @@
 
   <Target Name="GenerateVidereOpenApiClient"
           BeforeTargets="CoreCompile"
-          Condition="'$(SkipOpenApiGeneration)' != 'true'">
+          Condition="'$(SkipOpenApiGeneration)' != 'true' And '$(TRACKER_SKIP_OPENAPI_GEN)' != 'true'">
     <Exec Command="dotnet tool restore"
           WorkingDirectory="$(SolutionDir)" />
     <MakeDir Directories="$(VidereGeneratedDirectory)" />
     <Exec Command="node src/server/scripts/prepareVidereOpenAPI.cjs &quot;$(VidereOpenApiSpecPath)&quot;"
           WorkingDirectory="$(SolutionDir)" />
-    <Exec Command="dotnet nswag openapi2csclient /Input:&quot;$(VidereOpenApiSpecPath)&quot; /Output:&quot;$(VidereGeneratedClientPath)&quot; /ClassName:VidereOpenAPIClient /Namespace:Tracker.Services.Videre.Generated /OperationGenerationMode:SingleClientFromOperationId /InjectHttpClient:true /DisposeHttpClient:false /UseBaseUrl:false /GenerateClientInterfaces:false /GenerateExceptionClasses:true /ExceptionClass:VidereOpenAPIException /GenerateOptionalParameters:true /JsonLibrary:SystemTextJson /JsonLibraryVersion:10.0 /GenerateNullableReferenceTypes:true /GenerateOptionalPropertiesAsNullable:true /TypeAccessModifier:internal /ClientClassAccessModifier:internal /GenerateJsonMethods:false /GenerateDataAnnotations:false /NewLineBehavior:LF"
-          WorkingDirectory="$(ProjectDir)" />
     <Exec Command="node src/client/scripts/generateVidereOpenAPIEnums.cjs &quot;$(VidereOpenApiSpecPath)&quot; src/client/src/types/videre.g.ts"
-          WorkingDirectory="$(SolutionDir)" />
+          WorkingDirectory="$(SolutionDir)"
+          Condition="'$(TRACKER_DEV_CONTAINER)' != 'true'" />
+    <PropertyGroup>
+      <NswagCommand>/opt/wine/bin/wine /home/wine/tracker-tools/nswag.exe openapi2csclient /Input:&quot;$(VidereOpenApiSpecPath)&quot; /Output:&quot;$(VidereGeneratedClientPath)&quot; /ClassName:VidereOpenAPIClient /Namespace:Tracker.Services.Videre.Generated /OperationGenerationMode:SingleClientFromOperationId /InjectHttpClient:true /DisposeHttpClient:false /UseBaseUrl:false /GenerateClientInterfaces:false /GenerateExceptionClasses:true /ExceptionClass:VidereOpenAPIException /GenerateOptionalParameters:true /JsonLibrary:SystemTextJson /JsonLibraryVersion:10.0 /GenerateNullableReferenceTypes:true /GenerateOptionalPropertiesAsNullable:true /TypeAccessModifier:internal /ClientClassAccessModifier:internal /GenerateJsonMethods:false /GenerateDataAnnotations:false /NewLineBehavior:LF</NswagCommand>
+    </PropertyGroup>
+    <Exec Command="$(NswagCommand)"
+          WorkingDirectory="$(ProjectDir)"
+          EnvironmentVariables="DOTNET_ROOT=Z:\home\wine\windows-dotnet"
+          Condition="'$(TRACKER_DEV_CONTAINER)' == 'true'" />
+    <Exec Command="dotnet nswag openapi2csclient /Input:&quot;$(VidereOpenApiSpecPath)&quot; /Output:&quot;$(VidereGeneratedClientPath)&quot; /ClassName:VidereOpenAPIClient /Namespace:Tracker.Services.Videre.Generated /OperationGenerationMode:SingleClientFromOperationId /InjectHttpClient:true /DisposeHttpClient:false /UseBaseUrl:false /GenerateClientInterfaces:false /GenerateExceptionClasses:true /ExceptionClass:VidereOpenAPIException /GenerateOptionalParameters:true /JsonLibrary:SystemTextJson /JsonLibraryVersion:10.0 /GenerateNullableReferenceTypes:true /GenerateOptionalPropertiesAsNullable:true /TypeAccessModifier:internal /ClientClassAccessModifier:internal /GenerateJsonMethods:false /GenerateDataAnnotations:false /NewLineBehavior:LF"
+          WorkingDirectory="$(ProjectDir)"
+          Condition="'$(TRACKER_DEV_CONTAINER)' != 'true'" />
   </Target>
 
   <!-- Runtime Properties -->
   <Target Name="GenerateProductInfo" BeforeTargets="BeforeBuild">
-    <!-- Read version from package.json -->
-    <Exec Command="powershell -Command &quot;(Get-Content '$(SolutionDir)/package.json' | ConvertFrom-Json).version&quot;" ConsoleToMSBuild="true">
+    <!-- Read version from package.json (cross-platform) -->
+    <Exec Command="node $(MSBuildProjectDirectory)/scripts/get-version.js" ConsoleToMSBuild="true">
       <Output TaskParameter="ConsoleOutput" PropertyName="PackageVersion" />
     </Exec>
     <WriteLinesToFile
@@ -52,7 +61,11 @@
     <!-- Workaround for https://github.com/dotnet/aspnetcore/issues/45700 -->
     <SpaProxyLaunchCommand Condition="$([MSBuild]::IsOsPlatform('Windows'))">cmd.exe /s /c $(SpaProxyLaunchCommand)</SpaProxyLaunchCommand>
     <SpaProxyLaunchCommand Condition="$([MSBuild]::IsOSUnixLike())">sh -c %5C&quot;$(SpaProxyLaunchCommand)%5C&quot;</SpaProxyLaunchCommand>
+    <!-- Disable launch command in dev container (external Vite dev server) -->
+    <SpaProxyLaunchCommand Condition="'$(TRACKER_DEV_CONTAINER)' == 'true'"></SpaProxyLaunchCommand>
     <SpaProxyServerUrl>https://localhost:5279</SpaProxyServerUrl>
+    <!-- Override for dev container to proxy to external Vite dev server -->
+    <SpaProxyServerUrl Condition="'$(TRACKER_DEV_CONTAINER)' == 'true'">http://vite-dev:5279</SpaProxyServerUrl>
   </PropertyGroup>
   <ItemGroup>
     <!-- Embed the build output of the client project -->
@@ -75,10 +88,13 @@
   <Target Name="GenerateSpaProxyConfig" BeforeTargets="Build">
     <PropertyGroup>
       <SpaProxyConfigPath>$(OutputPath)spa-proxy-config.json</SpaProxyConfigPath>
-      <SpaProxyConfigContent>{
+      <SpaProxyConfigContent Condition="'$(TRACKER_DEV_CONTAINER)' != 'true'">{
   "LaunchCommand": "$(SpaProxyLaunchCommand.Replace('\', '\\'))",
   "WorkingDirectory": "$(SpaRoot.Replace('\', '\\'))",
   "MaxRetries": 15,
+  "ServerUrl": "$(SpaProxyServerUrl)"
+}</SpaProxyConfigContent>
+      <SpaProxyConfigContent Condition="'$(TRACKER_DEV_CONTAINER)' == 'true'">{
   "ServerUrl": "$(SpaProxyServerUrl)"
 }</SpaProxyConfigContent>
     </PropertyGroup>
@@ -90,8 +106,7 @@
 
   <!-- Ensure local builds do not keep stale portable-mode installer bypass flags -->
   <Target Name="ClearInstallerDisableEnvironment" BeforeTargets="Build;Publish">
-    <Exec Command="powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command &quot;[Environment]::SetEnvironmentVariable('TRACKER_DISABLE_INSTALLER',$null,'Process'); [Environment]::SetEnvironmentVariable('TRACKER_DISABLE_INSTALLER',$null,'User')&quot;"
-          ContinueOnError="true" />
+    <Exec Command="node $(MSBuildProjectDirectory)/scripts/clear-installer-env.js" ContinueOnError="true" />
   </Target>
 
   <!--
@@ -108,13 +123,18 @@
   <!-- Generate Typescript types from the Web API's OpenAPI spec on build -->
   <Target Name="GenerateOpenApiSpec"
           AfterTargets="Build"
-          Condition="'$(SkipOpenApiGeneration)' != 'true'">
+          Condition="'$(SkipOpenApiGeneration)' != 'true' And '$(TRACKER_SKIP_OPENAPI_GEN)' != 'true'">
     <Exec Command="dotnet tool restore"
           WorkingDirectory="$(ProjectDir)" />
+    <Exec Command="/opt/wine/bin/wine /home/wine/tracker-tools/swagger.exe tofile --output &quot;$(OutputPath)openapi.json&quot; &quot;$(OutputPath)$(AssemblyName).dll&quot; v1"
+          WorkingDirectory="$(ProjectDir)"
+          EnvironmentVariables="TRACKER_DISABLE_INSTALLER=1;DOTNET_ROOT=Z:\home\wine\windows-dotnet;WINEPATH=Z:\home\wine\windows-dotnet"
+          Condition="'$(TRACKER_DEV_CONTAINER)' == 'true'" />
     <Exec Command="dotnet swagger tofile --output &quot;$(OutputPath)openapi.json&quot; &quot;$(OutputPath)$(AssemblyName).dll&quot; v1"
           WorkingDirectory="$(ProjectDir)"
-          EnvironmentVariables="TRACKER_DISABLE_INSTALLER=1" />
-    
+          EnvironmentVariables="TRACKER_DISABLE_INSTALLER=1"
+          Condition="'$(TRACKER_DEV_CONTAINER)' != 'true'" />
+
     <PropertyGroup>
       <OpenApiSpecPath>src/server/$(OutputPath)openapi.json</OpenApiSpecPath>
       <OpenApiSpecPath>$(OpenApiSpecPath.Replace('\', '/'))</OpenApiSpecPath>

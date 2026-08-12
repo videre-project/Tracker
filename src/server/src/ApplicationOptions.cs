@@ -29,6 +29,22 @@ public class ApplicationOptions(string[] args = null!)
   public Uri Url => new($"https://localhost:{Port}");
 
   /// <summary>
+  /// The URL for the Web API (HTTP in dev container).
+  /// </summary>
+  public Uri HttpUrl
+  {
+    get
+    {
+      var httpPort = Environment.GetEnvironmentVariable("ASPNETCORE_HTTP_PORT");
+      if (int.TryParse(httpPort, out var port) && port > 0)
+      {
+        return new Uri($"http://localhost:{port}");
+      }
+      return new Uri($"http://localhost:5000");
+    }
+  }
+
+  /// <summary>
   /// The URL that the WebView2 UI should load.
   /// </summary>
   /// <remarks>

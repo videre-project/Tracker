@@ -24,6 +24,32 @@ services:
     build:
       context: .
       dockerfile: docker/tracker-wine.Dockerfile
+    image: videreproject/tracker:wayland
+    init: true
+    stdin_open: true
+    tty: true
+    devices:
+      - /dev/dri:/dev/dri
+    environment:
+      DISPLAY: ${DISPLAY:-}
+      WAYLAND_DISPLAY: ${WAYLAND_DISPLAY:-wayland-0}
+      XDG_RUNTIME_DIR: /tmp/runtime-dir
+      WINEDEBUG: -all
+      TRACKER_DISABLE_INSTALLER: "1"
+      TRACKER_WINE_COMPAT: "1"
+      TRACKER_SKIP_MTGO: ${TRACKER_SKIP_MTGO:-0}
+      APP_THEME: Dark
+      WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: --disable-gpu
+    volumes:
+      - .:/workspace
+      - tracker-wine-data:/home/wine/.wine
+      - ${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR must be set}/${WAYLAND_DISPLAY:-wayland-0}:/tmp/runtime-dir/${WAYLAND_DISPLAY:-wayland-0}
+      - /tmp/.X11-unix:/tmp/.X11-unix
+
+  tracker-dev:
+    build:
+      context: .
+      dockerfile: docker/tracker-dev.Dockerfile
     image: videreproject/tracker:wayland-dev
     init: true
     stdin_open: true
@@ -37,14 +63,51 @@ services:
       WINEDEBUG: -all
       TRACKER_DISABLE_INSTALLER: "1"
       TRACKER_WINE_COMPAT: "1"
+      TRACKER_SKIP_MTGO: ${TRACKER_SKIP_MTGO:-0}
       APP_THEME: Dark
       WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: --disable-gpu
+      ASPNETCORE_ENVIRONMENT: Development
+      # SpaProxy config to proxy to external Vite dev server
+      SPA_PROXY_SERVER_URL: http://vite-dev:5279
+      # Override UI URL to point to localhost (socat proxy forwards to vite-dev)
+      TRACKER_UI_URL: http://localhost:5279
+      # HTTP port for Vite proxy (use 5002 to avoid wineserver conflict on 5000/5001)
+      ASPNETCORE_HTTP_PORT: "5002"
     volumes:
       - .:/workspace
       - tracker-wine-data:/home/wine/.wine
       - ${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR must be set}/${WAYLAND_DISPLAY:-wayland-0}:/tmp/runtime-dir/${WAYLAND_DISPLAY:-wayland-0}
       - /tmp/.X11-unix:/tmp/.X11-unix
+    ports:
+      - "5002:5002"  # .NET API (HTTP)
+    depends_on:
+      - vite-dev
 
+  vite-dev:
+    build:
+      context: .
+      dockerfile: docker/vite-dev.Dockerfile
+    image: videreproject/vite:dev
+    init: true
+    stdin_open: true
+    tty: true
+    environment:
+      CI: "true"
+      TRACKER_DEV_CONTAINER: "true"
+      VIDERE_NPM_REGISTRY: ${VIDERE_NPM_REGISTRY:-http://host.docker.internal:4873/}
+      # Backend API URL for Vite proxy
+      ASPNETCORE_URLS: "http://tracker-dev:5002"
+      ASPNETCORE_HTTPS_PORT: "5002"
+    volumes:
+      - ./src/client:/workspace/src/client
+      - ./package.json:/workspace/package.json:ro
+      - vite-node-modules:/workspace/src/client/node_modules
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      # Vite dev server
+      - "5279:5279"
 volumes:
   mtgo-wine-data:
   tracker-wine-data:
+  vite-node-modules:

@@ -101,7 +101,7 @@ docker compose build tracker-wayland
 docker compose up tracker-wayland
 ```
 
-The service starts both MTGO and the Tracker in the same container and Wine prefix so MTGOSDK can discover the MTGO process. It dalso isables Tracker's installer and starts WebView2 with GPU acceleration disabled, and generates a loopback certificate for Tracker's HTTPS server for local development. Data for the Tracker is persisted in the `tracker-wine-data` volume and is shared in the Wine environment.
+The service starts both MTGO and the Tracker in the same container and Wine prefix so MTGOSDK can discover the MTGO process. It also disables Tracker's installer, starts WebView2 with GPU acceleration disabled, and generates a loopback certificate for Tracker's HTTPS server. Tracker data persists in the `tracker-wine-data` volume.
 
 ### Development mode
 
@@ -112,6 +112,19 @@ pnpm run dev
 ```
 
 This restores server dependencies, then runs the server in debug mode.
+
+For the Docker/Wine development workflow, start the repository-local package registry from the [`Videre Platform`](https://github.com/videre-project/platform) repository, then launch Tracker's development services:
+
+```sh
+# In Videre Platform
+pnpm registry:start
+
+# In Tracker
+docker compose build vite-dev tracker-dev
+docker compose up tracker-dev
+```
+
+The Vite service keeps dependencies in the `vite-node-modules` volume while bind-mounting the client source for HMR. It resolves `@videreproject/*` packages through the host registry; set `VIDERE_NPM_REGISTRY` to override its default `http://host.docker.internal:4873/` address.
 
 Once started, the Tracker will:
 
