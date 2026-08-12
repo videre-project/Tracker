@@ -3,12 +3,12 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-import { VIDERE_OPENAPI_ENUMS } from "@/types/videre.g"
+import { CARD_COLORS, type CardColor } from '@videreproject/constants'
 
 export const VIDERE_CARD_COLORS =
-  VIDERE_OPENAPI_ENUMS.components.schemas.Card.properties.colors.items
+  CARD_COLORS.map(color => color.symbol)
 
-export type VidereCardColor = (typeof VIDERE_CARD_COLORS)[number]
+export type VidereCardColor = CardColor['symbol']
 
 export const COLORLESS_CARD_COLOR = "C" as const
 const COLORLESS_CARD_COLORS = [COLORLESS_CARD_COLOR] as const

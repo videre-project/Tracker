@@ -1,14 +1,12 @@
-import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from "react"
+/** @file
+  Copyright (c) 2026, Cory Bennett. All rights reserved.
+  SPDX-License-Identifier: Apache-2.0
+**/
+
+import { useState, useCallback, type ReactNode } from "react"
 import { useClientState } from "@/hooks/use-client-state"
+import { CardArtContext, type CardArtContextValue } from "@/hooks/use-card-art"
 import { getApiUrl } from "@/utils/api-config"
-
-interface CardArtContextType {
-  getArtUrl: (cardName: string) => string | null
-  prefetchCards: (cardNames: string[]) => Promise<void>
-  isReady: boolean
-}
-
-const CardArtContext = createContext<CardArtContextType | null>(null)
 
 // Global cache shared across all contexts
 const globalCardArtCache = new Map<string, string>()
@@ -16,11 +14,11 @@ const pendingFetches = new Map<string, Promise<string | null>>()
 
 export function CardArtProvider({ children }: { children: ReactNode }) {
   const { isReady: clientReady, loading: clientLoading } = useClientState()
-  const [cacheVersion, setCacheVersion] = useState(0)
+  const [, setCacheVersion] = useState(0)
 
   const getArtUrl = useCallback((cardName: string): string | null => {
     return globalCardArtCache.get(cardName) ?? null
-  }, [cacheVersion]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [])
 
   const fetchSingleCard = useCallback(async (cardName: string): Promise<string | null> => {
     // Check cache first
@@ -66,7 +64,7 @@ export function CardArtProvider({ children }: { children: ReactNode }) {
     setCacheVersion(v => v + 1)
   }, [clientReady, fetchSingleCard])
 
-  const value: CardArtContextType = {
+  const value: CardArtContextValue = {
     getArtUrl,
     prefetchCards,
     isReady: clientReady && !clientLoading
@@ -77,82 +75,4 @@ export function CardArtProvider({ children }: { children: ReactNode }) {
       {children}
     </CardArtContext.Provider>
   )
-}
-
-export function useCardArtContext() {
-  const context = useContext(CardArtContext)
-  if (!context) {
-    throw new Error("useCardArtContext must be used within a CardArtProvider")
-  }
-  return context
-}
-
-interface CardArtProps {
-  cardName: string
-  className?: string
-}
-
-export function CardArt({ cardName, className = "" }: CardArtProps) {
-  const { getArtUrl, prefetchCards, isReady } = useCardArtContext()
-  const [localUrl, setLocalUrl] = useState<string | null>(() => getArtUrl(cardName))
-
-  // Try to get from context cache on each render
-  const cachedUrl = getArtUrl(cardName)
-
-  // Update local state if context has new value
-  useEffect(() => {
-    if (cachedUrl && cachedUrl !== localUrl) {
-      setLocalUrl(cachedUrl)
-    }
-  }, [cachedUrl, localUrl])
-
-  // Fetch if not cached and client is ready
-  useEffect(() => {
-    if (!cardName || localUrl || !isReady) return
-
-    prefetchCards([cardName])
-  }, [cardName, localUrl, isReady, prefetchCards])
-
-  const artUrl = localUrl || cachedUrl
-
-  // Show skeleton while loading
-  if (!artUrl && cardName) {
-    return (
-      <div className={`bg-muted/50 animate-pulse ${className}`} />
-    )
-  }
-
-  if (!artUrl) {
-    return (
-      <div className={`flex items-center justify-center bg-muted/30 ${className}`}>
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          className="h-5 w-5 text-muted-foreground/50"
-        >
-          <rect x="3" y="3" width="18" height="18" rx="2" />
-          <circle cx="8.5" cy="8.5" r="1.5" />
-          <path d="M21 15l-5-5L5 21" />
-        </svg>
-      </div>
-    )
-  }
-
-  return (
-    <img
-      src={artUrl}
-      alt={cardName}
-      className={`object-cover ${className}`}
-    />
-  )
-}
-
-/**
- * Get a cached card art URL synchronously (for use in SVG/charts)
- */
-export function getCachedCardArtUrl(cardName: string): string | null {
-  return globalCardArtCache.get(cardName) ?? null
 }

@@ -3,17 +3,9 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-import { VIDERE_OPENAPI_ENUMS } from "@/types/videre.g"
+import type { CardRarity } from '@videreproject/constants'
 
-const VIDERE_CARD_RARITIES =
-  VIDERE_OPENAPI_ENUMS.components.schemas.Card.properties.rarity
-export type VidereCardRarity = (typeof VIDERE_CARD_RARITIES)[number]
-
-const RARITY_ALIASES: Record<string, VidereCardRarity> = {
-  "basicland":   "basic land",
-  "land":        "basic land",
-  "mythic rare": "mythic",
-}
+export type VidereCardRarity = CardRarity
 
 export const CARD_RARITY_CLASSES = {
   "common":     "border-neutral-400/35  bg-neutral-400/10  text-neutral-200",
@@ -28,16 +20,6 @@ export const CARD_RARITY_CLASSES = {
 
 export const CARD_RARITIES_BY_DISPLAY_ORDER =
   Object.keys(CARD_RARITY_CLASSES) as VidereCardRarity[]
-
-export function normalizeCardRarity(value?: string | null): VidereCardRarity | null {
-  const normalized = value?.trim().toLowerCase().replace(/[_-]+/g, " ") ?? ""
-  if (!normalized) return null
-
-  const alias = RARITY_ALIASES[normalized]
-  if (alias) return alias
-
-  return VIDERE_CARD_RARITIES.find(rarity => rarity === normalized) ?? null
-}
 
 export function formatCardRarity(rarity: VidereCardRarity): string {
   return rarity.replace(/\b\w/g, letter => letter.toUpperCase())

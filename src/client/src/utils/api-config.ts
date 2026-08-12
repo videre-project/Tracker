@@ -1,14 +1,15 @@
+/** @file
+  Copyright (c) 2026, Cory Bennett. All rights reserved.
+  SPDX-License-Identifier: Apache-2.0
+**/
 
-// Helper to determine the API base URL.
-// In development, we point directly to the Kestrel backend (port 7101) to bypass the Vite proxy
-// and ensure proper HTTP/2 support (browsers handle H2 better than Node proxies).
-// In production, we use the relative path.
+
+// Browser requests are relative by default so development uses Vite's proxy and
+// production uses Tracker's same-origin API. A host may explicitly override it.
 
 export const getApiBaseUrl = () => {
-    if (import.meta.env.DEV) {
-        return "https://localhost:7101";
-    }
-    return "";
+    const configured = import.meta.env.VITE_API_BASE_URL?.trim();
+    return configured ? configured.replace(/\/$/, "") : "";
 };
 
 export const getApiUrl = (path: string) => {
