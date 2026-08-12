@@ -1,15 +1,20 @@
+/** @file
+  Copyright (c) 2026, Cory Bennett. All rights reserved.
+  SPDX-License-Identifier: Apache-2.0
+**/
+
 import * as React from "react"
 import { useNavigate, useLocation } from "react-router-dom"
 import { Play, Pause, Clock, Square, Trophy, Target, Calendar } from "lucide-react"
 import { getApiUrl } from "@/utils/api-config"
 import {
-  normalizeFormatName,
-  useEvents,
   type ActiveGame,
   type EventType,
   type GameStatus,
   type TournamentState,
 } from "@/hooks/use-events"
+import { useEvents } from "@/hooks/events-context"
+import { normalizeFormatName } from "@/utils/event-format"
 
 import {
   SidebarContent,
@@ -17,7 +22,7 @@ import {
   SidebarGroupContent,
   SidebarGroupLabel,
   useSidebar,
-} from "@/components/ui/sidebar"
+} from "@videreproject/ui"
 
 // Hook to calculate live countdown from a target time
 function useCountdown(targetTime?: string) {
@@ -29,14 +34,13 @@ function useCountdown(targetTime?: string) {
       return
     }
 
-    const calculateTimeLeft = () => {
+    const calculateTimeLeft = (): string | null => {
       const now = Date.now()
       const end = new Date(targetTime).getTime()
       const ms = Math.max(0, end - now)
 
       if (ms === 0) {
-        setTimeLeft(null)
-        return
+        return null
       }
 
       const totalSeconds = Math.floor(ms / 1000)
@@ -130,6 +134,8 @@ const getEventTypeIcon = (type: EventType) => {
       return Trophy
     case "draft":
       return Calendar
+    case "unknown":
+      return Calendar
   }
 }
 
@@ -143,7 +149,7 @@ const getRecordDisplay = (game: ActiveGame) => {
   return null
 }
 
-const getProgressDisplay = (game: ActiveGame & { eventStructure?: any }, isUpcoming = false) => {
+const getProgressDisplay = (game: ActiveGame, isUpcoming = false) => {
   // Always check for totalSwissRounds or totalRounds for all event types
   const rounds = game.totalSwissRounds || game.totalRounds;
   // Try to get eventStructure from the game object (if present)
@@ -496,7 +502,7 @@ export function GameList({ label, games, className, placeholder, isUpcoming }: G
                                     const start = new Date(String(game._rawStartTime));
                                     const end = new Date(String(game._rawEndTime));
                                     if (isNaN(start.getTime()) || isNaN(end.getTime())) return null;
-                                    let ms = end.getTime() - start.getTime();
+                                    const ms = end.getTime() - start.getTime();
                                     if (ms < 0) return null;
                                     const min = Math.floor(ms / 60000);
                                     const hr = Math.floor(min / 60);

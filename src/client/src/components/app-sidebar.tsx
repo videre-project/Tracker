@@ -1,17 +1,22 @@
+/** @file
+  Copyright (c) 2026, Cory Bennett. All rights reserved.
+  SPDX-License-Identifier: Apache-2.0
+**/
+
 import * as React from "react"
 
 import { NavMain } from "@/components/nav-main"
 import { NavFooter } from "@/components/nav-footer"
 import { NavLogo } from "./nav-logo"
 import { ActiveGames, UpcomingGames } from "@/components/game-list"
-import { useEvents } from "@/hooks/use-events"
+import { useEvents } from "@/hooks/events-context"
 import {
   Sidebar,
   SidebarFooter,
   SidebarHeader,
   SidebarRail,
-} from "@/components/ui/sidebar"
-import { routes, NavType, DummyComponent } from "@/router"
+} from "@videreproject/ui"
+import { routes, NavType } from "@/router"
 
 const data = {
   label: {
@@ -31,7 +36,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           title: r.name as string,
           url: r.path as string,
           icon: r.icon,
-          disabled: React.isValidElement(r.element) && r.element.type === DummyComponent,
+          disabled: false,
         }));
     },
     []
@@ -46,7 +51,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           title: r.name as string,
           url: r.path as string,
           icon: r.icon,
-          disabled: React.isValidElement(r.element) && r.element.type === DummyComponent,
+          disabled: false,
         }));
     },
     []

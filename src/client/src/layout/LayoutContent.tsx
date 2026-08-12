@@ -1,3 +1,8 @@
+/** @file
+  Copyright (c) 2026, Cory Bennett. All rights reserved.
+  SPDX-License-Identifier: Apache-2.0
+**/
+
 import React, { Suspense } from "react"
 import { ExternalLink } from "lucide-react"
 import { Link, Outlet, useLocation, matchPath } from "react-router-dom";
@@ -12,15 +17,11 @@ import {
   BreadcrumbList,
   BreadcrumbPage,
   BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb"
-import { Separator } from "@/components/ui/separator"
-import {
+  Separator,
   SidebarInset,
   SidebarProvider,
   SidebarTrigger,
-} from "@/components/ui/sidebar"
-
-import { CardTooltipProvider } from "@/components/card-tooltip"
+} from "@videreproject/ui"
 
 import { routes } from "@/router";
 import { EventsProvider } from "@/hooks/use-events";
@@ -211,7 +212,9 @@ export default function Layout() {
               }));
             }
           })
-          .catch(_ => { });
+          .catch(() => {
+            // Leave the route-derived breadcrumb in place when both lookups fail.
+          });
       });
 
     return () => abortController.abort();
@@ -285,7 +288,7 @@ export default function Layout() {
                  match?.params.deckRevisionId) {
         const title = currentDeckBreadcrumbName ?? route.name ?? "";
         if (currentDeckBreadcrumbFormat) {
-          const normalizedFormat = normalizeDeckFormat(currentDeckBreadcrumbFormat);
+          const normalizedFormat = normalizeDeckFormat(currentDeckBreadcrumbFormat) ?? currentDeckBreadcrumbFormat;
           acc.push({
             title: normalizedFormat,
             url: `/decks?format=${encodeURIComponent(normalizedFormat)}`,
@@ -321,11 +324,6 @@ export default function Layout() {
   const breadcrumbsWithReplay = replayBreadcrumb
     ? [...breadcrumbs, replayBreadcrumb]
     : breadcrumbs;
-  const displayBreadcrumbs = breadcrumbs.map(item =>
-    item.url === "/decks" && item.kind === "collection"
-      ? { ...item, title: "Decks" }
-      : item
-  );
   const displayBreadcrumbsWithReplay = breadcrumbsWithReplay.map(item =>
     item.url === "/decks" && item.kind === "collection"
       ? { ...item, title: "Decks" }
@@ -337,8 +335,7 @@ export default function Layout() {
   return (
     <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
       <EventsProvider>
-        <CardTooltipProvider>
-          <SidebarProvider>
+        <SidebarProvider>
             <AppSidebar />
             <SidebarInset className="min-w-0 relative">
               <header className={cn("absolute top-0 left-0 right-0 z-30 h-14 pointer-events-none", location.pathname === "/events" ? "" : "bg-background")}>
@@ -374,8 +371,7 @@ export default function Layout() {
                 </Suspense>
               </div>
             </SidebarInset>
-          </SidebarProvider>
-        </CardTooltipProvider>
+        </SidebarProvider>
       </EventsProvider>
     </ThemeProvider>
   )

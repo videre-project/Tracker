@@ -1,3 +1,8 @@
+/** @file
+  Copyright (c) 2026, Cory Bennett. All rights reserved.
+  SPDX-License-Identifier: Apache-2.0
+**/
+
 import * as React from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
@@ -7,7 +12,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   useSidebar,
-} from "@/components/ui/sidebar";
+} from "@videreproject/ui";
 import { type NavMenuItem } from "./nav-main";
 
 export function NavFooter(props: {

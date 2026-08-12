@@ -1,3 +1,8 @@
+/** @file
+  Copyright (c) 2026, Cory Bennett. All rights reserved.
+  SPDX-License-Identifier: Apache-2.0
+**/
+
 "use client"
 
 import { ChevronRight, type LucideIcon } from "lucide-react"
@@ -7,7 +12,7 @@ import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-} from "@/components/ui/collapsible"
+} from "@videreproject/ui"
 import {
   SidebarGroup,
   SidebarMenu,
@@ -16,7 +21,7 @@ import {
   SidebarMenuSub,
   SidebarMenuSubButton,
   SidebarMenuSubItem,
-} from "@/components/ui/sidebar"
+} from "@videreproject/ui"
 
 export type NavMenuItem = {
   title: string
