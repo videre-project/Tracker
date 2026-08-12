@@ -1,3 +1,8 @@
+/** @file
+  Copyright (c) 2026, Cory Bennett. All rights reserved.
+  SPDX-License-Identifier: Apache-2.0
+**/
+
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useClientState } from "./use-client-state"
 import { useNDJSONStream } from "./use-ndjson-stream"
@@ -225,8 +230,9 @@ export function useTradePosts(
   ])
 
   useEffect(() => {
+    const sequenceRef = requestSequence
     return () => {
-      requestSequence.current++
+      sequenceRef.current++
       postsAbortController.current?.abort()
       postsAbortController.current = null
       clearQueuedSilentRefresh()

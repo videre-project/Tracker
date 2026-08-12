@@ -1,42 +1,35 @@
+/** @file
+  Copyright (c) 2026, Cory Bennett. All rights reserved.
+  SPDX-License-Identifier: Apache-2.0
+**/
+
 import { useCallback, useEffect, useState } from "react"
+import type {
+  TradeAttributionStatus,
+  TradeEscrowItemRole,
+  TradeEscrowKind,
+  TradeEscrowResult,
+  TradeHistoryDetail,
+  TradeHistoryEffect,
+  TradeHistoryError,
+  TradeHistoryItem,
+  TradeHistoryMessage,
+  TradeHistorySummary,
+} from "@videreproject/ui"
 
 import { getApiUrl } from "@/utils/api-config"
 
-export type TradeEscrowKind = "Player" | "NonPlayer"
-export type TradeEscrowResult =
-  | "InProgress"
-  | "Completed"
-  | "Cancelled"
-  | "Failed"
-  | "ClosedUnknown"
-  | "Interrupted"
-export type TradeAttributionStatus =
-  | "NotApplicable"
-  | "Pending"
-  | "Inferred"
-  | "InferredAmbiguous"
-  | "Unavailable"
-export type TradeEscrowItemRole =
-  | "LocalOffer"
-  | "RemoteOffer"
-  | "InferredOutput"
-
-export interface TradeHistorySummary {
-  id: number
-  escrowId?: number
-  kind: TradeEscrowKind
-  partnerId?: number
-  partnerName?: string
-  startedAt: string
-  closedAt?: string
-  state: number
-  stateName?: string
-  result: TradeEscrowResult
-  attributionStatus: TradeAttributionStatus
-  outgoingQuantity: number
-  outgoingCatalogCount: number
-  incomingQuantity: number
-  incomingCatalogCount: number
+export type {
+  TradeAttributionStatus,
+  TradeEscrowItemRole,
+  TradeEscrowKind,
+  TradeEscrowResult,
+  TradeHistoryDetail,
+  TradeHistoryEffect,
+  TradeHistoryError,
+  TradeHistoryItem,
+  TradeHistoryMessage,
+  TradeHistorySummary,
 }
 
 export interface TradeHistoryPage {
@@ -44,42 +37,6 @@ export interface TradeHistoryPage {
   nextBeforeId?: number
 }
 
-export interface TradeHistoryItem {
-  role: TradeEscrowItemRole
-  catalogId: number
-  quantity: number
-}
-
-export interface TradeHistoryEffect {
-  catalogId: number
-  quantity: number
-  isInferred: boolean
-}
-
-export interface TradeHistoryMessage {
-  id: number
-  timestamp: string
-  senderId?: number
-  senderName?: string
-  text: string
-}
-
-export interface TradeHistoryError {
-  id: number
-  observedAt: string
-  errorCode: number
-  errorName?: string
-}
-
-export interface TradeHistoryDetail {
-  summary: TradeHistorySummary
-  token: string
-  accountId: number
-  items: TradeHistoryItem[]
-  effects: TradeHistoryEffect[]
-  messages: TradeHistoryMessage[]
-  errors: TradeHistoryError[]
-}
 export interface TradeHistoryFilters {
   search?: string
   kind?: TradeEscrowKind
