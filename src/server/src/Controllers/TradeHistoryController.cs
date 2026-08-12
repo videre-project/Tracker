@@ -97,7 +97,8 @@ public sealed class TradeHistoryController(
   }
 
   /// <summary>
-  /// Get one trade escrow with terminal offers, inferred outputs, chat, and errors.
+  /// Get one trade escrow with terminal offers, escrow-correlated product outputs,
+  /// chat, and errors.
   /// </summary>
   [HttpGet("{id:long}")]
   [ProducesResponseType(typeof(TradeHistoryDetailDTO), StatusCodes.Status200OK)]

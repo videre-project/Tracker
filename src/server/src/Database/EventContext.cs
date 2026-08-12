@@ -68,7 +68,7 @@ public class EventContext(DbContextOptions<EventContext> options)
       .HasForeignKey(g => g.MatchId)
       .OnDelete(DeleteBehavior.Cascade);
 
-    // Game → Cards, Players, States
+    // Game -> Cards, Players, States
     modelBuilder.Entity<GameModel>()
       .HasMany(g => g.Cards)
       .WithOne(c => c.Game)
@@ -87,7 +87,7 @@ public class EventContext(DbContextOptions<EventContext> options)
       .HasForeignKey(s => s.GameId)
       .OnDelete(DeleteBehavior.Cascade);
 
-    // GameState → child event tables
+    // GameState -> child event tables
     modelBuilder.Entity<GameStateModel>()
       .HasMany(s => s.Actions)
       .WithOne(a => a.GameState)

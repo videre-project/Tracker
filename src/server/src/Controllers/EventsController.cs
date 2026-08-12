@@ -396,7 +396,7 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
 
       // Use SerializeAs for batch property hydration, then combine
       // with Player name (User is [NonSerializable] and SerializeAs
-      // can't convert User→string, so we map it explicitly).
+      // can't convert User -> string, so we map it explicitly).
       var result = SerializeStandings(standings);
 
       if (stream)

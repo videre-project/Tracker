@@ -206,7 +206,7 @@ internal static class MatchHistorySerialization
     // state's ClientTimestamp, so they'll be adjacent. Reassigned actions
     // (whose ClientTimestamp predates the new state) sort between their
     // original nonce group and the new state's header. Within the same
-    // timestamp, type priority ensures GameState → Action → ZoneChange → etc.
+    // timestamp, type priority ensures GameState -> Action -> ZoneChange -> etc.
     return logs
       .OrderBy(l => l.Timestamp)
       .ThenBy(l => TypeOrder(l.GameLogType))

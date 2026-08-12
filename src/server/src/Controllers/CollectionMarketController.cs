@@ -18,7 +18,6 @@ using MTGOSDK.Core.Logging;
 
 using Tracker.Controllers.Base;
 using Tracker.Controllers.Models.Collection;
-using Tracker.Services.MTGO;
 using Tracker.Services.Videre;
 
 
@@ -27,7 +26,6 @@ namespace Tracker.Controllers;
 [ApiController]
 [Route("api/collection")]
 public sealed class CollectionMarketController(
-  IClientAPIProvider clientProvider,
   VidereAPIClient videreAPIClient) : APIController
 {
   private static readonly object s_collectionPriceHistoryCacheSync = new();
