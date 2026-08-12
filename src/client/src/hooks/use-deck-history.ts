@@ -5,7 +5,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { getApiUrl } from "@/utils/api-config"
-import { preloadCardImages } from "@/utils/card-image-cache"
+import { useCardMedia } from '@videreproject/ui'
 
 export interface DeckHistoryChange {
   catalogId: number
@@ -55,6 +55,7 @@ export interface DeckHistoryData {
 }
 
 export function useDeckHistory(revisionId: string | number | null) {
+  const { preloadCardImages } = useCardMedia()
   const [history, setHistory] = useState<DeckHistoryData | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -101,7 +102,7 @@ export function useDeckHistory(revisionId: string | number | null) {
       rev.changesFromPrevious?.forEach(c => ids.add(c.catalogId))
     }
     preloadCardImages(Array.from(ids))
-  }, [history])
+  }, [history, preloadCardImages])
 
   const latestRevision = useMemo(() => {
     if (!history?.revisions.length) return null

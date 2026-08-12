@@ -1,3 +1,8 @@
+/** @file
+  Copyright (c) 2026, Cory Bennett. All rights reserved.
+  SPDX-License-Identifier: Apache-2.0
+**/
+
 import { useState, useEffect, useCallback, useRef } from "react"
 import { useClientState } from "./use-client-state"
 import { getApiUrl } from "../utils/api-config"
@@ -279,7 +284,7 @@ export function useAggregatedArchetypes(timeRange: string | DateRange | undefine
       })
       .catch(err => setError(err.message))
       .finally(() => setLoading(false))
-  }, [rangeKey, format, clientReady, clientLoading, cacheKey])
+  }, [rangeKey, timeRange, format, clientReady, clientLoading, cacheKey])
 
   return { archetypes, loading, error }
 }

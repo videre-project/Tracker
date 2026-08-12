@@ -3,67 +3,31 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-import {
-  type ComponentType,
-  type ReactNode,
-  useCallback,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { createPortal } from "react-dom"
 import { useLocation, useNavigate, useParams } from "react-router-dom"
+import { Loader2, Pencil } from "lucide-react"
 import {
-  ArrowLeft,
-  CalendarClock,
-  Clipboard,
-  ClipboardCheck,
-  Download,
-  Pencil,
-  Check,
-  X,
-  PanelRightClose,
-  PanelRightOpen,
-  Tags,
-  Settings2,
-  Upload,
-} from "lucide-react"
+  DeckEditorLayout,
+  getDisplayCardColors,
+  getManaSymbolSvgPath,
+  type DeckCardSearchResult,
+  type DeckEditorCard,
+  type DeckSidePanelView,
+  type DeckSortMode,
+} from "@videreproject/ui"
 
-import { DeckCollectionEditor } from "@/components/decks/deck-collection-editor"
-import {
-  DeckBuildSidePane,
-  type SidePanelView,
-} from "@/components/decks/deck-build-side-pane"
 import { useDeckHistory } from "@/hooks/use-deck-history"
-import type { SortMode } from "@/hooks/use-sortable-cards"
-import { Button } from "@/components/ui/button"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { Skeleton } from "@/components/ui/skeleton"
-import { getManaSymbolSvgPath } from "@/utils/mana-symbols"
-import { getDisplayCardColors } from "@/utils/card-colors"
-import { cn } from "@/lib/utils"
+import { useDeckCardSearch } from "@/hooks/use-deck-card-search"
+import { useSortableCards } from "@/hooks/use-sortable-cards"
 import { buildDeckListText, getDeckFileName } from "@/utils/deck-list"
-import type {
-  DeckDetail,
-  DeckSummary,
-} from "@/hooks/use-decks"
+import type { DeckDetail, DeckSummary } from "@/hooks/use-decks"
 import {
   useDeckDetail,
   useDecks,
   updateDeckArchetype,
 } from "@/hooks/use-decks"
+
 type DeckRouteState = {
   deckName?: string
   deckFormat?: string
@@ -74,23 +38,10 @@ type DeckRouteState = {
   deckSideCount?: number
 }
 
-
-function formatDate(value?: string) {
-  if (!value) return "Unknown date"
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return "Unknown date"
-
-  return date.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  })
-}
-
 function getDeckCounts(
   summary?: DeckSummary,
   detail?: DeckDetail | null,
-  routeState?: DeckRouteState | null
+  routeState?: DeckRouteState | null,
 ) {
   if (summary) {
     return {
@@ -123,7 +74,7 @@ function BreadcrumbManaSymbols({ colors }: { colors: readonly string[] }) {
   const visibleColors = getDisplayCardColors(colors)
 
   return (
-    <span className="inline-flex h-4 items-center gap-0.5 translate-y-[2px] leading-none">
+    <span className="inline-flex h-4 translate-y-[2px] items-center gap-0.5 leading-none">
       {visibleColors.map((color, index) => (
         <img
           key={`${color}-${index}`}
@@ -136,43 +87,20 @@ function BreadcrumbManaSymbols({ colors }: { colors: readonly string[] }) {
   )
 }
 
-function HeaderMeta({
-  icon: Icon,
-  label,
-  children,
-  className,
-}: {
-  icon?: ComponentType<{ className?: string }>
-  label: string
-  children: ReactNode
-  className?: string
-}) {
-  return (
-    <span className={cn("inline-flex min-w-0 max-w-full items-center gap-2 whitespace-nowrap text-sm", className)}>
-      {Icon ? <Icon className="h-3.5 w-3.5 shrink-0 translate-y-px text-muted-foreground" /> : null}
-      <span className="shrink-0 text-muted-foreground">{label}</span>
-      <span className="min-w-0 truncate font-medium text-foreground">{children}</span>
-    </span>
-  )
-}
-
 export default function DeckEditor() {
   const { deckRevisionId = "" } = useParams()
   const navigate = useNavigate()
   const location = useLocation()
   const routeState = location.state as DeckRouteState | null
   const [copiedDeckList, setCopiedDeckList] = useState(false)
-  const [sidePanelView, setSidePanelView] = useState<SidePanelView>("cards")
-  const [sortMode, setSortMode] = useState<SortMode>("cmc")
+  const [sidePanelView, setSidePanelView] = useState<DeckSidePanelView>("cards")
+  const [sortMode, setSortMode] = useState<DeckSortMode>("cmc")
   const [isSideboardCollapsed, setIsSideboardCollapsed] = useState(true)
   const [isDeckToolsCollapsed, setIsDeckToolsCollapsed] = useState(false)
-  const [splitEditorHeaderControls, setSplitEditorHeaderControls] = useState(false)
   const [customArchetype, setCustomArchetype] = useState<string | null>(null)
-  const [isEditingArchetype, setIsEditingArchetype] = useState(false)
-  const [archetypeInput, setArchetypeInput] = useState("")
+  const [archetypeError, setArchetypeError] = useState<string | null>(null)
   const [isSavingArchetype, setIsSavingArchetype] = useState(false)
-  const editorHeaderRef = useRef<HTMLDivElement>(null)
-  const editorHeaderSingleRowProbeRef = useRef<HTMLDivElement>(null)
+  const [searchQuery, setSearchQuery] = useState("")
 
   const { decks, loading: summariesLoading } = useDecks()
   const { detail, loading: detailLoading } = useDeckDetail(deckRevisionId)
@@ -187,44 +115,91 @@ export default function DeckEditor() {
     diffMap,
   } = useDeckHistory(deckRevisionId)
 
-  const allDecks = useMemo(
-    () => Object.values(decks).flat(),
-    [decks]
-  )
+  const {
+    cards: sortableCards,
+    loading: sortableLoading,
+    fetchSortableCards,
+    reset: resetSortable,
+  } = useSortableCards()
+
+  const {
+    results: searchResults,
+    loading: searchLoading,
+    error: searchError,
+  } = useDeckCardSearch(searchQuery)
+
+  // Fetch sortable cards for the active (or selected history) revision
+  const activeRevisionId = selectedRevisionId
+    ? String(selectedRevisionId)
+    : deckRevisionId
+
+  useEffect(() => {
+    if (!activeRevisionId) {
+      resetSortable()
+      return
+    }
+    // When viewing a history revision, board uses override cards from history
+    if (selectedRevisionId != null) return
+    void fetchSortableCards("", activeRevisionId)
+  }, [activeRevisionId, fetchSortableCards, resetSortable, selectedRevisionId])
+
+  const allDecks = useMemo(() => Object.values(decks).flat(), [decks])
   const summary = useMemo(
     () => allDecks.find(deck => deck.revisionId.toString() === deckRevisionId),
-    [allDecks, deckRevisionId]
+    [allDecks, deckRevisionId],
   )
 
   const deckName = summary?.name ?? detail?.name ?? routeState?.deckName ?? "Deck"
-  const rawArchetype = customArchetype ?? summary?.archetype ?? detail?.archetype ?? routeState?.deckArchetype
+  const rawArchetype =
+    customArchetype ??
+    summary?.archetype ??
+    detail?.archetype ??
+    routeState?.deckArchetype
 
-  const handleSaveArchetype = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!deckRevisionId) return
-    setIsSavingArchetype(true)
-    try {
-      await updateDeckArchetype(deckRevisionId, archetypeInput.trim())
-      setCustomArchetype(archetypeInput.trim() || null)
-      setIsEditingArchetype(false)
-    } catch (err) {
-      console.error("Failed to update archetype:", err)
-    } finally {
-      setIsSavingArchetype(false)
-    }
-  }
+  const handleArchetypeChange = useCallback(
+    async (nextArchetype: string) => {
+      if (!deckRevisionId) return
+      setIsSavingArchetype(true)
+      setArchetypeError(null)
+      try {
+        await updateDeckArchetype(deckRevisionId, nextArchetype)
+        setCustomArchetype(nextArchetype || null)
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Failed to update archetype"
+        setArchetypeError(message)
+        throw err
+      } finally {
+        setIsSavingArchetype(false)
+      }
+    },
+    [deckRevisionId],
+  )
+
   const colors = getDisplayCardColors(
-    summary?.colors?.length ? summary.colors : detail?.colors?.length ? detail.colors : routeState?.deckColors,
+    summary?.colors?.length
+      ? summary.colors
+      : detail?.colors?.length
+        ? detail.colors
+        : routeState?.deckColors,
   )
   const timestamp = summary?.timestamp ?? detail?.timestamp ?? routeState?.deckTimestamp
   const counts = getDeckCounts(summary, detail, routeState)
   const deckListText = useMemo(() => buildDeckListText(detail), [detail])
   const canExportDeckList = Boolean(detail)
   const hasHeaderData = Boolean(summary || detail || routeState?.deckName)
-  const isArchetypeLoading = rawArchetype === undefined && (summariesLoading || detailLoading)
+  const isArchetypeLoading =
+    rawArchetype === undefined && (summariesLoading || detailLoading)
   const isDateLoading = timestamp === undefined && (summariesLoading || detailLoading)
-  const isCountsLoading = !summary && !detail && routeState?.deckMainCount === undefined && (summariesLoading || detailLoading)
-  const loadingHeader = ((summariesLoading || detailLoading) && !hasHeaderData) || isArchetypeLoading || isDateLoading || isCountsLoading
+  const isCountsLoading =
+    !summary &&
+    !detail &&
+    routeState?.deckMainCount === undefined &&
+    (summariesLoading || detailLoading)
+  const loadingHeader =
+    ((summariesLoading || detailLoading) && !hasHeaderData) ||
+    isArchetypeLoading ||
+    isDateLoading ||
+    isCountsLoading
   const archetype = rawArchetype ?? (loadingHeader ? "" : "Unclassified deck")
   const canNavigateBack = location.key !== "default"
 
@@ -233,37 +208,8 @@ export default function DeckEditor() {
       navigate(-1)
       return
     }
-
     navigate("/decks")
   }, [canNavigateBack, navigate])
-
-  useLayoutEffect(() => {
-    const header = editorHeaderRef.current
-    const probe = editorHeaderSingleRowProbeRef.current
-    if (!header || !probe) return
-
-    const measureHeaderFit = () => {
-      const nextSplit = probe.offsetWidth > header.clientWidth
-      setSplitEditorHeaderControls(current => current === nextSplit ? current : nextSplit)
-    }
-
-    measureHeaderFit()
-
-    if (typeof ResizeObserver === "undefined") return
-
-    const observer = new ResizeObserver(measureHeaderFit)
-    observer.observe(header)
-    observer.observe(probe)
-
-    return () => observer.disconnect()
-  }, [
-    archetype,
-    copiedDeckList,
-    counts.main,
-    counts.side,
-    loadingHeader,
-    timestamp,
-  ])
 
   const copyDeckList = useCallback(async () => {
     if (!canExportDeckList) return
@@ -299,285 +245,101 @@ export default function DeckEditor() {
     anchor.remove()
     URL.revokeObjectURL(url)
   }, [canExportDeckList, deckListText, deckName])
-  const renderEditorControls = (className?: string) => (
-    <div className={cn("flex shrink-0 flex-wrap items-center justify-end gap-2", className)}>
-      <div className="flex items-center gap-2">
-        <span className="text-xs text-muted-foreground">Sort</span>
-        <Select
-          value={sortMode}
-          onValueChange={value => setSortMode(value as SortMode)}
-        >
-          <SelectTrigger className="h-8 w-[108px] border-sidebar-border/70 bg-background/70 text-sm">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="cmc">CMC</SelectItem>
-            <SelectItem value="colors">Colors</SelectItem>
-            <SelectItem value="types">Types</SelectItem>
-            <SelectItem value="rarity">Rarity</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      {counts.side > 0 ? (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setIsSideboardCollapsed(current => !current)}
-          className={cn(
-            "h-8 border-sidebar-border/70 bg-background/70",
-            !isSideboardCollapsed && "bg-secondary/70 text-secondary-foreground hover:bg-secondary/80"
-          )}
-        >
-          {isSideboardCollapsed ? (
-            <PanelRightOpen className="h-4 w-4" />
-          ) : (
-            <PanelRightClose className="h-4 w-4" />
-          )}
-          Sideboard
-        </Button>
-      ) : null}
-    </div>
+
+  // Prefer history revision cards when selected; otherwise live sortable fetch
+  const boardCards: DeckEditorCard[] = useMemo(() => {
+    if (selectedRevisionId != null && selectedRevisionCards.length > 0) {
+      return selectedRevisionCards as DeckEditorCard[]
+    }
+    return sortableCards as DeckEditorCard[]
+  }, [selectedRevisionCards, selectedRevisionId, sortableCards])
+
+  const cardsLoading =
+    selectedRevisionId != null
+      ? historyLoading
+      : sortableLoading || (detailLoading && boardCards.length === 0)
+
+  const mappedSearchResults: DeckCardSearchResult[] = useMemo(
+    () =>
+      searchResults.map(card => ({
+        id: card.id,
+        mtgoId: card.mtgoId,
+        setCode: card.setCode,
+        name: card.name,
+        type: card.type,
+        text: card.text,
+        colors: card.colors,
+        imageUrl: card.imageUrl,
+        power: card.power,
+        toughness: card.toughness,
+        loyalty: card.loyalty,
+        defense: card.defense,
+      })),
+    [searchResults],
   )
 
-  const renderDeckActions = (className?: string) => (
-    <div className={cn(
-      "grid w-80 max-w-full shrink-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_2rem] items-center gap-2",
-      className
-    )}>
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={copyDeckList}
-        disabled={!canExportDeckList}
-        className="h-8 w-full justify-center border-sidebar-border/70 bg-background/70 px-2"
-      >
-        {copiedDeckList ? (
-          <ClipboardCheck className="h-4 w-4" />
-        ) : (
-          <Clipboard className="h-4 w-4" />
-        )}
-        {copiedDeckList ? "Copied" : "Copy list"}
-      </Button>
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={downloadDeckList}
-        disabled={!canExportDeckList}
-        className="h-8 w-full justify-center border-sidebar-border/70 bg-background/70 px-2"
-      >
-        <Download className="h-4 w-4" />
-        Export
-      </Button>
-      <Button
-        variant="outline"
-        size="sm"
-        disabled
-        title="Deck import is not available yet"
-        className="h-8 w-full justify-center border-sidebar-border/70 bg-background/70 px-2"
-      >
-        <Upload className="h-4 w-4" />
-        Import
-      </Button>
-      <Button
-        variant="outline"
-        size="icon"
-        onClick={() => setIsDeckToolsCollapsed(current => !current)}
-        className={cn(
-          "h-8 w-8 shrink-0 border-sidebar-border/70 bg-background/70",
-          !isDeckToolsCollapsed && "bg-secondary/70 text-secondary-foreground hover:bg-secondary/80"
-        )}
-        aria-label={isDeckToolsCollapsed ? "Show deck tools" : "Hide deck tools"}
-        title={isDeckToolsCollapsed ? "Show deck tools" : "Hide deck tools"}
-        aria-pressed={!isDeckToolsCollapsed}
-      >
-        <Settings2 className="h-4 w-4" />
-      </Button>
-    </div>
-  )
-  const breadcrumbContextHost = typeof document === "undefined"
-    ? null
-    : document.getElementById("page-header-context")
+  const breadcrumbContextHost =
+    typeof document === "undefined" ? null : document.getElementById("page-header-context")
 
-  const renderBreadcrumbDeckContext = () => {
-    if (loadingHeader) return null
-
-    return (
+  const breadcrumb =
+    loadingHeader ? (
+      <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" aria-label="Loading deck" />
+    ) : (
       <div className="group inline-flex items-center gap-2.5">
         <BreadcrumbManaSymbols colors={colors} />
-        <Button
-          variant="ghost"
-          size="icon"
+        <button
           type="button"
           className="h-4 w-4 p-0 text-muted-foreground/40 transition-colors group-hover:text-muted-foreground"
           title="Edit deck name and colors"
           aria-label="Edit deck name and colors"
         >
           <Pencil className="h-3.5 w-3.5 shrink-0 translate-y-px" />
-        </Button>
+        </button>
       </div>
     )
-  }
 
   return (
-    <div className="flex h-[calc(100vh-2.5rem)] min-h-0 flex-col gap-2 overflow-hidden px-4 pb-4 pt-1">
-      {breadcrumbContextHost ? createPortal(
-        renderBreadcrumbDeckContext(),
-        breadcrumbContextHost
-      ) : null}
-      <div className="flex flex-col gap-2 pt-0">
-        <div
-          ref={editorHeaderRef}
-          className={cn(
-            "relative grid min-w-0 items-start gap-x-4 gap-y-2",
-            splitEditorHeaderControls
-              ? "grid-cols-[minmax(0,1fr)_20rem]"
-              : "grid-cols-[minmax(0,1fr)_auto]"
-          )}
-        >
-          <div
-            ref={editorHeaderSingleRowProbeRef}
-            aria-hidden="true"
-            {...({ inert: "" } as Record<string, string>)}
-            className="pointer-events-none absolute left-0 top-0 -z-10 flex w-max max-w-none items-start gap-4 opacity-0"
-          >
-            <div className="flex min-w-max items-start gap-3">
-              <div className="mt-0.5 h-8 w-8 shrink-0" />
-              {!loadingHeader ? (
-                <div className="flex min-w-max flex-nowrap items-center gap-x-5 pt-1.5">
-                  <HeaderMeta
-                    icon={Tags}
-                    label="Archetype"
-                    className="max-w-[20rem]"
-                  >
-                    {archetype}
-                  </HeaderMeta>
-                  <HeaderMeta icon={CalendarClock} label="Updated">
-                    {formatDate(timestamp)}
-                  </HeaderMeta>
-                  <HeaderMeta label="Cards">
-                    {counts.main} main / {counts.side} side
-                  </HeaderMeta>
-                </div>
-              ) : null}
-            </div>
-            <div className="flex shrink-0 items-center gap-2">
-              {loadingHeader ? null : renderEditorControls("w-auto")}
-              {renderDeckActions("w-80")}
-            </div>
-          </div>
-
-          <div className="flex min-w-0 items-start gap-3 overflow-hidden">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={navigateBack}
-              className="mt-0.5 h-8 w-8 shrink-0"
-              aria-label="Back"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-
-            <div className="min-w-0 flex-1">
-              {loadingHeader ? (
-                <div className="flex items-center gap-3">
-                  <Skeleton className="h-7 w-[34rem] max-w-full" />
-                  <Skeleton className="h-8 w-64" />
-                </div>
-              ) : (
-                <div className="flex min-w-0 flex-nowrap items-center gap-x-5 gap-y-2 overflow-hidden pt-1.5">
-                  <HeaderMeta
-                    icon={Tags}
-                    label="Archetype"
-                    className="max-w-[20rem]"
-                  >
-                    <Popover open={isEditingArchetype} onOpenChange={setIsEditingArchetype}>
-                      <PopoverTrigger asChild>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setArchetypeInput(archetype === "Unclassified deck" ? "" : archetype)
-                          }}
-                          className="group/arch inline-flex max-w-full items-center gap-2 text-foreground focus:outline-none"
-                          title="Edit deck archetype"
-                        >
-                          <span className="truncate">{archetype}</span>
-                          <Pencil className="h-3 w-3 shrink-0 text-muted-foreground/50 transition-colors group-hover/arch:text-foreground" />
-                        </button>
-                      </PopoverTrigger>
-                      <PopoverContent align="start" className="w-64 p-3 shadow-lg">
-                        <form onSubmit={handleSaveArchetype} className="space-y-2.5">
-                          <div className="text-xs font-medium text-muted-foreground">Edit Archetype</div>
-                          <div className="flex items-center gap-1.5">
-                            <input
-                              type="text"
-                              value={archetypeInput}
-                              onChange={e => setArchetypeInput(e.target.value)}
-                              placeholder="e.g. Dimir Murktide"
-                              autoFocus
-                              className="h-7 flex-1 rounded border border-input bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                            />
-                            <Button size="sm" type="submit" disabled={isSavingArchetype} className="h-7 px-2.5 text-xs">
-                              Save
-                            </Button>
-                          </div>
-                        </form>
-                      </PopoverContent>
-                    </Popover>
-                  </HeaderMeta>
-                  <HeaderMeta icon={CalendarClock} label="Updated">
-                    {formatDate(timestamp)}
-                  </HeaderMeta>
-                  <HeaderMeta label="Cards">
-                    {counts.main} main / {counts.side} side
-                  </HeaderMeta>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className={cn(
-            "flex max-w-full shrink-0 items-end gap-2",
-            splitEditorHeaderControls
-              ? "flex-col"
-              : "flex-row items-center gap-4"
-          )}>
-            {loadingHeader ? null : renderEditorControls(
-              splitEditorHeaderControls ? "order-2 w-auto" : "order-1 w-auto"
-            )}
-            {renderDeckActions(
-              splitEditorHeaderControls ? "order-1 w-80" : "order-2 w-80"
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className="flex min-h-0 flex-1 items-stretch gap-4">
-        <DeckCollectionEditor
-          deckRevisionId={selectedRevisionId ? String(selectedRevisionId) : deckRevisionId}
-          overrideCards={selectedRevisionCards}
-          diffMap={sidePanelView === "history" ? diffMap : undefined}
-          className="h-full flex-1 gap-0 p-0"
-          editorTitle="Editor"
-          hideDeckSelector
-          showDeckStats={false}
-          showFixedDeckLabel={false}
-          hideEditorHeader
-          sortMode={sortMode}
-          onSortModeChange={setSortMode}
-          sideboardCollapsed={isSideboardCollapsed}
-          onSideboardCollapsedChange={setIsSideboardCollapsed}
-        />
-        <DeckBuildSidePane
-          view={sidePanelView}
-          onViewChange={setSidePanelView}
-          isCollapsed={isDeckToolsCollapsed}
-          historyData={historyData}
-          historyLoading={historyLoading}
-          historyError={historyError}
-          selectedRevisionId={selectedRevisionId}
-          onSelectRevision={setSelectedRevisionId}
-        />
-      </div>
-    </div>
+    <>
+      {breadcrumbContextHost ? createPortal(breadcrumb, breadcrumbContextHost) : null}
+      <DeckEditorLayout
+        className="h-[calc(100vh-2.5rem)]"
+        deckName={deckName}
+        archetype={archetype}
+        colors={colors}
+        timestamp={timestamp}
+        mainCount={counts.main}
+        sideCount={counts.side}
+        loadingHeader={loadingHeader}
+        cards={boardCards}
+        cardsLoading={cardsLoading}
+        diffMap={diffMap}
+        sortMode={sortMode}
+        onSortModeChange={setSortMode}
+        sideboardCollapsed={isSideboardCollapsed}
+        onSideboardCollapsedChange={setIsSideboardCollapsed}
+        toolsCollapsed={isDeckToolsCollapsed}
+        onToolsCollapsedChange={setIsDeckToolsCollapsed}
+        sidePanelView={sidePanelView}
+        onSidePanelViewChange={setSidePanelView}
+        historyData={historyData}
+        historyLoading={historyLoading}
+        historyError={historyError}
+        selectedRevisionId={selectedRevisionId}
+        onSelectRevision={setSelectedRevisionId}
+        searchResults={mappedSearchResults}
+        searchLoading={searchLoading}
+        searchError={searchError}
+        onSearchQueryChange={setSearchQuery}
+        onBack={navigateBack}
+        onCopyList={copyDeckList}
+        onExportList={downloadDeckList}
+        canExport={canExportDeckList}
+        copiedList={copiedDeckList}
+        importDisabled
+        onArchetypeChange={handleArchetypeChange}
+        archetypeSaving={isSavingArchetype}
+        archetypeError={archetypeError}
+      />
+    </>
   )
 }
