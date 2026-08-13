@@ -71,8 +71,8 @@ jobs:
       - name: Restore server dependencies
         shell: pwsh
         run: |
-          dotnet restore --locked-mode
-          dotnet restore tests/server/Tracker.Tests/Tracker.Tests.csproj --locked-mode
+          dotnet restore --locked-mode --runtime win-x64
+          dotnet restore tests/server/Tracker.Tests/Tracker.Tests.csproj --locked-mode --runtime win-x64
 
       - name: Lint client
         shell: pwsh
