@@ -161,6 +161,7 @@
   <PropertyGroup>
     <PublishSingleFile>true</PublishSingleFile>
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <EnableSingleFileAnalyzer>false</EnableSingleFileAnalyzer>
     <RemoveUnusedDesktopRuntimeFiles>true</RemoveUnusedDesktopRuntimeFiles>
     <DebugType>embedded</DebugType>
     <StaticWebAssetsEnabled Condition="'$(Configuration)' == 'Debug'">true</StaticWebAssetsEnabled>
