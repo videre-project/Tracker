@@ -14,6 +14,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http;
+using Microsoft.Extensions.Logging;
 
 using Tracker.Controllers;
 using Tracker.Database;
@@ -85,6 +86,9 @@ internal sealed class TrackerTestHost : IAsyncDisposable
 
       WebApplicationBuilder builder = WebAPIService.CreateHostBuilder(options);
       builder.WebHost.UseTestServer();
+      builder.Logging.AddFilter(
+        "Microsoft.EntityFrameworkCore.Database.Command",
+        LogLevel.Warning);
       builder.Services.AddControllers()
         .AddApplicationPart(typeof(ClientController).Assembly);
       builder.Services.PostConfigureAll<HttpClientFactoryOptions>(httpOptions =>
