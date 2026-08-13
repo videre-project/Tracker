@@ -1830,6 +1830,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
+                        "application/json": ITournamentStateUpdate[];
                         "application/x-ndjson": ITournamentStateUpdate[];
                     };
                 };
@@ -1873,6 +1874,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
+                        "application/json": ITournamentPlayerUpdate[];
                         "application/x-ndjson": ITournamentPlayerUpdate[];
                     };
                 };
@@ -1923,6 +1925,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
+                        "application/json": IStandingResult[];
                         "application/x-ndjson": IStandingResult[];
                     };
                 };
@@ -1932,6 +1935,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
+                        "application/json": ProblemDetails;
                         "application/x-ndjson": ProblemDetails;
                     };
                 };
@@ -2274,6 +2278,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
+                        "application/json": GameLogDTO[];
                         "application/x-ndjson": GameLogDTO[];
                     };
                 };
@@ -2316,6 +2321,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
+                        "application/json": MatchHistoryDTO[];
                         "application/x-ndjson": MatchHistoryDTO[];
                     };
                 };

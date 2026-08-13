@@ -40,6 +40,7 @@ bld/
 
 # Generated at build time from package.json.
 src/server/Properties/ProductInfo.g.cs
+src/server/ProductInfo.g.cs
 
 # Visual Studio 2015/2017 cache/options directory
 .vs/

@@ -13,12 +13,10 @@
     <VidereGeneratedDirectory>$(MSBuildProjectDirectory)\obj\Videre</VidereGeneratedDirectory>
     <VidereOpenApiSpecPath>$(VidereGeneratedDirectory)\openapi.json</VidereOpenApiSpecPath>
     <VidereGeneratedClientPath>$(VidereGeneratedDirectory)\VidereOpenAPIClient.g.cs</VidereGeneratedClientPath>
-    <ProductInfoGeneratedPath>$(IntermediateOutputPath)ProductInfo.g.cs</ProductInfoGeneratedPath>
   </PropertyGroup>
 
   <ItemGroup>
     <Compile Include="$(VidereGeneratedClientPath)" Visible="false" />
-    <Compile Include="$(ProductInfoGeneratedPath)" Visible="false" />
   </ItemGroup>
 
   <Target Name="GenerateVidereOpenApiClient"
@@ -42,7 +40,10 @@
   </Target>
 
   <!-- Runtime Properties -->
-  <Target Name="GenerateProductInfo" BeforeTargets="BeforeBuild">
+  <Target Name="GenerateProductInfo" BeforeTargets="CoreCompile">
+    <PropertyGroup>
+      <ProductInfoGeneratedPath>$(IntermediateOutputPath)ProductInfo.g.cs</ProductInfoGeneratedPath>
+    </PropertyGroup>
     <!-- Read version from package.json (cross-platform) -->
     <Exec Command="node $(MSBuildProjectDirectory)/scripts/get-version.js" ConsoleToMSBuild="true">
       <Output TaskParameter="ConsoleOutput" PropertyName="PackageVersion" />
@@ -51,7 +52,10 @@
       File="$(ProductInfoGeneratedPath)"
       Lines='namespace Tracker%3B public static class ProductInfo { public const string Name = "$(AssemblyName)"%3B public const string Version = "$(PackageVersion)"%3B }'
       Overwrite="true" />
-    </Target>
+    <ItemGroup>
+      <Compile Include="$(ProductInfoGeneratedPath)" Visible="false" />
+    </ItemGroup>
+  </Target>
 
   <!-- Frontend SPA Configuration -->
   <PropertyGroup>
