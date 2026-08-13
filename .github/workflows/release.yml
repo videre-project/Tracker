@@ -111,6 +111,6 @@ jobs:
             exit 1
           fi
           gh release create "${{ steps.version.outputs.tag }}" "$exe" \
-            --title "Videre Tracker ${{ steps.version.outputs.tag }}" \
+            --title "${{ steps.version.outputs.tag }}" \
             --generate-notes \
             --target "${{ github.sha }}"
