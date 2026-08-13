@@ -110,7 +110,7 @@ jobs:
             find publish -maxdepth 2 -type f -print
             exit 1
           fi
-          gh release create "${{ steps.version.outputs.tag }}" "$exe" \
+          gh release create "${{ steps.version.outputs.tag }}" "$exe#Videre Tracker.exe" \
             --title "${{ steps.version.outputs.tag }}" \
             --generate-notes \
             --target "${{ github.sha }}"
