@@ -27,7 +27,7 @@ Built on top of the [MTGOSDK](https://github.com/videre-project/MTGOSDK) library
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
 - [Node.js](https://nodejs.org/) (v18 or newer)
 - [pnpm](https://pnpm.io/) (v3 or newer)
-- Windows 10/11 (x64 or x86)
+- Windows 10 or 11 (64-bit)
 
 > [!NOTE]
 > You must have both the .NET SDK and Node.js (with pnpm) installed before running or building this project.
