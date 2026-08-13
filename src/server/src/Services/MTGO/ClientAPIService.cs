@@ -31,6 +31,7 @@ public static class ClientAPIService
   {
     var provider = new ClientAPIProvider();
     builder.Services.AddSingleton<IClientAPIProvider>(provider);
+    builder.Services.AddSingleton<IClientCommandGateway, NoOpClientCommandGateway>();
 
     // Register the client state monitor as scoped (per-request)
     builder.Services.AddScoped<ClientStateMonitor>();

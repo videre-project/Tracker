@@ -3,7 +3,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import type {
   TradeAttributionStatus,
   TradeEscrowItemRole,
@@ -52,8 +52,15 @@ export function useTradeHistory(filters: TradeHistoryFilters = {}, limit = 50) {
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const requestRef = useRef<AbortController | null>(null)
+  const requestSequenceRef = useRef(0)
 
   const fetchPage = useCallback(async (beforeId?: number) => {
+    requestRef.current?.abort()
+    const controller = new AbortController()
+    requestRef.current = controller
+    const requestSequence = ++requestSequenceRef.current
+
     if (beforeId) setLoadingMore(true)
     else setLoading(true)
     setError(null)
@@ -63,21 +70,34 @@ export function useTradeHistory(filters: TradeHistoryFilters = {}, limit = 50) {
       if (search) params.set("search", search)
       if (kind) params.set("kind", kind)
       if (result) params.set("result", result)
-      const response = await fetch(getApiUrl(`/api/trades/history?${params}`))
+      const response = await fetch(getApiUrl(`/api/trades/history?${params}`), {
+        signal: controller.signal,
+      })
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       const page = await response.json() as TradeHistoryPage
+      if (requestSequence !== requestSequenceRef.current) return
       setItems(current => beforeId ? [...current, ...page.items] : page.items)
       setNextBeforeId(page.nextBeforeId ?? null)
     } catch (reason) {
+      if (reason instanceof Error && reason.name === "AbortError") return
+      if (requestSequence !== requestSequenceRef.current) return
       setError(reason instanceof Error ? reason.message : "Unknown error")
     } finally {
-      setLoading(false)
-      setLoadingMore(false)
+      if (requestSequence === requestSequenceRef.current) {
+        setLoading(false)
+        setLoadingMore(false)
+      }
     }
   }, [kind, limit, result, search])
 
   useEffect(() => {
+    const requestSequence = requestSequenceRef
     void fetchPage()
+    return () => {
+      requestSequence.current++
+      requestRef.current?.abort()
+      requestRef.current = null
+    }
   }, [fetchPage])
 
   return {
@@ -97,6 +117,7 @@ export function useTradeHistoryDetail(id: number | null) {
   const [data, setData] = useState<TradeHistoryDetail | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const requestSequenceRef = useRef(0)
 
   useEffect(() => {
     if (id == null) {
@@ -106,6 +127,7 @@ export function useTradeHistoryDetail(id: number | null) {
     }
 
     const controller = new AbortController()
+    const requestSequence = ++requestSequenceRef.current
     setLoading(true)
     setError(null)
     fetch(getApiUrl(`/api/trades/history/${id}`), { signal: controller.signal })
@@ -113,14 +135,23 @@ export function useTradeHistoryDetail(id: number | null) {
         if (!response.ok) throw new Error(`HTTP ${response.status}`)
         return response.json() as Promise<TradeHistoryDetail>
       })
-      .then(setData)
+      .then(value => {
+        if (requestSequence === requestSequenceRef.current) setData(value)
+      })
       .catch(reason => {
         if (reason instanceof Error && reason.name === "AbortError") return
+        if (requestSequence !== requestSequenceRef.current) return
         setError(reason instanceof Error ? reason.message : "Unknown error")
       })
-      .finally(() => setLoading(false))
+      .finally(() => {
+        if (requestSequence === requestSequenceRef.current) setLoading(false)
+      })
 
-    return () => controller.abort()
+    const sequenceRef = requestSequenceRef
+    return () => {
+      sequenceRef.current++
+      controller.abort()
+    }
   }, [id])
 
   return { data, loading, error }

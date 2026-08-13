@@ -41,7 +41,7 @@ public sealed class EventStreamsController : APIController
   [ProducesResponseType(
     typeof(IEnumerable<ITournamentStateUpdate>), StatusCodes.Status200OK)]
   [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
-  [Produces("application/x-ndjson")]
+  [Produces("application/json", "application/x-ndjson")]
   public async Task<IActionResult> WatchTournamentUpdates(int id)
   {
     if (!clientMonitor.IsClientReady)
@@ -196,7 +196,7 @@ public sealed class EventStreamsController : APIController
   [ProducesResponseType(
     typeof(IEnumerable<ITournamentPlayerUpdate>), StatusCodes.Status200OK)]
   [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
-  [Produces("application/x-ndjson")]
+  [Produces("application/json", "application/x-ndjson")]
   public async Task<IActionResult> WatchPlayerCount()
   {
     if (!clientMonitor.IsClientReady)
@@ -259,7 +259,7 @@ public sealed class EventStreamsController : APIController
     typeof(IEnumerable<IStandingResult>), StatusCodes.Status200OK)]
   [ProducesResponseType(StatusCodes.Status404NotFound)]
   [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
-  [Produces("application/x-ndjson")]
+  [Produces("application/json", "application/x-ndjson")]
   public async Task<IActionResult> WatchStandings(int id)
   {
     if (!clientMonitor.IsClientReady)

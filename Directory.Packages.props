@@ -45,6 +45,15 @@
                     Version="$(MTGOSDKVersion)" />
     <PackageVersion Include="MTGOSDK.Win32"
                     Version="$(MTGOSDKVersion)" />
+    <!-- Tracker.Tests -->
+    <PackageVersion Include="Microsoft.AspNetCore.TestHost"
+                    Version="10.0.10" />
+    <PackageVersion Include="NUnit"
+                    Version="4.4.0" />
+    <PackageVersion Include="NUnit.Analyzers"
+                    Version="4.10.0" />
+    <PackageVersion Include="NUnit3TestAdapter"
+                    Version="5.2.0" />
   </ItemGroup>
 
 </Project>

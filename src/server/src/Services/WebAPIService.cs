@@ -14,6 +14,7 @@ using System.Text.Json.Serialization;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
@@ -58,10 +59,14 @@ public static class WebAPIService
     // Configure Kestrel
     builder.WebHost.ConfigureKestrel(options =>
     {
-      // Always listen on HTTPS for the main API
+      // CI test runs without a user certificate and is restricted to the
+      // local process. All normal application runs continue to use HTTPS.
       options.ListenLocalhost(appOptions.Url.Port, listenOptions =>
       {
-        listenOptions.UseHttps();
+        if (!IsCIEnabled())
+        {
+          listenOptions.UseHttps();
+        }
         // Enable HTTP/2 with HTTP/1.1 fallback
         listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
       });
@@ -273,6 +278,17 @@ public static class WebAPIService
     api.UseMiddleware<RequestMetricsMiddleware>();
 
     api.MapControllers();
+    if (IsCIEnabled() && options.DisableUI)
+    {
+      api.MapPost("/api/ci/shutdown", (IHostApplicationLifetime lifetime) =>
+      {
+        lifetime.StopApplication();
+        return Results.NoContent();
+      })
+      .RequireHost("localhost")
+      .ExcludeFromDescription();
+    }
+
     if (!options.DisableUI)
     {
       api.MapFallbackToFile("/index.html");
@@ -357,6 +373,13 @@ public static class WebAPIService
 
   private static string NormalizeOpenApiSchemaId(string schemaId) =>
     schemaId.Replace("+", ".");
+
+  private static bool IsCIEnabled()
+  {
+    string? value = Environment.GetEnvironmentVariable("TRACKER_CI_TEST");
+    return string.Equals(value, "1", StringComparison.OrdinalIgnoreCase)
+      || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
+  }
 
   private static void ConfigureVidereAPIClient(
     IServiceProvider services,

@@ -1,0 +1,162 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - '.github/workflows/**'
+      - 'Directory.Packages.props'
+      - 'Directory.Build.*'
+      - 'global.json'
+      - 'Project.sln'
+      - '.config/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'src/client/pnpm-lock.yaml'
+      - 'src/**'
+      - 'tests/**'
+      - 'scripts/**'
+      - 'docker/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tracker-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  ci:
+    name: Tracker CI
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      CI: true
+      DOTNET_NOLOGO: true
+      TRACKER_DISABLE_INSTALLER: '1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            src/client/pnpm-lock.yaml
+
+      - name: Enable pnpm
+        shell: pwsh
+        run: corepack enable
+
+      - name: Restore client dependencies
+        shell: pwsh
+        run: pnpm install --dir src/client --frozen-lockfile
+
+      - name: Restore repository tooling
+        shell: pwsh
+        run: pnpm install --frozen-lockfile
+
+      - name: Restore server dependencies
+        shell: pwsh
+        run: |
+          dotnet restore --locked-mode
+          dotnet restore tests/server/Tracker.Tests/Tracker.Tests.csproj --locked-mode
+
+      - name: Lint client
+        shell: pwsh
+        run: pnpm run -C src/client lint
+
+      - name: Build client and server
+        shell: pwsh
+        run: pnpm run build
+
+      - name: Verify generated files
+        shell: pwsh
+        run: git diff --exit-code -- src/client/src/types/api.d.ts
+
+      - name: Run frontend tests
+        shell: pwsh
+        run: pnpm run test:client
+
+      - name: Run backend tests
+        shell: pwsh
+        run: |
+          dotnet build tests/server/Tracker.Tests/Tracker.Tests.csproj --configuration Release --no-restore
+          dotnet exec tests/server/Tracker.Tests/bin/Release/net10.0-windows7.0/Tracker.Tests.dll --minimum-expected-tests 1 --output Detailed
+
+      - name: Publish application
+        shell: pwsh
+        run: dotnet publish src/server --configuration Release --output publish --no-restore
+
+      - name: Run published headless smoke test
+        shell: pwsh
+        run: ./scripts/ci/headless-smoke.ps1
+
+      - name: Upload publish artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tracker-publish-${{ github.sha }}
+          path: publish/
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tracker-ci-diagnostics-${{ github.sha }}
+          path: |
+            **/*.binlog
+            **/TestResults/**
+            **/*.trx
+            ci-diagnostics/**
+          if-no-files-found: ignore
+          retention-days: 7
+
+  detect-release:
+    name: Detect version change
+    needs: ci
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.detect.outputs.version }}
+      should_release: ${{ steps.detect.outputs.should_release }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Compare package.json version
+        id: detect
+        run: node scripts/ci/detect-release-version.mjs
+
+  release:
+    name: Release
+    needs: detect-release
+    if: needs.detect-release.outputs.should_release == 'true'
+    uses: ./.github/workflows/release.yml
+    with:
+      version: ${{ needs.detect-release.outputs.version }}
+      run_id: ${{ github.run_id }}
+    permissions:
+      actions: read
+      contents: write
+    secrets: inherit

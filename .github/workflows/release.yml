@@ -1,0 +1,116 @@
+name: Release
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Version from package.json to publish
+        required: true
+        type: string
+      run_id:
+        description: CI workflow run that uploaded the publish artifact
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to release (defaults to package.json)
+        required: false
+        type: string
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: tracker-release-${{ inputs.version || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Publish Tracker ${{ inputs.version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          version="${INPUT_VERSION}"
+          if [ -z "$version" ]; then
+            version="$(node -p "require('./package.json').version")"
+          fi
+          if [ -z "$version" ]; then
+            echo "Could not resolve a release version." >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+
+      - name: Skip if the tag already exists
+        id: existing
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          if git ls-remote --tags origin "refs/tags/$TAG" | grep -q .; then
+            echo "Tag $TAG already exists; skipping release."
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Resolve CI run
+        if: steps.existing.outputs.exists != 'true'
+        id: run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_RUN_ID: ${{ inputs.run_id }}
+        run: |
+          if [ -n "$INPUT_RUN_ID" ]; then
+            echo "run_id=$INPUT_RUN_ID" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          run_id="$(gh run list \
+            --workflow ci.yml \
+            --commit "${{ github.sha }}" \
+            --status success \
+            --json databaseId \
+            --jq '.[0].databaseId')"
+
+          if [ -z "$run_id" ] || [ "$run_id" = "null" ]; then
+            echo "No successful CI run found for ${{ github.sha }}." >&2
+            gh run list --workflow ci.yml --commit "${{ github.sha }}" --limit 5
+            exit 1
+          fi
+
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+
+      - name: Download CI publish artifact
+        if: steps.existing.outputs.exists != 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: tracker-publish-${{ github.sha }}
+          path: publish
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.run.outputs.run_id }}
+
+      - name: Create GitHub Release
+        if: steps.existing.outputs.exists != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          exe="publish/Videre Tracker.exe"
+          if [ ! -f "$exe" ]; then
+            echo "Published executable was not found: $exe" >&2
+            find publish -maxdepth 2 -type f -print
+            exit 1
+          fi
+          gh release create "${{ steps.version.outputs.tag }}" "$exe" \
+            --title "Videre Tracker ${{ steps.version.outputs.tag }}" \
+            --generate-notes \
+            --target "${{ github.sha }}"

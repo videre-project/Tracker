@@ -56,7 +56,14 @@ for (let i = 0; i < lines.length; i++) {
 }
 
 // Append the generated exports
-const finalContent = lines.join('\n') + '\n\n' + generatedExports.join('\n');
+const copyrightHeader = `/** @file
+  Copyright (c) 2026, Cory Bennett. All rights reserved.
+  SPDX-License-Identifier: Apache-2.0
+**/
+
+`;
+const finalContent = copyrightHeader + lines.join('\n')
+  + '\n\n' + generatedExports.join('\n');
 
 fs.writeFileSync(outputFile, finalContent, 'utf8');
 console.log(`Stripped namespaces from exported types and replaced references in ${outputFile}`);

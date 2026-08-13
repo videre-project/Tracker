@@ -140,6 +140,12 @@ public class ApplicationOptions(string[] args = null!)
 
   private static string ResolveUserDataFolder()
   {
+    var overridePath = Environment.GetEnvironmentVariable("TRACKER_USER_DATA_FOLDER");
+    if (!string.IsNullOrWhiteSpace(overridePath))
+    {
+      return Path.GetFullPath(overridePath);
+    }
+
     // If running from a versioned install subdirectory (e.g. <installRoot>\v0.0.0\),
     // use the parent as UserDataFolder so it matches the root the user chose at install time.
     var baseDir = AppContext.BaseDirectory

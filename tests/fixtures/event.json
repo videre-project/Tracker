@@ -1,0 +1,46 @@
+{
+  "fixtureVersion": 1,
+  "scenario": "bot-vs-bot multi-game replay with sideboarding",
+  "source": "Tracker Event.db from Docker volume tracker_tracker-wine-data (bot-vs-bot reference)",
+  "sanitized": true,
+  "database": "event.db",
+  "eventId": 289000494,
+  "matchId": 289000494,
+  "gameIds": [
+    958467820,
+    958468514,
+    958468536
+  ],
+  "openingHands": {
+    "958467820": {
+      "Counterspell": 2,
+      "Island": 1,
+      "Delver of Secrets": 1,
+      "Consider": 1,
+      "Tolarian Terror": 1,
+      "Lonely Sandbar": 1
+    },
+    "958468514": {
+      "Mental Journey": 1,
+      "Island": 1,
+      "Snap": 1,
+      "Opt": 1,
+      "Disrupt": 1,
+      "Counterspell": 2
+    },
+    "958468536": {
+      "Island": 2,
+      "Force Spike": 1,
+      "Mental Journey": 1,
+      "Cryptic Serpent": 1,
+      "Opt": 1,
+      "Delver of Secrets": 1
+    }
+  },
+  "redactions": [
+    "player names",
+    "account user ids",
+    "chat and whisper logs",
+    "unrelated matches"
+  ]
+}

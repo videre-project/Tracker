@@ -32,7 +32,9 @@ namespace Tracker.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/[controller]/[action]")]
-public class EventsController(ClientStateMonitor clientMonitor) : APIController
+public class EventsController(
+  ClientStateMonitor clientMonitor,
+  IClientCommandGateway commandGateway) : APIController
 {
   /// <summary>
   /// Get list of available tournaments/events
@@ -481,8 +483,13 @@ public class EventsController(ClientStateMonitor clientMonitor) : APIController
   [HttpPost("{id}")] // POST /api/events/openevent/{id}
   [ProducesResponseType(StatusCodes.Status204NoContent)]
   [ProducesResponseType(StatusCodes.Status404NotFound)]
-  public IActionResult OpenEvent(int id)
+  public async Task<IActionResult> OpenEvent(
+    int id,
+    CancellationToken cancellationToken)
   {
+    if (id <= 0) return NotFound();
+
+    await commandGateway.OpenEventAsync(id, cancellationToken);
     return NoContent();
   }
 }

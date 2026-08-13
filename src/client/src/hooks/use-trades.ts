@@ -38,11 +38,19 @@ export function useTrades() {
   const [data, setData] = useState<TradeSnapshot | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
+  const requestSequenceRef = useRef(0)
 
   const fetchTrades = useCallback(async () => {
+    abortControllerRef.current?.abort()
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+    const requestSequence = ++requestSequenceRef.current
+
     if (clientLoading) return
 
     if (!clientReady) {
+      if (requestSequence !== requestSequenceRef.current) return
       setData(null)
       setLoading(false)
       setError(null)
@@ -53,25 +61,40 @@ export function useTrades() {
     setError(null)
 
     try {
-      const response = await fetch(getApiUrl("/api/trades"))
+      const response = await fetch(getApiUrl("/api/trades"), {
+        signal: controller.signal,
+      })
       if (!response.ok) {
         if (response.status === 503) {
+          if (requestSequence !== requestSequenceRef.current) return
           setData(null)
           return
         }
         throw new Error(`HTTP ${response.status}`)
       }
 
-      setData(await response.json())
+      const nextData = await response.json()
+      if (requestSequence === requestSequenceRef.current) setData(nextData)
     } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return
+      if (requestSequence !== requestSequenceRef.current) return
       setError(err instanceof Error ? err.message : "Unknown error")
     } finally {
-      setLoading(false)
+      if (requestSequence === requestSequenceRef.current) setLoading(false)
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null
+      }
     }
   }, [clientLoading, clientReady])
 
   useEffect(() => {
-    fetchTrades()
+    const requestSequence = requestSequenceRef
+    void fetchTrades()
+    return () => {
+      requestSequence.current++
+      abortControllerRef.current?.abort()
+      abortControllerRef.current = null
+    }
   }, [fetchTrades])
 
   return {

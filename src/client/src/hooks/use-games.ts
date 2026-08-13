@@ -119,13 +119,24 @@ export function useGames(timeRange: string | DateRange | undefined, format?: str
 
     if (FORMATS_CACHE) return
 
-    fetch(getApiUrl("/api/games/formats"))
+    const controller = new AbortController()
+    let active = true
+    fetch(getApiUrl("/api/games/formats"), { signal: controller.signal })
       .then(res => res.json())
       .then(data => {
+        if (!active) return
         setFormats(data)
         FORMATS_CACHE = data
       })
-      .catch(err => console.error("Failed to fetch formats:", err))
+      .catch(err => {
+        if (!active || (err instanceof Error && err.name === "AbortError")) return
+        console.error("Failed to fetch formats:", err)
+      })
+
+    return () => {
+      active = false
+      controller.abort()
+    }
   }, [clientReady, clientLoading])
 
   // Fetch stats and trend when filters change or client becomes ready
@@ -181,12 +192,19 @@ export function useGames(timeRange: string | DateRange | undefined, format?: str
     params.append("maxDate", maxDate.toISOString())
 
     const queryString = params.toString()
+    const controller = new AbortController()
+    let active = true
 
     Promise.all([
-      fetch(getApiUrl(`/api/games/dashboard-stats?${queryString}`)).then(res => res.json()),
-      fetch(getApiUrl(`/api/games/performance-trend?${queryString}`)).then(res => res.json())
+      fetch(getApiUrl(`/api/games/dashboard-stats?${queryString}`), {
+        signal: controller.signal,
+      }).then(res => res.json()),
+      fetch(getApiUrl(`/api/games/performance-trend?${queryString}`), {
+        signal: controller.signal,
+      }).then(res => res.json())
     ])
       .then(([statsData, trendData]) => {
+        if (!active) return
         setStats(statsData)
         setTrend(trendData)
         GAMES_CACHE[cacheKey] = {
@@ -195,11 +213,20 @@ export function useGames(timeRange: string | DateRange | undefined, format?: str
           timestamp: Date.now()
         }
       })
-      .catch(err => console.error("Failed to fetch game data:", err))
+      .catch(err => {
+        if (!active || (err instanceof Error && err.name === "AbortError")) return
+        console.error("Failed to fetch game data:", err)
+      })
       // .finally(() => setLoading(false)) // Moved to then block to avoid flickering if cache hit happens immediately after? 
       // actually finally is safer. 
-      .finally(() => setLoading(false))
+      .finally(() => {
+        if (active) setLoading(false)
+      })
 
+    return () => {
+      active = false
+      controller.abort()
+    }
   }, [rangeKey, timeRange, format, clientReady, clientLoading, cacheKey])
 
   return { formats, stats, trend, loading }
@@ -227,6 +254,8 @@ export function useGamesHistory(
 
     setLoading(true)
     setError(null)
+    const controller = new AbortController()
+    let active = true
 
     const params = new URLSearchParams()
     params.append("page", page.toString())
@@ -261,20 +290,28 @@ export function useGamesHistory(
     if (minDate) params.append("minDate", minDate.toISOString())
     params.append("maxDate", maxDate.toISOString())
 
-    fetch(getApiUrl(`/api/games/history?${params.toString()}`))
+    fetch(getApiUrl(`/api/games/history?${params.toString()}`), {
+      signal: controller.signal,
+    })
       .then(res => {
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`)
         return res.json()
       })
       .then((json: PaginatedMatchesDTO) => {
+        if (!active) return
         setData(toPaginatedMatches(json))
         setLoading(false)
       })
       .catch(err => {
+        if (!active || (err instanceof Error && err.name === "AbortError")) return
         console.error("Failed to fetch game history:", err)
         setError(err instanceof Error ? err.message : "Unknown error")
         setLoading(false)
       })
+    return () => {
+      active = false
+      controller.abort()
+    }
   }, [page, pageSize, timeRange, format, deckRevisionId, clientReady, clientLoading])
 
   return { data, loading, error }

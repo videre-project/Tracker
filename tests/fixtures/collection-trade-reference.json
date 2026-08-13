@@ -1,0 +1,27 @@
+{
+  "metadata": {
+    "fixtureVersion": 1,
+    "scenario": "collection reconciliation and trade transitions",
+    "source": "Tracker-owned normalized scenario",
+    "sanitized": true,
+    "expectedBehavior": "apply collection deltas idempotently and preserve terminal trade outcomes",
+    "coverage": ["collection", "trade-state"]
+  },
+  "data": {
+    "collection": {
+      "snapshots": [
+        { "revision": 1, "cards": { "102392": 4, "62441": 2 } },
+        { "revision": 2, "cards": { "102392": 3, "62441": 2, "9231": 1 } }
+      ],
+      "deltas": [
+        { "revision": 2, "added": { "9231": 1 }, "removed": { "102392": 1 } }
+      ],
+      "reconcile": { "missing": [], "unexpected": [] }
+    },
+    "trades": [
+      { "token": "trade-1", "state": "completed", "result": "success" },
+      { "token": "trade-2", "state": "closed", "result": "failed" },
+      { "token": "trade-3", "state": "closed", "result": "partial" }
+    ]
+  }
+}

@@ -427,7 +427,8 @@ public class GamesController : APIController
     bool isActive = GameAPIService.ActiveMatchIds.Contains(matchId);
     if (playerResult == null && !isActive)
     {
-        return Forbid("You do not have access to this match.");
+        return StatusCode(StatusCodes.Status403Forbidden,
+          "You do not have access to this match.");
     }
 
     int wins = 0;

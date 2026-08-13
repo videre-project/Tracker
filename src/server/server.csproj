@@ -13,10 +13,12 @@
     <VidereGeneratedDirectory>$(MSBuildProjectDirectory)\obj\Videre</VidereGeneratedDirectory>
     <VidereOpenApiSpecPath>$(VidereGeneratedDirectory)\openapi.json</VidereOpenApiSpecPath>
     <VidereGeneratedClientPath>$(VidereGeneratedDirectory)\VidereOpenAPIClient.g.cs</VidereGeneratedClientPath>
+    <ProductInfoGeneratedPath>$(IntermediateOutputPath)ProductInfo.g.cs</ProductInfoGeneratedPath>
   </PropertyGroup>
 
   <ItemGroup>
     <Compile Include="$(VidereGeneratedClientPath)" Visible="false" />
+    <Compile Include="$(ProductInfoGeneratedPath)" Visible="false" />
   </ItemGroup>
 
   <Target Name="GenerateVidereOpenApiClient"
@@ -46,7 +48,7 @@
       <Output TaskParameter="ConsoleOutput" PropertyName="PackageVersion" />
     </Exec>
     <WriteLinesToFile
-      File="Properties/ProductInfo.g.cs"
+      File="$(ProductInfoGeneratedPath)"
       Lines='namespace Tracker%3B public static class ProductInfo { public const string Name = "$(AssemblyName)"%3B public const string Version = "$(PackageVersion)"%3B }'
       Overwrite="true" />
     </Target>

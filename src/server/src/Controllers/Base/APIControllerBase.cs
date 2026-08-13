@@ -353,6 +353,7 @@ public abstract class APIController : ControllerBase
     var requestAborted = HttpContext.RequestAborted;
     var channel = Channel.CreateBounded<TEvent>(StreamCallbackChannelOptions());
     var acceptingCallbacks = true;
+    var unsubscribed = 0;
 
     Task eventCallback(TEvent evt)
     {
@@ -366,12 +367,16 @@ public abstract class APIController : ControllerBase
 
       return Task.CompletedTask;
     }
+    void unsubscribeOnce() {
+      if (Interlocked.Exchange(ref unsubscribed, 1) == 0)
+        unsubscribe(eventCallback);
+    }
     subscribe(eventCallback);
 
     using var cancellationRegistration = requestAborted.Register(() =>
     {
       Volatile.Write(ref acceptingCallbacks, false);
-      unsubscribe(eventCallback);
+      unsubscribeOnce();
       channel.Writer.TryComplete();
     });
 
@@ -389,7 +394,7 @@ public abstract class APIController : ControllerBase
     finally
     {
       Volatile.Write(ref acceptingCallbacks, false);
-      unsubscribe(eventCallback);
+      unsubscribeOnce();
       channel.Writer.TryComplete();
     }
 
@@ -419,6 +424,7 @@ public abstract class APIController : ControllerBase
     var channel =
       Channel.CreateBounded<(T1 Arg1, T2 Arg2)>(StreamCallbackChannelOptions());
     var acceptingCallbacks = true;
+    var unsubscribed = 0;
 
     void eventCallback(T1 arg1, T2 arg2)
     {
@@ -430,12 +436,16 @@ public abstract class APIController : ControllerBase
         }
       }
     }
+    void unsubscribeOnce() {
+      if (Interlocked.Exchange(ref unsubscribed, 1) == 0)
+        unsubscribe(eventCallback);
+    }
     subscribe(eventCallback);
 
     using var cancellationRegistration = streamToken.Register(() =>
     {
       Volatile.Write(ref acceptingCallbacks, false);
-      unsubscribe(eventCallback);
+      unsubscribeOnce();
       channel.Writer.TryComplete();
     });
 
@@ -453,7 +463,7 @@ public abstract class APIController : ControllerBase
     finally
     {
       Volatile.Write(ref acceptingCallbacks, false);
-      unsubscribe(eventCallback);
+      unsubscribeOnce();
       channel.Writer.TryComplete();
     }
 
@@ -482,6 +492,7 @@ public abstract class APIController : ControllerBase
     var channel = Channel.CreateBounded<(object? Sender, TEventArgs Args)>(
       StreamCallbackChannelOptions());
     var acceptingCallbacks = true;
+    var unsubscribed = 0;
 
     void eventCallback(object? sender, TEventArgs args)
     {
@@ -493,12 +504,16 @@ public abstract class APIController : ControllerBase
         }
       }
     }
+    void unsubscribeOnce() {
+      if (Interlocked.Exchange(ref unsubscribed, 1) == 0)
+        unsubscribe(eventCallback);
+    }
     subscribe(eventCallback);
 
     using var cancellationRegistration = streamToken.Register(() =>
     {
       Volatile.Write(ref acceptingCallbacks, false);
-      unsubscribe(eventCallback);
+      unsubscribeOnce();
       channel.Writer.TryComplete();
     });
 
@@ -516,7 +531,7 @@ public abstract class APIController : ControllerBase
     finally
     {
       Volatile.Write(ref acceptingCallbacks, false);
-      unsubscribe(eventCallback);
+      unsubscribeOnce();
       channel.Writer.TryComplete();
     }
 

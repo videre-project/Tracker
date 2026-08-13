@@ -6,7 +6,8 @@
     "build": "tsc -b && vite build",
     "inspect:mtgo-cdn": "node scripts/inspectMtgoCdnManifest.cjs",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.11",
@@ -50,11 +51,15 @@
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.26",
     "globals": "^15.15.0",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.2",
+    "jsdom": "^30.0.1",
     "postcss": "^8.5.26",
     "tailwindcss": "^3.4.19",
     "typescript": "~5.6.3",
     "typescript-eslint": "^8.67.0",
     "vite": "^7.3.5",
-    "vite-plugin-proxy-http2": "^0.2.2"
+    "vite-plugin-proxy-http2": "^0.2.2",
+    "vitest": "^4.1.10"
   }
 }

@@ -36,7 +36,7 @@ public sealed class GameStreamsController(
 {  [HttpGet("/api/games/match/{matchId}/watch")]
   [ProducesResponseType(typeof(IEnumerable<GameLogDTO>), StatusCodes.Status200OK)]
   [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
-  [Produces("application/x-ndjson")]
+  [Produces("application/json", "application/x-ndjson")]
   public async Task<IActionResult> WatchMatchLogs(int matchId)
   {
     if (!clientMonitor.IsClientReady)
@@ -81,7 +81,7 @@ public sealed class GameStreamsController(
   [HttpGet("/api/games/history/watch")]
   [ProducesResponseType(typeof(IEnumerable<MatchHistoryDTO>), StatusCodes.Status200OK)]
   [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
-  [Produces("application/x-ndjson")]
+  [Produces("application/json", "application/x-ndjson")]
   public async Task<IActionResult> WatchMatchHistory()
   {
     if (!clientMonitor.IsClientReady)

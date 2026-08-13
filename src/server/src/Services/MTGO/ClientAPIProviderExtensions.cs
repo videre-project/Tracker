@@ -19,8 +19,22 @@ public static class ClientAPIProviderExtensions
   {
     identity = null;
 
-    if ((requireReady && !clientProvider.IsReady) ||
-        clientProvider.Client == null)
+    if (requireReady && !clientProvider.IsReady)
+    {
+      return false;
+    }
+
+    // The provider owns the authoritative identity once the client loop has
+    // observed it. Prefer that value so callers do not need to re-read a
+    // remote MTGO object at every API boundary (and so reconnect transitions
+    // cannot race an otherwise valid cached identity).
+    if (clientProvider.CurrentUser is { IsValid: true } currentIdentity)
+    {
+      identity = currentIdentity;
+      return true;
+    }
+
+    if (clientProvider.Client == null)
     {
       return false;
     }
@@ -48,8 +62,18 @@ public static class ClientAPIProviderExtensions
   {
     username = string.Empty;
 
-    if ((requireReady && !clientProvider.IsReady) ||
-        clientProvider.Client == null)
+    if (requireReady && !clientProvider.IsReady)
+    {
+      return false;
+    }
+
+    if (clientProvider.CurrentUser is { IsValid: true } currentIdentity)
+    {
+      username = currentIdentity.Username;
+      return true;
+    }
+
+    if (clientProvider.Client == null)
     {
       return false;
     }

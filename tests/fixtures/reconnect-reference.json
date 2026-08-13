@@ -1,0 +1,17 @@
+{
+  "metadata": {
+    "fixtureVersion": 1,
+    "scenario": "client reconnect with identity change",
+    "source": "Wine/Docker reference data",
+    "sanitized": true,
+    "expectedBehavior": "cancel work owned by the old client session and accept the new identity",
+    "coverage": ["reconnect-handling"]
+  },
+  "data": {
+    "sessions": [
+      { "session": "old", "state": "ready", "account": "PlayerA", "process": 1 },
+      { "session": "old", "state": "disconnected", "account": null, "process": 1 },
+      { "session": "new", "state": "ready", "account": "PlayerB", "process": 2 }
+    ]
+  }
+}
