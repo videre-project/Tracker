@@ -94,7 +94,7 @@ services:
     environment:
       CI: "true"
       TRACKER_DEV_CONTAINER: "true"
-      VIDERE_NPM_REGISTRY: ${VIDERE_NPM_REGISTRY:-http://host.docker.internal:4873/}
+      VIDERE_NPM_REGISTRY: ${VIDERE_NPM_REGISTRY:-}
       # Backend API URL for Vite proxy
       ASPNETCORE_URLS: "http://tracker-dev:5002"
       ASPNETCORE_HTTPS_PORT: "5002"

@@ -26,6 +26,7 @@ using Microsoft.OpenApi;
 using Scalar.AspNetCore;
 using Swashbuckle.AspNetCore.SwaggerGen;
 
+using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection.Serialization;
 
 using Tracker.Services.Base;
@@ -421,8 +422,29 @@ public static class WebAPIService
       }
     }
 
+    // Try to load prebuilt container certificate if available (e.g. Wine under Docker).
+    var prebuiltCertPath = "/opt/tracker/localhost.pfx";
+    if (File.Exists(prebuiltCertPath))
+    {
+      try
+      {
+        return X509CertificateLoader.LoadPkcs12FromFile(
+          prebuiltCertPath,
+          password: "tracker-localhost",
+          keyStorageFlags: X509KeyStorageFlags.EphemeralKeySet);
+      }
+      catch
+      {
+        // Unreadable or corrupted fallback.
+      }
+    }
+
     // Generate a new self-signed certificate valid for 2 years.
-    using var rsa = RSA.Create(2048);
+    // Use RSACryptoServiceProvider (CAPI) on Windows/Wine to avoid CNG CopyWithEphemeralKey P/Invoke bugs in Wine's ncrypt.dll.
+    using var rsa = OperatingSystem.IsWindows()
+      ? (RSA)new RSACryptoServiceProvider(2048)
+      : RSA.Create(2048);
+
     var request = new CertificateRequest(
       "CN=localhost",
       rsa,
@@ -450,9 +472,6 @@ public static class WebAPIService
       DateTimeOffset.UtcNow.AddDays(-1),
       DateTimeOffset.UtcNow.AddYears(2));
 
-    // Round-trip through PFX so the returned certificate owns an independent
-    // copy of the private key. Without this, the `using var rsa` disposal
-    // above releases the CNG key handle and Kestrel's TLS handshake fails.
     var pfxBytes = tempCert.Export(X509ContentType.Pfx);
 
     // Persist for future runs.

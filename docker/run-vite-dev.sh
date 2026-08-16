@@ -12,9 +12,13 @@ cd /workspace/src/client
 
 # The source tree is bind-mounted while node_modules lives in a named volume.
 # Reconcile it on every start so package and lockfile changes are picked up.
-videre_registry="${VIDERE_NPM_REGISTRY:-http://host.docker.internal:4873/}"
-echo "Synchronizing client dependencies from ${videre_registry}..."
-pnpm install --frozen-lockfile --config.@videreproject:registry="$videre_registry"
+if [ -n "${VIDERE_NPM_REGISTRY:-}" ]; then
+  echo "Synchronizing client dependencies from ${VIDERE_NPM_REGISTRY}..."
+  pnpm install --frozen-lockfile --config.@videreproject:registry="${VIDERE_NPM_REGISTRY}"
+else
+  echo "Synchronizing client dependencies..."
+  pnpm install --frozen-lockfile
+fi
 
 # Run Vite dev server
 exec pnpm exec vite --host 0.0.0.0 --port 5279 --force

@@ -149,9 +149,11 @@ public static class DatabaseService
 
         if (!exists)
         {
+#pragma warning disable EF1002
           await context.Database.ExecuteSqlRawAsync(
             $"ALTER TABLE {tableName} ADD COLUMN {columnName} {columnType};",
             cancellationToken);
+#pragma warning restore EF1002
         }
       }
       finally
