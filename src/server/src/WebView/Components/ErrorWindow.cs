@@ -163,14 +163,111 @@ public class ErrorWindow : Form, IResizableForm
     };
     _panel.Controls.Add(copyButton);
 
+    bool isCopied = false;
+    var copyIconButton = new Button
+    {
+      Size = new Size(28, 28),
+      Location = new Point(stackTracePanel.Width - 56, 8),
+      Anchor = AnchorStyles.Top | AnchorStyles.Right,
+      BackColor = Color.FromArgb(45, 45, 52),
+      FlatStyle = FlatStyle.Flat,
+      Cursor = Cursors.Hand
+    };
+    copyIconButton.FlatAppearance.BorderSize = 0;
+    copyIconButton.MouseEnter += (s, e) => copyIconButton.BackColor = Color.FromArgb(60, 60, 68);
+    copyIconButton.MouseLeave += (s, e) => copyIconButton.BackColor = Color.FromArgb(45, 45, 52);
+
+    copyIconButton.Paint += (s, e) =>
+    {
+      var g = e.Graphics;
+      g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+
+      using var bgBrush = new SolidBrush(copyIconButton.BackColor);
+      g.FillRectangle(bgBrush, copyIconButton.ClientRectangle);
+
+      if (isCopied)
+      {
+        using var checkPen = new Pen(Color.FromArgb(52, 211, 153), 2f)
+        {
+          StartCap = System.Drawing.Drawing2D.LineCap.Round,
+          EndCap = System.Drawing.Drawing2D.LineCap.Round,
+          LineJoin = System.Drawing.Drawing2D.LineJoin.Round
+        };
+        g.DrawLines(checkPen, new[]
+        {
+          new PointF(8f, 14f),
+          new PointF(12f, 18f),
+          new PointF(20f, 10f)
+        });
+      }
+      else
+      {
+        using var iconPen = new Pen(Color.FromArgb(200, 200, 210), 1.6f)
+        {
+          LineJoin = System.Drawing.Drawing2D.LineJoin.Round
+        };
+
+        using var backPath = GetRoundedRectPath(new RectangleF(11.5f, 11.5f, 9.5f, 9.5f), 2.5f);
+        g.DrawPath(iconPen, backPath);
+
+        using var frontPath = GetRoundedRectPath(new RectangleF(7f, 7f, 9.5f, 9.5f), 2.5f);
+        g.FillPath(bgBrush, frontPath);
+        g.DrawPath(iconPen, frontPath);
+      }
+    };
+
+    copyIconButton.Click += (s, e) =>
+    {
+      try
+      {
+        Clipboard.SetText(exceptionMessage);
+        isCopied = true;
+        copyIconButton.Invalidate();
+        var timer = new System.Windows.Forms.Timer { Interval = 1500 };
+        timer.Tick += (st, et) =>
+        {
+          isCopied = false;
+          copyIconButton.Invalidate();
+          timer.Stop();
+          timer.Dispose();
+        };
+        timer.Start();
+      }
+      catch { }
+    };
+
+    stackTracePanel.Controls.Add(copyIconButton);
+    copyIconButton.BringToFront();
+
     this.Resize += (sender, e) =>
     {
       messagePanel.Size = new Size(this.ClientSize.Width - 20, message.Height + 20);
       stackTracePanel.Size = new Size(this.ClientSize.Width - 20, this.ClientSize.Height - messagePanel.Bottom - 50);
+      copyIconButton.Location = new Point(stackTracePanel.Width - 56, 8);
       closeButton.Location = new Point(this.ClientSize.Width - 110, this.ClientSize.Height - 35);
       copyButton.Location = new Point(this.ClientSize.Width - 220, this.ClientSize.Height - 35);
     };
   }
+
+  private static System.Drawing.Drawing2D.GraphicsPath GetRoundedRectPath(RectangleF rect, float radius)
+  {
+    var path = new System.Drawing.Drawing2D.GraphicsPath();
+    float diameter = radius * 2;
+    var size = new SizeF(diameter, diameter);
+    var arc = new RectangleF(rect.Location, size);
+
+    path.AddArc(arc, 180, 90);
+    arc.X = rect.Right - diameter;
+    path.AddArc(arc, 270, 90);
+    arc.Y = rect.Bottom - diameter;
+    path.AddArc(arc, 0, 90);
+    arc.X = rect.Left;
+    path.AddArc(arc, 90, 90);
+    path.CloseFigure();
+
+    return path;
+  }
+
   protected override void OnPaint(PaintEventArgs e)
   {
     base.OnPaint(e);

@@ -110,9 +110,89 @@ public class SplashForm : Form
       ReadOnly = true,
       ScrollBars = RichTextBoxScrollBars.None,
       DetectUrls = false,
-      ShortcutsEnabled = false
+      ShortcutsEnabled = true
     };
     _historyPanel.Controls.Add(_splashHistory);
+
+    bool isCopied = false;
+    var copyButton = new Button
+    {
+      Size = new Size(28, 28),
+      Location = new Point(_historyPanel.Width - 36, 8),
+      Anchor = AnchorStyles.Top | AnchorStyles.Right,
+      BackColor = Color.FromArgb(45, 45, 52),
+      FlatStyle = FlatStyle.Flat,
+      Cursor = Cursors.Hand
+    };
+    copyButton.FlatAppearance.BorderSize = 0;
+    copyButton.MouseEnter += (s, e) => copyButton.BackColor = Color.FromArgb(60, 60, 68);
+    copyButton.MouseLeave += (s, e) => copyButton.BackColor = Color.FromArgb(45, 45, 52);
+
+    copyButton.Paint += (s, e) =>
+    {
+      var g = e.Graphics;
+      g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+
+      using var bgBrush = new SolidBrush(copyButton.BackColor);
+      g.FillRectangle(bgBrush, copyButton.ClientRectangle);
+
+      if (isCopied)
+      {
+        using var checkPen = new Pen(Color.FromArgb(52, 211, 153), 2f)
+        {
+          StartCap = System.Drawing.Drawing2D.LineCap.Round,
+          EndCap = System.Drawing.Drawing2D.LineCap.Round,
+          LineJoin = System.Drawing.Drawing2D.LineJoin.Round
+        };
+        g.DrawLines(checkPen, new[]
+        {
+          new PointF(8f, 14f),
+          new PointF(12f, 18f),
+          new PointF(20f, 10f)
+        });
+      }
+      else
+      {
+        using var iconPen = new Pen(Color.FromArgb(200, 200, 210), 1.6f)
+        {
+          LineJoin = System.Drawing.Drawing2D.LineJoin.Round
+        };
+
+        // Back rounded rectangle
+        using var backPath = GetRoundedRectPath(new RectangleF(11.5f, 11.5f, 9.5f, 9.5f), 2.5f);
+        g.DrawPath(iconPen, backPath);
+
+        // Front rounded rectangle
+        using var frontPath = GetRoundedRectPath(new RectangleF(7f, 7f, 9.5f, 9.5f), 2.5f);
+        g.FillPath(bgBrush, frontPath);
+        g.DrawPath(iconPen, frontPath);
+      }
+    };
+
+    copyButton.Click += (s, e) =>
+    {
+      if (_splashHistory != null && !string.IsNullOrEmpty(_splashHistory.Text))
+      {
+        try
+        {
+          Clipboard.SetText(_splashHistory.Text);
+          isCopied = true;
+          copyButton.Invalidate();
+          var feedbackTimer = new System.Windows.Forms.Timer { Interval = 1500 };
+          feedbackTimer.Tick += (st, et) =>
+          {
+            isCopied = false;
+            copyButton.Invalidate();
+            feedbackTimer.Stop();
+            feedbackTimer.Dispose();
+          };
+          feedbackTimer.Start();
+        }
+        catch { /* Ignore temporary clipboard lock */ }
+      }
+    };
+    _historyPanel.Controls.Add(copyButton);
+    copyButton.BringToFront();
 
     _splashStatus = new Label
     {
@@ -424,6 +504,25 @@ public class SplashForm : Form
     };
     
     e.Graphics.FillRectangle(brush, x, 0, width, rect.Height);
+  }
+
+  private static System.Drawing.Drawing2D.GraphicsPath GetRoundedRectPath(RectangleF rect, float radius)
+  {
+    var path = new System.Drawing.Drawing2D.GraphicsPath();
+    float diameter = radius * 2;
+    var size = new SizeF(diameter, diameter);
+    var arc = new RectangleF(rect.Location, size);
+
+    path.AddArc(arc, 180, 90);
+    arc.X = rect.Right - diameter;
+    path.AddArc(arc, 270, 90);
+    arc.Y = rect.Bottom - diameter;
+    path.AddArc(arc, 0, 90);
+    arc.X = rect.Left;
+    path.AddArc(arc, 90, 90);
+    path.CloseFigure();
+
+    return path;
   }
 
   protected override void OnFormClosed(FormClosedEventArgs e)
