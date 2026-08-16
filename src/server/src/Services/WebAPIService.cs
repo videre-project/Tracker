@@ -402,10 +402,10 @@ public static class WebAPIService
     {
       try
       {
-        var existing = new X509Certificate2(
+        var existing = X509CertificateLoader.LoadPkcs12FromFile(
           certPath,
-          (string?)null,
-          X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.EphemeralKeySet);
+          password: null,
+          keyStorageFlags: X509KeyStorageFlags.EphemeralKeySet);
 
         // Reuse if it won't expire in the next 7 days.
         if (existing.NotAfter > DateTime.UtcNow.AddDays(7))
@@ -446,15 +446,23 @@ public static class WebAPIService
     sanBuilder.AddIpAddress(IPAddress.IPv6Loopback);
     request.CertificateExtensions.Add(sanBuilder.Build());
 
-    var cert = request.CreateSelfSigned(
+    using var tempCert = request.CreateSelfSigned(
       DateTimeOffset.UtcNow.AddDays(-1),
       DateTimeOffset.UtcNow.AddYears(2));
 
+    // Round-trip through PFX so the returned certificate owns an independent
+    // copy of the private key. Without this, the `using var rsa` disposal
+    // above releases the CNG key handle and Kestrel's TLS handshake fails.
+    var pfxBytes = tempCert.Export(X509ContentType.Pfx);
+
     // Persist for future runs.
     Directory.CreateDirectory(userDataFolder);
-    File.WriteAllBytes(certPath, cert.Export(X509ContentType.Pfx));
+    File.WriteAllBytes(certPath, pfxBytes);
 
-    return cert;
+    return X509CertificateLoader.LoadPkcs12(
+      pfxBytes,
+      password: null,
+      keyStorageFlags: X509KeyStorageFlags.EphemeralKeySet);
   }
 
   private static void ConfigureVidereAPIClient(

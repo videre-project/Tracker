@@ -10,7 +10,7 @@ export CI=true
 # Enable dev container mode for SpaProxy config
 export TRACKER_DEV_CONTAINER=true
 
-tracker_certificate=/opt/tracker/localhost.pfx
+
 skip_mtgo=false
 if [[ "${TRACKER_SKIP_MTGO:-0}" =~ ^(1|true|yes|on)$ ]]; then
   skip_mtgo=true
@@ -29,12 +29,6 @@ if [[ "$skip_mtgo" == false ]]; then
     cp "$bootstrap" "$persisted_bootstrap"
   fi
 fi
-
-# The published app explicitly enables HTTPS.
-# Point Kestrel at the loopback-only certificate since Wine has no ASP.NET dev cert.
-export ASPNETCORE_Kestrel__Certificates__Default__Path
-ASPNETCORE_Kestrel__Certificates__Default__Path="$(winepath -w "$tracker_certificate")"
-export ASPNETCORE_Kestrel__Certificates__Default__Password=tracker-localhost
 
 # Wine's accelerated WPF composition currently renders MTGO as a black surface.
 # We instead have WPF fall back to software rendering for compatibility with Wine.

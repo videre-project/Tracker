@@ -242,10 +242,6 @@ public class ApplicationOptions(string[] args = null!)
       // this flag the renderer can start but never present a painted surface.
       "--no-sandbox",
       "--disable-dev-shm-usage",
-      // The API uses the local development certificate generated for the
-      // container. WebView2 does not inherit Wine's host trust store.
-      "--allow-insecure-localhost",
-      "--ignore-certificate-errors",
     };
 
     var existing = args.Split(' ', StringSplitOptions.RemoveEmptyEntries);

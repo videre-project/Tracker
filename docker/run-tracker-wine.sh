@@ -2,7 +2,7 @@
 set -euo pipefail
 
 tracker_exe='/workspace/publish/Videre Tracker.exe'
-tracker_certificate=/opt/tracker/localhost.pfx
+
 skip_mtgo=false
 if [[ "${TRACKER_SKIP_MTGO:-0}" =~ ^(1|true|yes|on)$ ]]; then
   skip_mtgo=true
@@ -27,12 +27,6 @@ if [[ ! -f "$tracker_exe" ]]; then
   echo "Run 'pnpm run publish' on the host before starting tracker-wayland." >&2
   exit 1
 fi
-
-# The published app explicitly enables HTTPS.
-# Point Kestrel at the loopback-only certificate since Wine has no ASP.NET dev cert.
-export ASPNETCORE_Kestrel__Certificates__Default__Path
-ASPNETCORE_Kestrel__Certificates__Default__Path="$(winepath -w "$tracker_certificate")"
-export ASPNETCORE_Kestrel__Certificates__Default__Password=tracker-localhost
 
 # Wine's accelerated WPF composition currently renders MTGO as a black surface.
 # We instead have WPF fall back to software rendering for compatibility with Wine.
