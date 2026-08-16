@@ -105,8 +105,8 @@ public static class DatabaseService
 
           if (typeof(T).Name == "EventContext")
           {
-            try { await db.ExecuteSqlRawAsync("ALTER TABLE Matches ADD COLUMN OpponentDeckArchetype TEXT;", cancellationToken); } catch { }
-            try { await db.ExecuteSqlRawAsync("ALTER TABLE Matches ADD COLUMN OpponentDeckColors TEXT;", cancellationToken); } catch { }
+            await EnsureColumnExistsAsync(context, "Matches", "OpponentDeckArchetype", "TEXT", cancellationToken);
+            await EnsureColumnExistsAsync(context, "Matches", "OpponentDeckColors", "TEXT", cancellationToken);
           }
         }
 
@@ -116,6 +116,47 @@ public static class DatabaseService
       {
         readiness.SetException(ex);
         throw;
+      }
+    }
+
+    private static async Task EnsureColumnExistsAsync(
+      DbContext context,
+      string tableName,
+      string columnName,
+      string columnType,
+      CancellationToken cancellationToken)
+    {
+      var connection = context.Database.GetDbConnection();
+      bool wasOpen = connection.State == System.Data.ConnectionState.Open;
+      if (!wasOpen) await connection.OpenAsync(cancellationToken);
+
+      try
+      {
+        using var command = connection.CreateCommand();
+        command.CommandText = $"PRAGMA table_info('{tableName}');";
+        using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+        bool exists = false;
+        while (await reader.ReadAsync(cancellationToken))
+        {
+          if (string.Equals(reader.GetString(1), columnName, StringComparison.OrdinalIgnoreCase))
+          {
+            exists = true;
+            break;
+          }
+        }
+        await reader.CloseAsync();
+
+        if (!exists)
+        {
+          await context.Database.ExecuteSqlRawAsync(
+            $"ALTER TABLE {tableName} ADD COLUMN {columnName} {columnType};",
+            cancellationToken);
+        }
+      }
+      finally
+      {
+        if (!wasOpen) await connection.CloseAsync();
       }
     }
 
