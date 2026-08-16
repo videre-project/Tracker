@@ -8,6 +8,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Reflection;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -65,7 +67,8 @@ public static class WebAPIService
       {
         if (!IsCIEnabled())
         {
-          listenOptions.UseHttps();
+          listenOptions.UseHttps(GetOrCreateLocalhostCertificate(
+            appOptions.UserDataFolder));
         }
         // Enable HTTP/2 with HTTP/1.1 fallback
         listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
@@ -379,6 +382,79 @@ public static class WebAPIService
     string? value = Environment.GetEnvironmentVariable("TRACKER_CI_TEST");
     return string.Equals(value, "1", StringComparison.OrdinalIgnoreCase)
       || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
+  }
+
+  /// <summary>
+  /// Returns a self-signed X.509 certificate for localhost HTTPS.
+  /// </summary>
+  /// <remarks>
+  /// The certificate is persisted as a PFX file inside the user data folder
+  /// so it survives restarts. A new certificate is generated when the file
+  /// is missing or the existing one has expired (or will expire within 7 days).
+  /// </remarks>
+  private static X509Certificate2 GetOrCreateLocalhostCertificate(
+    string userDataFolder)
+  {
+    var certPath = Path.Combine(userDataFolder, "localhost.pfx");
+
+    // Try to load an existing certificate.
+    if (File.Exists(certPath))
+    {
+      try
+      {
+        var existing = new X509Certificate2(
+          certPath,
+          (string?)null,
+          X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.EphemeralKeySet);
+
+        // Reuse if it won't expire in the next 7 days.
+        if (existing.NotAfter > DateTime.UtcNow.AddDays(7))
+        {
+          return existing;
+        }
+
+        existing.Dispose();
+      }
+      catch
+      {
+        // Corrupted or unreadable.
+      }
+    }
+
+    // Generate a new self-signed certificate valid for 2 years.
+    using var rsa = RSA.Create(2048);
+    var request = new CertificateRequest(
+      "CN=localhost",
+      rsa,
+      HashAlgorithmName.SHA256,
+      RSASignaturePadding.Pkcs1);
+
+    // Mark as a TLS server certificate.
+    request.CertificateExtensions.Add(
+      new X509KeyUsageExtension(
+        X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment,
+        critical: true));
+    request.CertificateExtensions.Add(
+      new X509EnhancedKeyUsageExtension(
+        new OidCollection { new("1.3.6.1.5.5.7.3.1") }, // id-kp-serverAuth
+        critical: false));
+
+    // SAN: DNS=localhost + loopback IPs
+    var sanBuilder = new SubjectAlternativeNameBuilder();
+    sanBuilder.AddDnsName("localhost");
+    sanBuilder.AddIpAddress(IPAddress.Loopback);
+    sanBuilder.AddIpAddress(IPAddress.IPv6Loopback);
+    request.CertificateExtensions.Add(sanBuilder.Build());
+
+    var cert = request.CreateSelfSigned(
+      DateTimeOffset.UtcNow.AddDays(-1),
+      DateTimeOffset.UtcNow.AddYears(2));
+
+    // Persist for future runs.
+    Directory.CreateDirectory(userDataFolder);
+    File.WriteAllBytes(certPath, cert.Export(X509ContentType.Pfx));
+
+    return cert;
   }
 
   private static void ConfigureVidereAPIClient(
