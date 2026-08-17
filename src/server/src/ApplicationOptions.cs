@@ -4,6 +4,7 @@
 **/
 
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -231,21 +232,20 @@ public class ApplicationOptions(string[] args = null!)
     var args = Environment.GetEnvironmentVariable("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS")
       ?? string.Empty;
 
-    if (!wineCompat)
+    var extra = new List<string>
     {
-      return args.Trim();
-    }
-
-    var extra = new[]
-    {
-      // WebView2's sandbox initialization is not compatible with Wine. Without
-      // this flag the renderer can start but never present a painted surface.
-      "--no-sandbox",
-      "--disable-dev-shm-usage",
+      "--allow-insecure-localhost",
+      "--ignore-certificate-errors"
     };
 
+    if (wineCompat)
+    {
+      extra.Add("--no-sandbox");
+      extra.Add("--disable-dev-shm-usage");
+    }
+
     var existing = args.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-    return string.Join(" ", existing.Concat(extra)).Trim();
+    return string.Join(" ", existing.Concat(extra).Distinct()).Trim();
   }
 
   /// <summary>

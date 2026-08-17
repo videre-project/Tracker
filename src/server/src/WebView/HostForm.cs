@@ -1,4 +1,4 @@
-﻿/** @file
+/** @file
   Copyright (c) 2023, Cory Bennett. All rights reserved.
   SPDX-License-Identifier: Apache-2.0
 **/
@@ -40,17 +40,30 @@ public partial class HostForm : Form
   /// <summary>
   /// The source of the web content to display.
   /// </summary>
-  public Uri Source { get => WebView.Source; set => WebView.Source = value; }
+  public Uri Source
+  {
+    get => WebView.CoreWebView2 != null ? WebView.Source : _initialSource!;
+    set
+    {
+      _initialSource = value;
+      if (WebView.CoreWebView2 != null && value != null)
+      {
+        WebView.CoreWebView2.Navigate(value.ToString());
+      }
+    }
+  }
 
   /// <summary>
   /// The thread that controls the WebView2 control.
   /// </summary>
   public Thread ControllerThread { get; private set; } = Thread.CurrentThread;
 
+  private readonly ApplicationOptions _options;
   private readonly DwmTitleBar? _dwmTitleBar;
   private readonly InvisibleResizePanel[] _resizePanels;
   private bool _hasUpdatedTitleBarColor;
   private SplashForm? _splashForm;
+  private Uri? _initialSource;
   private int _navigationRetryAttempts;
   private DateTime _lastNavigationErrorLog = DateTime.MinValue;
 
@@ -59,6 +72,7 @@ public partial class HostForm : Form
 
   public HostForm(ApplicationOptions options)
   {
+    _options = options;
     AppDomain.CurrentDomain.UnhandledException += Error_MessageBox;
     LoggerBase.SetProviderInstance(this.RegisterProvider());
 
@@ -159,15 +173,15 @@ public partial class HostForm : Form
       // Handle certificate errors to allow localhost without valid certificates
       WebView.CoreWebView2.ServerCertificateErrorDetected += (s, args) =>
       {
-        // Allow localhost and 127.0.0.1 without valid certificates
-        if (args.RequestUri.Contains("localhost") ||
-            args.RequestUri.Contains("127.0.0.1"))
-        {
-          args.Action = CoreWebView2ServerCertificateErrorAction.AlwaysAllow;
-        }
+        args.Action = CoreWebView2ServerCertificateErrorAction.AlwaysAllow;
       };
 
       Log.Information("Initialized WebView2 environment.");
+
+      if (_initialSource != null)
+      {
+        WebView.CoreWebView2.Navigate(_initialSource.ToString());
+      }
     };
 
     WebView.NavigationCompleted += OnNavigationCompleted;
@@ -203,6 +217,17 @@ public partial class HostForm : Form
       }
 
       _navigationRetryAttempts++;
+
+      // If initial navigation to dev server failed, fall back to Kestrel local URL (options.Url)
+      if (_options?.Url != null && WebView.CoreWebView2 != null &&
+          !string.Equals(WebView.Source?.ToString(), _options.Url.ToString(), StringComparison.OrdinalIgnoreCase) &&
+          _navigationRetryAttempts == 1)
+      {
+        Log.Warning("Initial navigation to {0} failed; falling back to local server {1}.", WebView.Source, _options.Url);
+        WebView.CoreWebView2.Navigate(_options.Url.ToString());
+        return;
+      }
+
       //
       // The API thread starts concurrently with the WinForms UI.
       //
