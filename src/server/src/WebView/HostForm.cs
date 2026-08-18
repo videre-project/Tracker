@@ -58,7 +58,6 @@ public partial class HostForm : Form
   /// </summary>
   public Thread ControllerThread { get; private set; } = Thread.CurrentThread;
 
-  private readonly ApplicationOptions _options;
   private readonly DwmTitleBar? _dwmTitleBar;
   private readonly InvisibleResizePanel[] _resizePanels;
   private bool _hasUpdatedTitleBarColor;
@@ -72,7 +71,6 @@ public partial class HostForm : Form
 
   public HostForm(ApplicationOptions options)
   {
-    _options = options;
     AppDomain.CurrentDomain.UnhandledException += Error_MessageBox;
     LoggerBase.SetProviderInstance(this.RegisterProvider());
 
@@ -173,6 +171,7 @@ public partial class HostForm : Form
       // Handle certificate errors to allow localhost without valid certificates
       WebView.CoreWebView2.ServerCertificateErrorDetected += (s, args) =>
       {
+        Log.Warning("Allowing WebView2 certificate error for {0}.", args.RequestUri);
         args.Action = CoreWebView2ServerCertificateErrorAction.AlwaysAllow;
       };
 
@@ -200,11 +199,12 @@ public partial class HostForm : Form
   {
     if (!e.IsSuccess)
     {
+      var uri = WebView.Source?.ToString() ?? _initialSource?.ToString() ?? "<unknown>";
       var now = DateTime.UtcNow;
       if (now - _lastNavigationErrorLog >= TimeSpan.FromSeconds(1))
       {
-        Log.Error("WebView2 navigation failed: {0} ({1}); retry {2}/{3}.",
-          e.WebErrorStatus, e.NavigationId,
+        Log.Error("WebView2 navigation failed for {0}: error={1}, httpStatus={2}, navigationId={3}; retry {4}/{5}.",
+          uri, e.WebErrorStatus, e.HttpStatusCode, e.NavigationId,
           Math.Min(_navigationRetryAttempts + 1, MaxNavigationRetries),
           MaxNavigationRetries);
         _lastNavigationErrorLog = now;
@@ -218,22 +218,14 @@ public partial class HostForm : Form
 
       _navigationRetryAttempts++;
 
-      // If initial navigation to dev server failed, fall back to Kestrel local URL (options.Url)
-      if (_options?.Url != null && WebView.CoreWebView2 != null &&
-          !string.Equals(WebView.Source?.ToString(), _options.Url.ToString(), StringComparison.OrdinalIgnoreCase) &&
-          _navigationRetryAttempts == 1)
-      {
-        Log.Warning("Initial navigation to {0} failed; falling back to local server {1}.", WebView.Source, _options.Url);
-        WebView.CoreWebView2.Navigate(_options.Url.ToString());
-        return;
-      }
 
       //
-      // The API thread starts concurrently with the WinForms UI.
+      // The API thread and the SPA proxy start concurrently with the WinForms UI.
       //
-      // As a result, a first navigation can therefore race Kestrel startup;
-      // instead we retry while this handler remains subscribed instead of
-      // leaving the host surface blank.
+      // As a result, the first navigation can race either server startup.
+      // Keep retrying the original URL so a temporary Vite startup failure does
+      // not switch to a separate HTTPS endpoint that may not be ready or may
+      // not be configured for the current development environment.
       //
       try
       {

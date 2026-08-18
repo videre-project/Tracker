@@ -77,7 +77,8 @@ public static class WebAPIService
 
       // In development container, also listen on HTTP for Vite proxy
       // Listen on all interfaces (0.0.0.0) so other containers can connect
-      if (appOptions.IsDevelopment && appOptions.HttpUrl != null)
+      if (appOptions.IsDevelopment && IsDevelopmentContainer() &&
+          appOptions.HttpUrl != null)
       {
         options.Listen(IPAddress.Any, appOptions.HttpUrl.Port, listenOptions =>
         {
@@ -378,6 +379,13 @@ public static class WebAPIService
   private static string NormalizeOpenApiSchemaId(string schemaId) =>
     schemaId.Replace("+", ".");
 
+  private static bool IsDevelopmentContainer()
+  {
+    string? value = Environment.GetEnvironmentVariable("TRACKER_DEV_CONTAINER");
+    return string.Equals(value, "1", StringComparison.OrdinalIgnoreCase)
+      || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
+  }
+
   private static bool IsCIEnabled()
   {
     string? value = Environment.GetEnvironmentVariable("TRACKER_CI_TEST");
@@ -406,7 +414,7 @@ public static class WebAPIService
         var existing = X509CertificateLoader.LoadPkcs12FromFile(
           certPath,
           password: null,
-          keyStorageFlags: X509KeyStorageFlags.EphemeralKeySet);
+          keyStorageFlags: X509KeyStorageFlags.UserKeySet | X509KeyStorageFlags.PersistKeySet);
 
         // Reuse if it won't expire in the next 7 days.
         if (existing.NotAfter > DateTime.UtcNow.AddDays(7))
@@ -481,7 +489,7 @@ public static class WebAPIService
     return X509CertificateLoader.LoadPkcs12(
       pfxBytes,
       password: null,
-      keyStorageFlags: X509KeyStorageFlags.EphemeralKeySet);
+      keyStorageFlags: X509KeyStorageFlags.UserKeySet | X509KeyStorageFlags.PersistKeySet);
   }
 
   private static void ConfigureVidereAPIClient(

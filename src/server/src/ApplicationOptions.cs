@@ -30,9 +30,9 @@ public class ApplicationOptions(string[] args = null!)
   public Uri Url => new($"https://localhost:{Port}");
 
   /// <summary>
-  /// The URL for the Web API (HTTP in dev container).
+  /// The optional HTTP URL for the Vite proxy in a development container.
   /// </summary>
-  public Uri HttpUrl
+  public Uri? HttpUrl
   {
     get
     {
@@ -41,7 +41,7 @@ public class ApplicationOptions(string[] args = null!)
       {
         return new Uri($"http://localhost:{port}");
       }
-      return new Uri($"http://localhost:5000");
+      return null;
     }
   }
 
