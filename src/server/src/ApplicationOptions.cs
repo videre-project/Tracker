@@ -30,22 +30,6 @@ public class ApplicationOptions(string[] args = null!)
   public Uri Url => new($"https://localhost:{Port}");
 
   /// <summary>
-  /// The optional HTTP URL for the Vite proxy in a development container.
-  /// </summary>
-  public Uri? HttpUrl
-  {
-    get
-    {
-      var httpPort = Environment.GetEnvironmentVariable("ASPNETCORE_HTTP_PORT");
-      if (int.TryParse(httpPort, out var port) && port > 0)
-      {
-        return new Uri($"http://localhost:{port}");
-      }
-      return null;
-    }
-  }
-
-  /// <summary>
   /// The URL that the WebView2 UI should load.
   /// </summary>
   /// <remarks>

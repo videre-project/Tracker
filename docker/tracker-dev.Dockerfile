@@ -87,11 +87,11 @@ COPY --chmod=755 docker/run-tracker-dev.sh /usr/local/bin/run-tracker-dev
 
 # Kestrel needs an explicit certificate because Wine does not provide the
 # ASP.NET Core development certificate that UseHttps() normally discovers.
-# This certificate is only used by Tracker's loopback server.
+# This certificate is used by Tracker's local development server.
 RUN mkdir -p /opt/tracker \
     && openssl req -x509 -newkey rsa:2048 -sha256 -nodes -days 3650 \
       -subj "/CN=localhost" \
-      -addext "subjectAltName=DNS:localhost,IP:127.0.0.1,IP:::1" \
+      -addext "subjectAltName=DNS:localhost,DNS:tracker-dev,IP:127.0.0.1,IP:::1" \
       -keyout /tmp/tracker-localhost.key \
       -out /tmp/tracker-localhost.crt \
     && openssl pkcs12 -export \

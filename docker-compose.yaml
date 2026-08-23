@@ -37,6 +37,7 @@ services:
       WINEDEBUG: -all
       TRACKER_DISABLE_INSTALLER: "1"
       TRACKER_WINE_COMPAT: "1"
+      TRACKER_CONTAINER: "1"
       TRACKER_SKIP_MTGO: ${TRACKER_SKIP_MTGO:-0}
       APP_THEME: Dark
       WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: --disable-gpu
@@ -45,6 +46,8 @@ services:
       - tracker-wine-data:/home/wine/.wine
       - ${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR must be set}/${WAYLAND_DISPLAY:-wayland-0}:/tmp/runtime-dir/${WAYLAND_DISPLAY:-wayland-0}
       - /tmp/.X11-unix:/tmp/.X11-unix
+    ports:
+      - "127.0.0.1:7101:7101"  # .NET API (HTTPS)
 
   tracker-dev:
     build:
@@ -71,15 +74,13 @@ services:
       SPA_PROXY_SERVER_URL: http://vite-dev:5279
       # Override UI URL to point to localhost (socat proxy forwards to vite-dev)
       TRACKER_UI_URL: http://localhost:5279
-      # HTTP port for Vite proxy (use 5002 to avoid wineserver conflict on 5000/5001)
-      ASPNETCORE_HTTP_PORT: "5002"
     volumes:
       - .:/workspace
       - tracker-wine-data:/home/wine/.wine
       - ${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR must be set}/${WAYLAND_DISPLAY:-wayland-0}:/tmp/runtime-dir/${WAYLAND_DISPLAY:-wayland-0}
       - /tmp/.X11-unix:/tmp/.X11-unix
     ports:
-      - "5002:5002"  # .NET API (HTTP)
+      - "127.0.0.1:7101:7101"  # .NET API (HTTPS)
     depends_on:
       - vite-dev
 
@@ -96,8 +97,8 @@ services:
       TRACKER_DEV_CONTAINER: "true"
       VIDERE_NPM_REGISTRY: ${VIDERE_NPM_REGISTRY:-}
       # Backend API URL for Vite proxy
-      ASPNETCORE_URLS: "http://tracker-dev:5002"
-      ASPNETCORE_HTTPS_PORT: "5002"
+      ASPNETCORE_URLS: "https://tracker-dev:7101"
+      ASPNETCORE_HTTPS_PORT: "7101"
     volumes:
       - ./src/client:/workspace/src/client
       - ./package.json:/workspace/package.json:ro

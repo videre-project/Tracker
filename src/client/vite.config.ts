@@ -58,11 +58,11 @@ const aspnetcoreUrls = (env.ASPNETCORE_URLS ?? '')
 const aspnetcoreHttpsUrl = aspnetcoreUrls.find((u) => u.startsWith('https://'));
 const aspnetcoreFirstUrl = aspnetcoreUrls[0];
 
-// In dev container, use HTTP to tracker-dev service
+// In the dev container, connect to Kestrel over the Docker network.
 const target = targetOverride
   ? targetOverride
   : env.TRACKER_DEV_CONTAINER
-    ? 'http://tracker-dev:5002'
+    ? 'https://tracker-dev:7101'
     : env.ASPNETCORE_HTTPS_PORT
       ? `https://localhost:${env.ASPNETCORE_HTTPS_PORT}`
       : aspnetcoreHttpsUrl
@@ -90,7 +90,8 @@ export default defineConfig({
   server: {
     port: parseInt(env.DEV_SERVER_PORT || '5279'),
     strictPort: true,
-    // Use HTTP in dev container (no certs), HTTPS locally
+    // Vite is exposed over HTTP in the dev container; proxied API traffic
+    // between containers still uses HTTPS.
     https: env.TRACKER_DEV_CONTAINER ? undefined : {
       key: fs.readFileSync(keyFilePath),
       cert: fs.readFileSync(certFilePath)

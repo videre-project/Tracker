@@ -62,9 +62,7 @@ public static class WebAPIService
     // Configure Kestrel
     builder.WebHost.ConfigureKestrel(options =>
     {
-      // CI test runs without a user certificate and is restricted to the
-      // local process. All normal application runs continue to use HTTPS.
-      options.ListenLocalhost(appOptions.Url.Port, listenOptions =>
+      void ConfigureEndpoint(ListenOptions listenOptions)
       {
         if (!IsCIEnabled())
         {
@@ -73,17 +71,19 @@ public static class WebAPIService
         }
         // Enable HTTP/2 with HTTP/1.1 fallback
         listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
-      });
+      }
 
-      // In development container, also listen on HTTP for Vite proxy
-      // Listen on all interfaces (0.0.0.0) so other containers can connect
-      if (appOptions.IsDevelopment && IsDevelopmentContainer() &&
-          appOptions.HttpUrl != null)
+      // Vite and the Linux URL bridge reach Kestrel over the Docker network.
+      // Native and CI runs remain restricted to loopback.
+      if (IsContainer())
       {
-        options.Listen(IPAddress.Any, appOptions.HttpUrl.Port, listenOptions =>
-        {
-          listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
-        });
+        options.Listen(IPAddress.Any, appOptions.Url.Port, ConfigureEndpoint);
+      }
+      else
+      {
+        // CI runs without a user certificate and are restricted to the local
+        // process. All normal application runs continue to use HTTPS.
+        options.ListenLocalhost(appOptions.Url.Port, ConfigureEndpoint);
       }
     });
 
@@ -384,6 +384,19 @@ public static class WebAPIService
     string? value = Environment.GetEnvironmentVariable("TRACKER_DEV_CONTAINER");
     return string.Equals(value, "1", StringComparison.OrdinalIgnoreCase)
       || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
+  }
+
+  private static bool IsContainer()
+  {
+    return IsDevelopmentContainer()
+      || string.Equals(
+        Environment.GetEnvironmentVariable("TRACKER_CONTAINER"),
+        "1",
+        StringComparison.OrdinalIgnoreCase)
+      || string.Equals(
+        Environment.GetEnvironmentVariable("TRACKER_CONTAINER"),
+        "true",
+        StringComparison.OrdinalIgnoreCase);
   }
 
   private static bool IsCIEnabled()
