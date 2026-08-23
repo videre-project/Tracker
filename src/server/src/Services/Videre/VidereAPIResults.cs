@@ -20,6 +20,15 @@ public sealed record VidereProductResult(
   bool? IsTradable
 );
 
+public sealed record VidereCatalogMetadataResult(
+  int Id,
+  string Name,
+  string? SetCode,
+  string? Rarity,
+  string? ObjectType,
+  string? ImageUrl
+);
+
 public sealed record ViderePriceResult(
   int Id,
   string? PriceDate,

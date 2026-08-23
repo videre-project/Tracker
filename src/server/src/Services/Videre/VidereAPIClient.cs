@@ -27,6 +27,8 @@ namespace Tracker.Services.Videre;
 
 public sealed class VidereAPIClient
 {
+  private static readonly HttpMethod s_queryMethod = new("QUERY");
+
   private readonly Generated.VidereOpenAPIClient videreOpenAPIClient;
   private readonly HttpClient httpClient;
   private readonly ApplicationOptions appOptions;
@@ -155,6 +157,78 @@ public sealed class VidereAPIClient
     }
 
     return products;
+  }
+
+  internal async Task<IReadOnlyDictionary<int, VidereCatalogMetadataResult>>
+    GetCatalogMetadataAsync(
+      IReadOnlyCollection<int> catalogIds,
+      CancellationToken cancellationToken = default)
+  {
+    const int pageSize = 500;
+    var metadata = new Dictionary<int, VidereCatalogMetadataResult>();
+    int[] ids = catalogIds
+      .Where(id => id > 0)
+      .Distinct()
+      .ToArray();
+
+    foreach (int[] chunk in ids.Chunk(pageSize))
+    {
+      var requestBody = JsonSerializer.Serialize(new Generated.CardSearchRequest
+      {
+        Collection = CreateCollection(chunk)
+      }, JsonSerializerOptions.Web);
+
+      Task<string?> cardsRequest = SendAsync(
+        s_queryMethod,
+        BuildUri($"cards/search?unique=prints&limit={pageSize}"),
+        requestBody,
+        cancellationToken);
+      Task<string?> productsRequest = SendAsync(
+        s_queryMethod,
+        BuildUri($"cards/search?q={Uri.EscapeDataString("is:product")}&limit={pageSize}"),
+        requestBody,
+        cancellationToken);
+      await Task.WhenAll(cardsRequest, productsRequest);
+
+      string? cardsContent = await cardsRequest;
+      if (cardsContent is not null)
+      {
+        var response = DeserializeResponse<VidereCardSearchResponse>(cardsContent);
+        foreach (var card in response?.Data?.Where(card => card.Id > 0) ?? [])
+        {
+          string name = string.IsNullOrWhiteSpace(card.Display_name)
+            ? card.Name
+            : card.Display_name;
+          metadata[card.Id] = new VidereCatalogMetadataResult(
+            card.Id,
+            name,
+            NormalizeOptionalText(card.Set_code)?.ToUpperInvariant(),
+            NormalizeOptionalText(card.Rarity)?.ToLowerInvariant(),
+            null,
+            card.Image_url);
+        }
+      }
+
+      string? productsContent = await productsRequest;
+      if (productsContent is not null)
+      {
+        var response = DeserializeResponse<VidereProductSearchResponse>(productsContent);
+        foreach (var product in response?.Data?.Where(product => product.Id > 0) ?? [])
+        {
+          metadata[product.Id] = new VidereCatalogMetadataResult(
+            product.Id,
+            string.IsNullOrWhiteSpace(product.Name)
+              ? $"Catalog {product.Id}"
+              : product.Name,
+            NormalizeOptionalText(product.Set_code)?.ToUpperInvariant(),
+            null,
+            NormalizeOptionalText(product.Object_type),
+            product.Image_url?.ToString());
+        }
+      }
+    }
+
+    return metadata;
   }
 
   internal async Task<IReadOnlyCollection<int>> SearchCollectionAsync(
@@ -630,6 +704,36 @@ public sealed class VidereAPIClient
 
     [System.Text.Json.Serialization.JsonPropertyName("meta")]
     public Generated.ListMeta? Meta { get; set; }
+  }
+
+  private sealed class VidereCardSearchResponse
+  {
+    [System.Text.Json.Serialization.JsonPropertyName("data")]
+    public List<VidereCatalogCard>? Data { get; set; }
+
+    [System.Text.Json.Serialization.JsonPropertyName("meta")]
+    public Generated.ListMeta? Meta { get; set; }
+  }
+
+  private sealed class VidereCatalogCard
+  {
+    [System.Text.Json.Serialization.JsonPropertyName("id")]
+    public int Id { get; set; }
+
+    [System.Text.Json.Serialization.JsonPropertyName("name")]
+    public string Name { get; set; } = "";
+
+    [System.Text.Json.Serialization.JsonPropertyName("display_name")]
+    public string? Display_name { get; set; }
+
+    [System.Text.Json.Serialization.JsonPropertyName("set_code")]
+    public string? Set_code { get; set; }
+
+    [System.Text.Json.Serialization.JsonPropertyName("rarity")]
+    public string? Rarity { get; set; }
+
+    [System.Text.Json.Serialization.JsonPropertyName("image_url")]
+    public string? Image_url { get; set; }
   }
 
   internal static DateTimeOffset GetPriceCacheExpiration(DateTimeOffset now)
