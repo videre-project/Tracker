@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Videre Tracker URL Handler
+Comment=Import decks into Videre Tracker
+Exec=/home/csqua/Documents/Tracker/scripts/videre-url-handler.sh %u
+Terminal=false
+NoDisplay=true
+MimeType=x-scheme-handler/videre;
