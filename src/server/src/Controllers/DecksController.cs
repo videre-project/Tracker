@@ -33,6 +33,7 @@ using Tracker.Controllers.Models.Decks;
 using Tracker.Services.MTGO;
 using Tracker.Services.MTGO.Collection;
 using Tracker.Services.Videre;
+using Tracker.WebView;
 
 
 namespace Tracker.Controllers;
@@ -48,17 +49,20 @@ public class DecksController : APIController
   private readonly CollectionDeckService deckService;
   private readonly IManafoldArchetypeClient manafoldArchetypeClient;
   private readonly IClientAPIProvider clientProvider;
+  private readonly WebViewHostAccessor webViewHost;
 
   public DecksController(
     EventContext context,
     CollectionDeckService deckService,
     IManafoldArchetypeClient manafoldArchetypeClient,
-    IClientAPIProvider clientProvider)
+    IClientAPIProvider clientProvider,
+    WebViewHostAccessor webViewHost)
   {
     this.context = context;
     this.deckService = deckService;
     this.manafoldArchetypeClient = manafoldArchetypeClient;
     this.clientProvider = clientProvider;
+    this.webViewHost = webViewHost;
   }
 
   //
@@ -143,6 +147,70 @@ public class DecksController : APIController
         }).ToList());
 
     return Ok(grouped);
+  }
+
+  /// <summary>
+  /// Import or update a Tracker-local deck in SQLite.
+  /// </summary>
+  [HttpPost("import")] // POST /api/decks/import
+  [ProducesResponseType(typeof(ImportDeckResponse), StatusCodes.Status200OK)]
+  [ProducesResponseType(typeof(ImportDeckResponse), StatusCodes.Status201Created)]
+  [ProducesResponseType(StatusCodes.Status400BadRequest)]
+  [ProducesResponseType(StatusCodes.Status409Conflict)]
+  public async Task<ActionResult<ImportDeckResponse>> ImportDeck(
+    [FromBody] ImportDeckRequest request,
+    CancellationToken cancellationToken)
+  {
+    try
+    {
+      ImportDeckResponse result = await deckService.ImportLocalDeckAsync(
+        request,
+        cancellationToken);
+      return result.Created
+        ? CreatedAtAction(nameof(GetDeck), new { revisionId = result.RevisionId }, result)
+        : Ok(result);
+    }
+    catch (ArgumentException exception)
+    {
+      return BadRequest(new { error = exception.Message });
+    }
+    catch (InvalidOperationException exception)
+    {
+      return Conflict(new { error = exception.Message });
+    }
+  }
+
+  /// <summary>
+  /// Imports a Tracker-local deck received through the Linux/desktop
+  /// <c>videre://</c> URL handler, then opens it in the deck editor.
+  /// </summary>
+  [HttpPost("import-and-open")]
+  [ProducesResponseType(typeof(ImportDeckResponse), StatusCodes.Status200OK)]
+  [ProducesResponseType(typeof(ImportDeckResponse), StatusCodes.Status201Created)]
+  [ProducesResponseType(StatusCodes.Status400BadRequest)]
+  [ProducesResponseType(StatusCodes.Status409Conflict)]
+  public async Task<ActionResult<ImportDeckResponse>> ImportDeckAndOpen(
+    [FromBody] ImportDeckRequest request,
+    CancellationToken cancellationToken)
+  {
+    try
+    {
+      ImportDeckResponse result = await deckService.ImportLocalDeckAsync(
+        request,
+        cancellationToken);
+      webViewHost.HostForm?.NavigateToPath($"/decks/{result.RevisionId}");
+      return result.Created
+        ? CreatedAtAction(nameof(GetDeck), new { revisionId = result.RevisionId }, result)
+        : Ok(result);
+    }
+    catch (ArgumentException exception)
+    {
+      return BadRequest(new { error = exception.Message });
+    }
+    catch (InvalidOperationException exception)
+    {
+      return Conflict(new { error = exception.Message });
+    }
   }
 
   private async Task<Dictionary<long, DeckMatchRecord>> GetDeckMatchRecordsAsync(

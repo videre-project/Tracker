@@ -54,6 +54,37 @@ public partial class HostForm : Form
   }
 
   /// <summary>
+  /// Navigates the hosted UI to an application route and brings the tracker
+  /// window to the foreground.
+  /// </summary>
+  public void NavigateToPath(string path)
+  {
+    if (string.IsNullOrWhiteSpace(path))
+      throw new ArgumentException("A navigation path is required.", nameof(path));
+
+    void navigate()
+    {
+      if (IsDisposed || WebView.IsDisposed || WebView.CoreWebView2 is null)
+        return;
+
+      Uri? baseUri = WebView.Source ?? _initialSource;
+      if (baseUri is null)
+        return;
+
+      WebView.CoreWebView2.Navigate(new Uri(baseUri, path).ToString());
+      if (WindowState == FormWindowState.Minimized)
+        WindowState = FormWindowState.Normal;
+      BringToFront();
+      Activate();
+    }
+
+    if (WebView.InvokeRequired)
+      WebView.BeginInvoke(navigate);
+    else
+      navigate();
+  }
+
+  /// <summary>
   /// The thread that controls the WebView2 control.
   /// </summary>
   public Thread ControllerThread { get; private set; } = Thread.CurrentThread;
