@@ -69,6 +69,8 @@ public sealed class CollectionContext(DbContextOptions<CollectionContext> option
           value => value.HasValue
             ? new DateTime(value.Value, DateTimeKind.Unspecified)
             : null);
+      entity.Property(grouping => grouping.IsLocal)
+        .HasDefaultValue(false);
       entity.HasIndex(grouping => new
       {
         grouping.AccountId,

@@ -57,7 +57,8 @@ public sealed class CollectionHistoryWriter
     int accountId,
     CardGroupingState state,
     DateTime observedAt,
-    CancellationToken cancellationToken)
+    CancellationToken cancellationToken,
+    bool isLocal = false)
   {
     state = state.Normalize();
     ValidateState(state);
@@ -69,7 +70,8 @@ public sealed class CollectionHistoryWriter
       .SingleOrDefaultAsync(candidate =>
         candidate.AccountId == accountId &&
         candidate.Kind == state.Kind &&
-        candidate.NetDeckId == state.NetDeckId,
+        candidate.NetDeckId == state.NetDeckId &&
+        candidate.IsLocal == isLocal,
         cancellationToken);
 
     if (grouping == null)
@@ -79,6 +81,7 @@ public sealed class CollectionHistoryWriter
         AccountId = accountId,
         Kind = state.Kind,
         NetDeckId = state.NetDeckId,
+        IsLocal = isLocal,
       };
       ApplyMetadata(grouping, state);
       context.CardGroupings.Add(grouping);
@@ -169,20 +172,23 @@ public sealed class CollectionHistoryWriter
     int accountId,
     CardGroupingState state,
     DateTime observedAt,
-    CancellationToken cancellationToken)
+    CancellationToken cancellationToken,
+    bool isLocal = false)
   {
     await ReconcileAsync(
       context,
       accountId,
       state,
       observedAt,
-      cancellationToken);
+      cancellationToken,
+      isLocal);
 
     long groupingId = await context.CardGroupings
       .Where(grouping =>
         grouping.AccountId == accountId &&
         grouping.Kind == state.Kind &&
-        grouping.NetDeckId == state.NetDeckId)
+        grouping.NetDeckId == state.NetDeckId &&
+        grouping.IsLocal == isLocal)
       .Select(grouping => grouping.Id)
       .SingleAsync(cancellationToken);
 
@@ -203,7 +209,8 @@ public sealed class CollectionHistoryWriter
     var missing = await context.CardGroupings
       .Where(grouping =>
         grouping.AccountId == accountId &&
-        !grouping.IsDeleted)
+        !grouping.IsDeleted &&
+        !grouping.IsLocal)
       .ToListAsync(cancellationToken);
     missing.RemoveAll(grouping =>
       seen.Contains((grouping.Kind, grouping.NetDeckId)));

@@ -108,6 +108,15 @@ public static class DatabaseService
             await EnsureColumnExistsAsync(context, "Matches", "OpponentDeckArchetype", "TEXT", cancellationToken);
             await EnsureColumnExistsAsync(context, "Matches", "OpponentDeckColors", "TEXT", cancellationToken);
           }
+          else if (typeof(T).Name == "CollectionContext")
+          {
+            await EnsureColumnExistsAsync(
+              context,
+              "CardGroupings",
+              "IsLocal",
+              "INTEGER NOT NULL DEFAULT 0",
+              cancellationToken);
+          }
         }
 
         readiness.SetReady();

@@ -27,6 +27,10 @@ public sealed class CardGroupingModel
   public string? Name { get; set; }
   public string? FormatCode { get; set; }
   public bool IsDeleted { get; set; }
+  /// <summary>
+  /// True for Tracker-owned records that have not been reconciled to MTGO.
+  /// </summary>
+  public bool IsLocal { get; set; }
 
   public AccountModel Account { get; set; } = null!;
   public ICollection<CardGroupingRevisionModel> Revisions { get; set; } = [];

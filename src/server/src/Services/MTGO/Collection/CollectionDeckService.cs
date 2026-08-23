@@ -104,6 +104,153 @@ public sealed class CollectionDeckService(
       cancellationToken);
   }
 
+  /// <summary>
+  /// Creates or updates a Tracker-local deck in Collection.db. This does not
+  /// mutate MTGO; a future reconciliation service owns that boundary.
+  /// </summary>
+  public async Task<ImportDeckResponse> ImportLocalDeckAsync(
+    ImportDeckRequest request,
+    CancellationToken cancellationToken = default)
+  {
+    string name = request.Name.Trim();
+    string format = request.Format.Trim();
+    if (name.Length == 0)
+      throw new ArgumentException("A deck name is required.", nameof(request));
+    if (format.Length == 0)
+      throw new ArgumentException("A deck format is required.", nameof(request));
+
+    ImportDeckCardDTO[] cards = request.Mainboard
+      .Concat(request.Sideboard)
+      .Where(card => card.CatalogId > 0 && card.Quantity > 0)
+      .ToArray();
+    if (cards.Length == 0)
+      throw new ArgumentException("At least one deck card is required.", nameof(request));
+
+    await databaseReadiness.WaitAsync(cancellationToken);
+    await clientProvider.WaitForClientReadyAsync(cancellationToken);
+    UserIdentity identity = clientProvider.CurrentUser
+      ?? throw new InvalidOperationException(
+        "Cannot import a local deck without an authoritative user identity.");
+
+    await using var scope = scopeFactory.CreateAsyncScope();
+    var context = scope.ServiceProvider.GetRequiredService<CollectionContext>();
+    await historyWriter.UpsertAccountAsync(context, identity, cancellationToken);
+
+    CardGroupingModel? existing = await context.CardGroupings
+      .Where(grouping =>
+        grouping.AccountId == identity.Id &&
+        grouping.Kind == CardGroupingKind.Deck &&
+        grouping.IsLocal &&
+        !grouping.IsDeleted &&
+        grouping.Name == name &&
+        grouping.FormatCode == format)
+      .OrderByDescending(grouping => grouping.Timestamp)
+      .FirstOrDefaultAsync(cancellationToken);
+
+    bool created = existing == null;
+    int netDeckId = existing?.NetDeckId
+      ?? await AllocateLocalNetDeckIdAsync(context, identity.Id, cancellationToken);
+    DateTime observedAt = DateTime.UtcNow;
+    var items = request.Mainboard
+      .Where(card => card.CatalogId > 0 && card.Quantity > 0)
+      .Select(card => new CardGroupingItemState(
+        card.CatalogId,
+        (int)DeckRegion.MainDeck,
+        0,
+        card.Quantity))
+      .Concat(request.Sideboard
+        .Where(card => card.CatalogId > 0 && card.Quantity > 0)
+        .Select(card => new CardGroupingItemState(
+          card.CatalogId,
+          (int)DeckRegion.Sideboard,
+          0,
+          card.Quantity)))
+      .ToArray();
+    var state = new CardGroupingState(
+      CardGroupingKind.Deck,
+      netDeckId,
+      null,
+      name,
+      format,
+      items);
+
+    long revisionId = await historyWriter.ReconcileAndGetRevisionAsync(
+      context,
+      identity.Id,
+      state,
+      observedAt,
+      cancellationToken,
+      isLocal: true);
+
+    string? archetype = string.IsNullOrWhiteSpace(request.Archetype)
+      ? null
+      : request.Archetype.Trim();
+    var enrichment = await context.DeckRevisionEnrichments.FindAsync(
+      [revisionId],
+      cancellationToken);
+    if (enrichment == null)
+    {
+      context.DeckRevisionEnrichments.Add(new DeckRevisionEnrichmentModel
+      {
+        CardGroupingRevisionId = revisionId,
+        Archetype = archetype,
+        FeaturedCard = request.Mainboard.FirstOrDefault()?.Name,
+      });
+    }
+    else
+    {
+      enrichment.Archetype = archetype;
+      enrichment.FeaturedCard = request.Mainboard.FirstOrDefault()?.Name;
+    }
+
+    foreach (ImportDeckCardDTO card in cards)
+    {
+      s_catalog[card.CatalogId] = new CatalogData(
+        string.IsNullOrWhiteSpace(card.Name)
+          ? card.CatalogId.ToString(CultureInfo.InvariantCulture)
+          : card.Name.Trim(),
+        Math.Max(0, card.Cmc),
+        string.Join(',', card.Colors),
+        card.Types,
+        string.IsNullOrWhiteSpace(card.Rarity) ? "common" : card.Rarity);
+    }
+    await context.SaveChangesAsync(cancellationToken);
+
+    return new ImportDeckResponse
+    {
+      RevisionId = revisionId,
+      NetDeckId = netDeckId,
+      Created = created,
+    };
+  }
+
+  private static async Task<int> AllocateLocalNetDeckIdAsync(
+    CollectionContext context,
+    int accountId,
+    CancellationToken cancellationToken)
+  {
+    int candidate = await context.CardGroupings
+      .Where(grouping => grouping.AccountId == accountId && grouping.IsLocal)
+      .Select(grouping => (int?)grouping.NetDeckId)
+      .MinAsync(cancellationToken) is int minimum
+        ? minimum - 1
+        : int.MaxValue;
+
+    while (candidate > 0 && await context.CardGroupings.AnyAsync(
+      grouping =>
+        grouping.AccountId == accountId &&
+        grouping.Kind == CardGroupingKind.Deck &&
+        grouping.NetDeckId == candidate,
+      cancellationToken))
+    {
+      candidate--;
+    }
+
+    return candidate > 0
+      ? candidate
+      : throw new InvalidOperationException("No local deck identifiers are available.");
+  }
+
   public async Task<IReadOnlyList<DeckRevisionView>> GetCurrentDecksAsync(
     CancellationToken cancellationToken = default)
   {
@@ -739,6 +886,13 @@ public sealed class CollectionDeckService(
 
       try
       {
+        if (grouping.IsLocal)
+        {
+          foreach (int catalogId in state.Items.Select(item => item.CatalogId).Distinct())
+            ResolveCatalogData(catalogId);
+          continue;
+        }
+
         Deck deck = CollectionManager.GetDeck(grouping.NetDeckId);
         IList<IDeckCatalogData> cards =
           await deck.SerializeItemsAsAsync<IDeckCatalogData>();
