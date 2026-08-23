@@ -24,6 +24,7 @@ import Layout from "@/layout/LayoutContent";
 const Events = React.lazy(() => import('@/pages/events'))
 const EventDetails = React.lazy(() => import('@/pages/event-details'))
 const Home = React.lazy(() => import('@/pages/home'))
+const Metagame = React.lazy(() => import('@/pages/metagame-decks'))
 const SettingsPage = React.lazy(() => import('@/pages/settings'))
 const ApiDocs = React.lazy(() => import('@/pages/api-docs'))
 const Diagnostics = React.lazy(() => import('@/pages/diagnostics'))
@@ -64,6 +65,12 @@ export const routes: RouteEntry[] = [
         type: NavType.Primary,
         index: true,
         element: <Home />
+      },
+      {
+        path: "/metagame",
+        name: "Metagame",
+        type: NavType.Secondary,
+        element: <Metagame />
       },
       {
         path: "/collection",
