@@ -748,6 +748,163 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/Decks/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Import or update a Tracker-local deck in SQLite. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": ImportDeckRequest;
+                    "text/json": ImportDeckRequest;
+                    "application/*+json": ImportDeckRequest;
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": ImportDeckResponse;
+                        "application/json": ImportDeckResponse;
+                        "text/json": ImportDeckResponse;
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": ImportDeckResponse;
+                        "application/json": ImportDeckResponse;
+                        "text/json": ImportDeckResponse;
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": ProblemDetails;
+                        "application/json": ProblemDetails;
+                        "text/json": ProblemDetails;
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": ProblemDetails;
+                        "application/json": ProblemDetails;
+                        "text/json": ProblemDetails;
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/Decks/import-and-open": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Imports a Tracker-local deck received through the Linux/desktop
+         *     `videre://` URL handler, then opens it in the deck editor.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": ImportDeckRequest;
+                    "text/json": ImportDeckRequest;
+                    "application/*+json": ImportDeckRequest;
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": ImportDeckResponse;
+                        "application/json": ImportDeckResponse;
+                        "text/json": ImportDeckResponse;
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": ImportDeckResponse;
+                        "application/json": ImportDeckResponse;
+                        "text/json": ImportDeckResponse;
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": ProblemDetails;
+                        "application/json": ProblemDetails;
+                        "text/json": ProblemDetails;
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": ProblemDetails;
+                        "application/json": ProblemDetails;
+                        "text/json": ProblemDetails;
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/Decks/identifiers": {
         parameters: {
             query?: never;
@@ -3104,6 +3261,32 @@ export interface components {
             name: string | null;
             format: string | null;
         };
+        "Tracker.Controllers.Models.Decks.ImportDeckCardDTO": {
+            /** Format: int32 */
+            catalogId: number;
+            name: string | null;
+            /** Format: int32 */
+            quantity: number;
+            /** Format: int32 */
+            cmc?: number;
+            colors?: string[] | null;
+            types?: string[] | null;
+            rarity?: string | null;
+        };
+        "Tracker.Controllers.Models.Decks.ImportDeckRequest": {
+            name: string | null;
+            format: string | null;
+            archetype?: string | null;
+            mainboard?: ImportDeckCardDTO[] | null;
+            sideboard?: ImportDeckCardDTO[] | null;
+        };
+        "Tracker.Controllers.Models.Decks.ImportDeckResponse": {
+            /** Format: int64 */
+            revisionId: number;
+            /** Format: int32 */
+            netDeckId: number;
+            created: boolean;
+        };
         /** @description Card entry with sortable metadata (CMC, Colors, Types) */
         "Tracker.Controllers.Models.Decks.SortableCardEntry": {
             /** Format: int32 */
@@ -3443,6 +3626,10 @@ export interface components {
             catalogId?: number;
             /** Format: int32 */
             quantity?: number;
+            name?: string | null;
+            setCode?: string | null;
+            rarity?: string | null;
+            objectType?: string | null;
         };
         "Tracker.Controllers.TradeHistoryMessageDTO": {
             /** Format: int64 */
@@ -3465,9 +3652,11 @@ export interface components {
             /** Format: int32 */
             escrowId?: number | null;
             kind?: TradeEscrowKind;
+            productName?: string | null;
             /** Format: int32 */
             partnerId?: number | null;
             partnerName?: string | null;
+            partnerAvatar?: TradePartnerAvatarDTO;
             /** Format: date-time */
             startedAt?: string;
             /** Format: date-time */
@@ -3485,6 +3674,12 @@ export interface components {
             incomingQuantity?: number;
             /** Format: int32 */
             incomingCatalogCount?: number;
+        };
+        "Tracker.Controllers.TradePartnerAvatarDTO": {
+            /** Format: int32 */
+            productCatalogId?: number;
+            productName?: string | null;
+            productImageUrl?: string | null;
         };
         "Tracker.Controllers.TradesController.TradeMarketplaceUpdateDTO": {
             /** Format: date-time */
@@ -3638,6 +3833,9 @@ export type TrackerControllersModelsDecksDeckHistoryChangeView = DeckHistoryChan
 export type TrackerControllersModelsDecksDeckHistoryRevisionView = DeckHistoryRevisionView;
 export type TrackerControllersModelsDecksDeckHistoryView = DeckHistoryView;
 export type TrackerControllersModelsDecksDeckIdentifierDto = DeckIdentifierDTO;
+export type TrackerControllersModelsDecksImportDeckCardDto = ImportDeckCardDTO;
+export type TrackerControllersModelsDecksImportDeckRequest = ImportDeckRequest;
+export type TrackerControllersModelsDecksImportDeckResponse = ImportDeckResponse;
 export type TrackerControllersModelsDecksSortableCardEntry = SortableCardEntry;
 export type TrackerControllersModelsEventsIEventStructure = IEventStructure;
 export type TrackerControllersModelsEventsIStandingResult = IStandingResult;
@@ -3665,6 +3863,7 @@ export type TrackerControllersTradeHistoryItemDto = TradeHistoryItemDTO;
 export type TrackerControllersTradeHistoryMessageDto = TradeHistoryMessageDTO;
 export type TrackerControllersTradeHistoryPageDto = TradeHistoryPageDTO;
 export type TrackerControllersTradeHistorySummaryDto = TradeHistorySummaryDTO;
+export type TrackerControllersTradePartnerAvatarDto = TradePartnerAvatarDTO;
 export type TrackerControllersTradesControllerTradeMarketplaceUpdateDto = TradeMarketplaceUpdateDTO;
 export type TrackerControllersTradesControllerTradePostDto = TradePostDTO;
 export type TrackerControllersTradesControllerTradePostsPageDto = TradePostsPageDTO;
@@ -3727,6 +3926,9 @@ export type DeckHistoryChangeView = components['schemas']['Tracker.Controllers.M
 export type DeckHistoryRevisionView = components['schemas']['Tracker.Controllers.Models.Decks.DeckHistoryRevisionView'];
 export type DeckHistoryView = components['schemas']['Tracker.Controllers.Models.Decks.DeckHistoryView'];
 export type DeckIdentifierDTO = components['schemas']['Tracker.Controllers.Models.Decks.DeckIdentifierDTO'];
+export type ImportDeckCardDTO = components['schemas']['Tracker.Controllers.Models.Decks.ImportDeckCardDTO'];
+export type ImportDeckRequest = components['schemas']['Tracker.Controllers.Models.Decks.ImportDeckRequest'];
+export type ImportDeckResponse = components['schemas']['Tracker.Controllers.Models.Decks.ImportDeckResponse'];
 export type SortableCardEntry = components['schemas']['Tracker.Controllers.Models.Decks.SortableCardEntry'];
 export type IEventStructure = components['schemas']['Tracker.Controllers.Models.Events.IEventStructure'];
 export type IStandingResult = components['schemas']['Tracker.Controllers.Models.Events.IStandingResult'];
@@ -3754,6 +3956,7 @@ export type TradeHistoryItemDTO = components['schemas']['Tracker.Controllers.Tra
 export type TradeHistoryMessageDTO = components['schemas']['Tracker.Controllers.TradeHistoryMessageDTO'];
 export type TradeHistoryPageDTO = components['schemas']['Tracker.Controllers.TradeHistoryPageDTO'];
 export type TradeHistorySummaryDTO = components['schemas']['Tracker.Controllers.TradeHistorySummaryDTO'];
+export type TradePartnerAvatarDTO = components['schemas']['Tracker.Controllers.TradePartnerAvatarDTO'];
 export type TradeMarketplaceUpdateDTO = components['schemas']['Tracker.Controllers.TradesController.TradeMarketplaceUpdateDTO'];
 export type TradePostDTO = components['schemas']['Tracker.Controllers.TradesController.TradePostDTO'];
 export type TradePostsPageDTO = components['schemas']['Tracker.Controllers.TradesController.TradePostsPageDTO'];
