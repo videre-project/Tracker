@@ -149,6 +149,13 @@ public sealed class InstallerWizardForm : Form
     };
     _headerAnimationTimer.Start();
 
+    // Set the form's icon to the application icon
+    string processPath = Environment.ProcessPath;
+    if (!string.IsNullOrEmpty(processPath) && File.Exists(processPath))
+    {
+        this.Icon = System.Drawing.Icon.ExtractAssociatedIcon(processPath);
+    }
+
     _eulaScrollAnimationTimer = new Timer { Interval = 14 };
     _eulaScrollAnimationTimer.Tick += (_, _) => ProcessPendingEulaScroll();
 
