@@ -1,7 +1,7 @@
 {
   "name": "tracker",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.0.1",
   "scripts": {
     "dev": "dotnet restore --no-cache --force-evaluate && dotnet watch run --project src/server --launch-profile https --no-restore --configuration Debug",
     "build": "pnpm run build:client && pnpm run build:server",
