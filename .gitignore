@@ -239,6 +239,9 @@ ClientBin/
 *.dbproj.schemaview
 *.jfm
 *.pfx
+# ... but keep the committed, known-good loopback certificate used by the
+# Docker/Wine image (a throwaway self-signed localhost dev cert).
+!docker/certs/localhost.pfx
 *.publishsettings
 orleans.codegen.cs
 

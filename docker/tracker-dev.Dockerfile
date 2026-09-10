@@ -16,7 +16,6 @@ RUN apt-get update \
       libgl1-mesa-dri \
       curl \
       gnupg \
-      socat \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Node.js 22

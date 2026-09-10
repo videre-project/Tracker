@@ -1,8 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
-# Development mode: run the .NET host alongside the external Vite service.
-# This keeps React HMR in the separate vite-dev container.
+# Development mode: run the .NET host alongside the host's Vite dev server.
+# Start Vite on the host first (`pnpm dev:client`); React HMR runs there.
 
 # Run in CI mode to avoid TTY issues with pnpm
 export CI=true
@@ -62,13 +62,7 @@ fi
 echo "Building server..."
 cd /workspace/src/server && dotnet restore --force-evaluate && dotnet build -c Debug
 
-# Start socat proxy to forward localhost:5279 to vite-dev:5279
-# This allows WebView2 in Wine to access the Vite dev server via localhost:5279
-echo "Starting socat proxy for Vite dev server..."
-socat TCP-LISTEN:5279,fork,reuseaddr TCP:vite-dev:5279 &
-socat_pid=$!
-
-echo "Launching Videre Tracker with SpaProxy (proxies to vite-dev:5279)..."
+echo "Launching Videre Tracker with SpaProxy (proxies to the host's Vite dev server)"
 cd /workspace/src/server
 export ASPNETCORE_ENVIRONMENT=Development
 export DOTNET_WATCH=1
@@ -83,7 +77,5 @@ wait "$dotnet_pid"
 exit_code=$?
 set -e
 
-# Clean up socat
-kill "$socat_pid" 2>/dev/null || true
 wineserver -w
 exit "$exit_code"

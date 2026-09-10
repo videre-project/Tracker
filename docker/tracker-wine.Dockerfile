@@ -45,19 +45,22 @@ COPY --chmod=755 docker/run-tracker-wine.sh /usr/local/bin/run-tracker-wine
 # Kestrel needs an explicit certificate because Wine does not provide the
 # ASP.NET Core development certificate that UseHttps() normally discovers.
 # This certificate is only used by Tracker's loopback server.
-RUN mkdir -p /opt/tracker \
-    && openssl req -x509 -newkey rsa:2048 -sha256 -nodes -days 3650 \
-      -subj "/CN=localhost" \
-      -addext "subjectAltName=DNS:localhost,IP:127.0.0.1,IP:::1" \
-      -keyout /tmp/tracker-localhost.key \
-      -out /tmp/tracker-localhost.crt \
-    && openssl pkcs12 -export \
-      -out /opt/tracker/localhost.pfx \
-      -inkey /tmp/tracker-localhost.key \
-      -in /tmp/tracker-localhost.crt \
-      -passout pass:tracker-localhost \
-    && chmod 0444 /opt/tracker/localhost.pfx \
-    && rm /tmp/tracker-localhost.key /tmp/tracker-localhost.crt
+#
+# We COPY a fixed, committed, known-good PFX instead of generating one at
+# build time. A freshly generated PFX (Linux OpenSSL) yields a private key
+# that Wine's Schannel/GnuTLS provider cannot sign with, which surfaces as
+# "GnuTLS error: Public key signing has failed" and breaks WebView2's
+# navigation to https://localhost:7101. The committed PFX is a throwaway
+# self-signed localhost dev cert (its password is already hardcoded in the
+# app and this Dockerfile), so committing it is safe and makes builds
+# deterministic.
+RUN mkdir -p /opt/tracker
+COPY --chmod=0444 docker/certs/localhost.pfx /opt/tracker/localhost.pfx
 USER wine
+
+# Pre-create the Tracker user-data directory so Docker seeds the
+# tracker-user-data named volume with wine-owned ownership (matching
+# how the Wine prefix at /home/wine/.wine is seeded into tracker-wine-data).
+RUN mkdir -p "/home/wine/.local/share/Videre Tracker"
 
 CMD ["run-tracker-wine"]
