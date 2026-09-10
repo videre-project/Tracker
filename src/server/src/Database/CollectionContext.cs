@@ -57,6 +57,9 @@ public sealed class CollectionContext(DbContextOptions<CollectionContext> option
           "CK_CardGroupings_CollectionMetadata",
           "Kind <> 0 OR " +
           "(Timestamp IS NULL AND Name IS NULL AND FormatCode IS NULL)");
+        table.HasCheckConstraint(
+          "CK_CardGroupings_PendingOperation",
+          "PendingOperation IN (0, 1, 2)");
       });
       entity.HasKey(grouping => grouping.Id);
       var groupingId = entity.Property(grouping => grouping.Id)
@@ -71,6 +74,8 @@ public sealed class CollectionContext(DbContextOptions<CollectionContext> option
             : null);
       entity.Property(grouping => grouping.IsLocal)
         .HasDefaultValue(false);
+      entity.Property(grouping => grouping.PendingOperation)
+        .HasDefaultValue(DeckSyncOperation.None);
       entity.HasIndex(grouping => new
       {
         grouping.AccountId,

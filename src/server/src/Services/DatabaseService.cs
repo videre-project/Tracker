@@ -116,6 +116,18 @@ public static class DatabaseService
               "IsLocal",
               "INTEGER NOT NULL DEFAULT 0",
               cancellationToken);
+            await EnsureColumnExistsAsync(
+              context,
+              "CardGroupings",
+              "PendingOperation",
+              "INTEGER NOT NULL DEFAULT 0",
+              cancellationToken);
+            await EnsureColumnExistsAsync(
+              context,
+              "CardGroupings",
+              "SyncError",
+              "TEXT",
+              cancellationToken);
           }
         }
 

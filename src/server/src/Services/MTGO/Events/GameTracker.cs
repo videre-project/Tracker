@@ -14,7 +14,8 @@ using System.Threading.Tasks;
 using MTGOSDK.API.Chat;
 using MTGOSDK.API.Play.Games;
 using MTGOSDK.API.Play.Games.Processors;
-using MTGOSDK.API.Play.Games.Processors.EventArgs;
+using MTGOSDK.API.Play.Games.Processors.Events;
+using MTGOSDK.API.Play.Games.Processors.Snapshots;
 using MTGOSDK.API.Play.Games.Processors.Partials;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection.Serialization;
@@ -167,7 +168,7 @@ public class GameTracker : IDisposable
     // processing queued hooks. Before this call, hooks are buffered but
     // not drained, ensuring no snapshots are processed with an incomplete
     // processor set.
-    game.ReadyProcessor();
+    GameProcessor.ForGame(game).Ready();
 
     Log.Debug("Game {Id} GameProcessor events configured", game.Id);
   }
@@ -186,7 +187,7 @@ public class GameTracker : IDisposable
     // (including PromptProcessor) have fired and their data is buffered
     // before we flush. Without this, ForceFlush can race ahead of the
     // 25ms drain-loop holdback and flush an empty or incomplete snapshot.
-    _game.WaitForPendingProcessing(TimeSpan.FromMilliseconds(200));
+    GameProcessor.ForGame(_game).WaitForPendingProcessing(TimeSpan.FromMilliseconds(200));
 
     using var signal = new ManualResetEventSlim(false);
     EnqueueFlush();
@@ -203,7 +204,7 @@ public class GameTracker : IDisposable
     // Drain any remaining hooks before shutting down event handlers.
     // OnGameStatusChanged already waits up to 30s, but Dispose() may
     // also be called directly (e.g. service shutdown).
-    _game.WaitForPendingProcessing(TimeSpan.FromSeconds(30));
+    GameProcessor.ForGame(_game).WaitForPendingProcessing(TimeSpan.FromSeconds(30));
 
     _disposed = true;
 
@@ -812,7 +813,7 @@ public class GameTracker : IDisposable
   /// </summary>
   private static string? SerializePromptOptions(GamePrompt prompt)
   {
-    IDictionary<ActionType, IList<GameAction>> options;
+    IReadOnlyDictionary<ActionType, IReadOnlyList<IPromptOption>> options;
     try
     {
       options = prompt.Options;
@@ -828,10 +829,10 @@ public class GameTracker : IDisposable
     {
       foreach (var action in kvp.Value)
       {
-        if (action == null) continue;
+        if (action is not GameAction gameAction) continue;
         try
         {
-          jsonObjects.Add(action.ToJSON());
+          jsonObjects.Add(gameAction.ToJSON());
         }
         catch (Exception ex)
         {
@@ -860,7 +861,7 @@ public class GameTracker : IDisposable
         // Wait for the drain loop to finish processing all remaining
         // hooks. This replaces the old fixed 5-second delay — the drain
         // may take much longer if there's a large hook buffer at game end.
-        _game.WaitForPendingProcessing(TimeSpan.FromSeconds(30));
+        GameProcessor.ForGame(_game).WaitForPendingProcessing(TimeSpan.FromSeconds(30));
 
         // Brief grace period for OnGameResultsChanged to fire.
         // Results are computed before the status change in MTGO, but

@@ -38,6 +38,7 @@ public static class CollectionAPIService
     builder.Services.AddSingleton<ICollectionStateFeed>(provider =>
       provider.GetRequiredService<CollectionStateFeed>());
     builder.Services.AddHostedService<CollectionService>();
+    builder.Services.AddHostedService<DeckSyncService>();
     return builder;
   }
 

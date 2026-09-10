@@ -58,7 +58,9 @@ public sealed class CollectionHistoryWriter
     CardGroupingState state,
     DateTime observedAt,
     CancellationToken cancellationToken,
-    bool isLocal = false)
+    bool isLocal = false,
+    bool allowPendingWrite = false,
+    long? expectedRevisionId = null)
   {
     state = state.Normalize();
     ValidateState(state);
@@ -73,6 +75,23 @@ public sealed class CollectionHistoryWriter
         candidate.NetDeckId == state.NetDeckId &&
         candidate.IsLocal == isLocal,
         cancellationToken);
+
+    if (expectedRevisionId.HasValue)
+    {
+      var intervening = grouping == null ? [] : await context.CardGroupingRevisions
+        .Where(revision => revision.CardGroupingId == grouping.Id && revision.Id > expectedRevisionId.Value)
+        .OrderBy(revision => revision.Id)
+        .ToListAsync(cancellationToken);
+      if (grouping == null || intervening.Any(revision => !CardGroupingRevisionCodec.IsMetadataOnly(revision)))
+        throw new InvalidOperationException(
+          "The deck changed after this revision was loaded. Reload it and try again.");
+      // Preserve acknowledgements such as MTGO's canonical format code while
+      // applying the card edit against its original content revision.
+      DateTime? editedAt = state.Timestamp;
+      foreach (var revision in intervening)
+        state = CardGroupingRevisionCodec.ApplyDelta(state, revision.Payload!);
+      state = state with { Timestamp = editedAt };
+    }
 
     if (grouping == null)
     {
@@ -97,6 +116,16 @@ public sealed class CollectionHistoryWriter
       await context.SaveChangesAsync(cancellationToken);
       await transaction.CommitAsync(cancellationToken);
       return true;
+    }
+
+    // A controller-authored revision is the desired state until the outbound
+    // deck reconciler applies it. Do not let an older MTGO snapshot overwrite
+    // that pending edit while the operation is queued.
+    if (!isLocal && !allowPendingWrite &&
+        grouping.PendingOperation != DeckSyncOperation.None)
+    {
+      await transaction.RollbackAsync(cancellationToken);
+      return false;
     }
 
     var revisions = new List<CardGroupingRevisionModel>();
@@ -173,7 +202,9 @@ public sealed class CollectionHistoryWriter
     CardGroupingState state,
     DateTime observedAt,
     CancellationToken cancellationToken,
-    bool isLocal = false)
+    bool isLocal = false,
+    bool allowPendingWrite = false,
+    long? expectedRevisionId = null)
   {
     await ReconcileAsync(
       context,
@@ -181,7 +212,9 @@ public sealed class CollectionHistoryWriter
       state,
       observedAt,
       cancellationToken,
-      isLocal);
+      isLocal,
+      allowPendingWrite,
+      expectedRevisionId);
 
     long groupingId = await context.CardGroupings
       .Where(grouping =>

@@ -17,6 +17,13 @@ public enum CardGroupingKind
   Wishlist = 3,
 }
 
+public enum DeckSyncOperation
+{
+  None = 0,
+  Upsert = 1,
+  Delete = 2,
+}
+
 public sealed class CardGroupingModel
 {
   public long Id { get; set; }
@@ -31,6 +38,14 @@ public sealed class CardGroupingModel
   /// True for Tracker-owned records that have not been reconciled to MTGO.
   /// </summary>
   public bool IsLocal { get; set; }
+  /// <summary>
+  /// The pending outbound operation that must be applied to MTGO.
+  /// </summary>
+  public DeckSyncOperation PendingOperation { get; set; }
+  /// <summary>
+  /// The most recent outbound reconciliation error, if any.
+  /// </summary>
+  public string? SyncError { get; set; }
 
   public AccountModel Account { get; set; } = null!;
   public ICollection<CardGroupingRevisionModel> Revisions { get; set; } = [];

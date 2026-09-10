@@ -2842,6 +2842,8 @@ export interface components {
         "MTGOSDK.API.Collection.Card": {
             /** Format: int32 */
             readonly id?: number;
+            /** Format: int32 */
+            readonly ctn?: number;
             readonly name?: string | null;
             readonly description?: string | null;
             readonly isOpenable?: boolean;

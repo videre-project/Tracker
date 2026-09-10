@@ -18,6 +18,14 @@ public static class CardGroupingRevisionCodec
 {
   public const byte PayloadVersion = 1;
 
+  public static bool IsMetadataOnly(CardGroupingRevisionModel revision)
+  {
+    if (revision.RevisionType != CardGroupingRevisionType.Delta || revision.Payload == null)
+      return false;
+    CardGroupingDeltaPayload delta = DeserializeDelta(revision.Payload);
+    return delta.ItemChanges.Length == 0;
+  }
+
   private static readonly MessagePackSerializerOptions s_options =
     MessagePackSerializerOptions.Standard.WithSecurity(
       MessagePackSecurity.UntrustedData);

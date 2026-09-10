@@ -3,11 +3,26 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
 
 namespace Tracker.Services.MTGO;
+
+public sealed record DeckSyncCard(
+  int CatalogId,
+  int Region,
+  uint Annotation,
+  int Quantity);
+
+public sealed record DeckSyncState(
+  int NetDeckId,
+  string Name,
+  string? FormatCode,
+  IReadOnlyList<DeckSyncCard> Items);
+
+public sealed record DeckSyncResult(int NetDeckId, string Name);
 
 /// <summary>
 /// Dispatches Tracker-owned commands that may have an interactive MTGO effect.
@@ -22,15 +37,16 @@ public interface IClientCommandGateway
   Task OpenEventAsync(
     int eventId,
     CancellationToken cancellationToken = default);
-}
 
-/// <summary>
-/// Safe default for commands that are not implemented by the current client.
-/// </summary>
-public sealed class NoOpClientCommandGateway : IClientCommandGateway
-{
-  public Task OpenEventAsync(
-    int eventId,
-    CancellationToken cancellationToken = default) =>
-      Task.CompletedTask;
+  Task<DeckSyncResult> ImportDeckAsync(
+    DeckSyncState deck,
+    CancellationToken cancellationToken = default);
+
+  Task UpdateDeckAsync(
+    DeckSyncState deck,
+    CancellationToken cancellationToken = default);
+
+  Task DeleteDeckAsync(
+    int netDeckId,
+    CancellationToken cancellationToken = default);
 }

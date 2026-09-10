@@ -21,6 +21,7 @@ using MTGOSDK.API.Play.Games;
 using MTGOSDK.API.Play.Leagues;
 using MTGOSDK.API.Play.Games.Processors;
 using MTGOSDK.API.Play.Games.Processors.Partials;
+using MTGOSDK.API.Play.Games.Processors.Snapshots;
 using MTGOSDK.API.Play.Tournaments;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection;
