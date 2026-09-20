@@ -1,4 +1,18 @@
 # Development Dockerfile for Tracker with Vite HMR and .NET SpaProxy
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS launcher-build
+
+WORKDIR /src
+COPY Directory.Packages.props ./
+COPY NuGet.config ./
+COPY --from=mtgosdk-packages / /MTGOSDK/packages/
+COPY docker/launcher/ ./docker/launcher/
+
+RUN dotnet publish docker/launcher/launcher.csproj \
+    -c Release \
+    -r win-x64 \
+    --self-contained true \
+    -o /out
+
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS dotnet-sdk
 
 FROM videreproject/mtgosdk:wayland AS tracker-dev-base
@@ -82,6 +96,8 @@ RUN curl --fail --location --retry 3 \
     && rm /tmp/MicrosoftEdgeWebView2RuntimeInstallerX64.exe
 
 USER root
+COPY --from=launcher-build /out /opt/mtgo-launcher
+COPY --chmod=755 docker/start-mtgo.sh /usr/local/bin/start-mtgo
 COPY --chmod=755 docker/run-tracker-dev.sh /usr/local/bin/run-tracker-dev
 
 # Kestrel needs an explicit certificate because Wine does not provide the

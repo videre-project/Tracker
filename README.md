@@ -70,38 +70,66 @@ pnpm run build
 
 ## Usage
 
-### Run MTGO with Docker
+### Run Tracker with MTGO under Wine
 
-On a Wayland desktop, start MTGO with:
+On a Wayland desktop, keep the `MTGOSDK` and `platform` checkouts beside Tracker.
+
+Create a gitignored `.env` file in Tracker's root with your MTGO `USERNAME` and
+`PASSWORD` for the launcher's automatic login.
+
+Install the client dependencies, then build and start the development container:
 
 ```sh
-docker compose up mtgo-wayland
+pnpm -C src/client install
+docker compose build tracker-dev
+docker compose up tracker-dev
 ```
 
-The `mtgo-wayland` service uses the [`videreproject/mtgo:wayland`](https://hub.docker.com/r/videreproject/mtgo) image. On its first run, it downloads and installs MTGO, then stores the Wine prefix and bootstrapper in the `mtgo-wine-data` volume for later runs.
+The `tracker-dev` service builds on `videreproject/mtgosdk:wayland` and installs
+the Visual C++ runtime and WebView2. Its SDK launcher installs and starts MTGO;
+Tracker attaches to that process in the same container and Wine prefix. The
+launcher reads login credentials from the repository's `.env` file. The image
+build uses SDK packages from `../MTGOSDK/packages`, matching Tracker's local
+NuGet source. Client development uses the shared UI source from
+`../platform/packages/ui`. Vite and TypeScript share the source mappings in
+`src/client/tsconfig.paths.json`; Docker mounts the same checkout at `/platform`.
+UI edits are picked up directly, without rebuilding the UI package or copying
+declarations into `node_modules`. Run `pnpm -C src/client build` to type-check
+and build Tracker against that source. Install dependencies in the `platform`
+checkout too (`pnpm -C ../platform install`).
 
 To follow the service logs or stop the container, use:
 
 ```sh
-docker compose logs -f mtgo-wayland
+docker compose logs -f tracker-dev
 docker compose down
 ```
 
-The service mounts the Wayland socket from the current desktop session. Docker reads its directory from `XDG_RUNTIME_DIR` and uses `wayland-0` when `WAYLAND_DISPLAY` is unset, so start it from a session where `XDG_RUNTIME_DIR` is set. It also mounts the host X11 socket for XWayland fallback and disables WPF hardware acceleration to avoid rendering MTGO windows black under Wine.
+The service mounts the current Wayland socket and the host X11 socket for
+XWayland fallback. Start it from a desktop session with `XDG_RUNTIME_DIR` set;
+`WAYLAND_DISPLAY` defaults to `wayland-0`. WPF uses software rendering under Wine.
+The `tracker-wine-data` volume persists the Wine prefix and Tracker's user data.
+Vite runs in the container with client hot reload; server changes require a
+rebuild and restart. Set `TRACKER_SKIP_MTGO=1` to skip MTGO startup when needed.
+Tracker requires MTGO in its own Wine session to attach successfully.
+Closing Tracker leaves MTGO running until its window is closed too. Once both
+applications exit, the container stops Vite and the remaining Wine services.
+`docker compose down` stops the whole session.
 
-### Run Tracker with MTGO under Wine
+### Test website imports on Linux
 
-The `tracker-wayland` service builds on `videreproject/mtgosdk:wayland`. Its image installs both the Visual C++ 2015–2022 runtime and Microsoft's x64 Evergreen WebView2 Runtime for the Tracker's embedded web UI.
-
-To run the Tracker through wine, first build the Windows executable on the host, then build and start the service:
+With Tracker running in the development container, register the website's
+`videre://` links on the host:
 
 ```sh
-pnpm run publish
-docker compose build tracker-wayland
-docker compose up tracker-wayland
+./docker/url-handler/install-videre-url-handler.sh
 ```
 
-The service starts both MTGO and the Tracker in the same container and Wine prefix so MTGOSDK can discover the MTGO process. It also disables Tracker's installer, starts WebView2 with GPU acceleration disabled, and generates a loopback certificate for Tracker's HTTPS server. Tracker data persists in the `tracker-wine-data` volume.
+The helper requires Python 3, curl, and the `xdg-utils` and `desktop-file-utils`
+utilities. Registration uses the current checkout path; rerun it if you move
+the checkout. The website's import button sends the deck to Tracker at
+`https://127.0.0.1:7101` and opens its editor. Set `TRACKER_API_URL` in the desktop
+session environment to override that address.
 
 ### Development mode
 
@@ -113,18 +141,18 @@ pnpm run dev
 
 This restores server dependencies, then runs the server in debug mode.
 
-For the Docker/Wine development workflow, start the repository-local package registry from the [`Videre Platform`](https://github.com/videre-project/platform) repository, then launch Tracker's development services:
+For the Docker/Wine development workflow, start the repository-local package registry from the [`Videre Platform`](https://github.com/videre-project/platform) repository, then:
 
 ```sh
 # In Videre Platform
 pnpm registry:start
 
 # In Tracker
-docker compose build vite-dev tracker-dev
+docker compose build tracker-dev
 docker compose up tracker-dev
 ```
 
-The Vite service keeps dependencies in the `vite-node-modules` volume while bind-mounting the client source for HMR. It resolves `@videreproject/*` packages through the host registry; set `VIDERE_NPM_REGISTRY` to override its default `http://host.docker.internal:4873/` address.
+The `tracker-dev` container starts MTGO, Vite, and Tracker together. Client HMR uses the repository `node_modules` bind-mounted at `/workspace`. To keep Vite on the host instead, run `pnpm dev:client` and set `TRACKER_UI_URL=http://host.docker.internal:5279`.
 
 Once started, the Tracker will:
 

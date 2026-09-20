@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["./src/*"],
+      "@videreproject/ui": [
+        "../../../platform/packages/ui/src/index.ts",
+        "./node_modules/@videreproject/ui/dist/index.d.ts"
+      ],
+      "@videreproject/ui/dashboard-visuals": [
+        "../../../platform/packages/ui/src/components/dashboard/dashboard-visuals.tsx",
+        "./node_modules/@videreproject/ui/dist/components/dashboard/dashboard-visuals.d.ts"
+      ],
+      "@videreproject/ui/fixtures": [
+        "../../../platform/packages/ui/src/fixtures/index.ts",
+        "./node_modules/@videreproject/ui/dist/fixtures/index.d.ts"
+      ],
+      "@videreproject/ui/tooltip": [
+        "../../../platform/packages/ui/src/primitives/Tooltip.tsx",
+        "./node_modules/@videreproject/ui/dist/primitives/Tooltip.d.ts"
+      ],
+      "@videreproject/ui/tailwind-preset": [
+        "../../../platform/packages/ui/tailwind.preset.ts",
+        "./node_modules/@videreproject/ui/dist/tailwind-preset.d.ts"
+      ],
+      "@videreproject/ui/theme.css": [
+        "../../../platform/packages/ui/src/theme.css",
+        "./node_modules/@videreproject/ui/dist/theme.css"
+      ]
+    }
+  }
+}

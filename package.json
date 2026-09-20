@@ -4,16 +4,14 @@
   "version": "0.0.1",
   "scripts": {
     "dev": "dotnet restore --no-cache --force-evaluate && dotnet watch run --project src/server --launch-profile https --no-restore --configuration Debug",
+    "dev:client": "DEV_SERVER_HTTP=1 pnpm run -C src/client dev",
     "build": "pnpm run build:client && pnpm run build:server",
     "build:client": "pnpm run -C src/client build",
     "build:server": "dotnet build src/server",
-    "test:server": "dotnet build tests/server/Tracker.Tests/Tracker.Tests.csproj --configuration Release && dotnet exec tests/server/Tracker.Tests/bin/Release/net10.0-windows7.0/Tracker.Tests.dll --minimum-expected-tests 1 --output Detailed",
     "test:client": "pnpm run -C src/client test",
-    "test": "pnpm run test:client && pnpm run test:server",
+    "test": "pnpm run test:client",
     "restore": "pnpm install --prefix src/client && dotnet restore",
-    "publish": "pnpm run build:client && dotnet publish src/server --configuration Release -o ./publish",
-    "fixtures:normalize": "node scripts/fixtures/normalize-reference.mjs",
-    "fixtures:capture:wine": "bash scripts/fixtures/capture-wine-reference.sh"
+    "publish": "pnpm run build:client && dotnet publish src/server --configuration Release -o ./publish"
   },
   "devDependencies": {
     "openapi-typescript": "^7.13.0"

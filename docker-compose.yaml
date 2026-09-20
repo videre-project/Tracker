@@ -1,94 +1,53 @@
 services:
-  mtgo-wayland:
-    image: videreproject/mtgo:wayland
-    init: true
-    stdin_open: true
-    tty: true
-    devices:
-      - /dev/dri:/dev/dri
-    environment:
-      DISPLAY: ${DISPLAY:-}
-      WAYLAND_DISPLAY: ${WAYLAND_DISPLAY:-wayland-0}
-      XDG_RUNTIME_DIR: /tmp/runtime-dir
-      WINEDEBUG: -all
-    command:
-      - /bin/bash
-      - /workspace/docker/run-mtgo-wayland.sh
-    volumes:
-      - .:/workspace
-      - ../MTGOSDK/packages:/MTGOSDK/packages:ro
-      - mtgo-wine-data:/home/wine/.wine
-      - ${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR must be set}/${WAYLAND_DISPLAY:-wayland-0}:/tmp/runtime-dir/${WAYLAND_DISPLAY:-wayland-0}
-      - /tmp/.X11-unix:/tmp/.X11-unix
-
-  tracker-wayland:
-    build:
-      context: .
-      dockerfile: docker/tracker-wine.Dockerfile
-    image: videreproject/tracker:wayland
-    init: true
-    stdin_open: true
-    tty: true
-    devices:
-      - /dev/dri:/dev/dri
-    environment:
-      DISPLAY: ${DISPLAY:-}
-      WAYLAND_DISPLAY: ${WAYLAND_DISPLAY:-wayland-0}
-      XDG_RUNTIME_DIR: /tmp/runtime-dir
-      WINEDEBUG: -all
-      TRACKER_DISABLE_INSTALLER: "1"
-      TRACKER_WINE_COMPAT: "1"
-      TRACKER_CONTAINER: "1"
-      TRACKER_SKIP_MTGO: ${TRACKER_SKIP_MTGO:-0}
-      APP_THEME: Dark
-      WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: --disable-gpu
-      TRACKER_USER_DATA_FOLDER: /home/wine/.local/share/Videre Tracker
-    volumes:
-      - .:/workspace
-      - ../MTGOSDK/packages:/MTGOSDK/packages:ro
-      - tracker-wine-data:/home/wine/.wine
-      - tracker-user-data:/home/wine/.local/share/Videre Tracker
-      - ${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR must be set}/${WAYLAND_DISPLAY:-wayland-0}:/tmp/runtime-dir/${WAYLAND_DISPLAY:-wayland-0}
-      - /tmp/.X11-unix:/tmp/.X11-unix
-    ports:
-      - "127.0.0.1:7101:7101"  # .NET API (HTTPS)
-
   tracker-dev:
     build:
       context: .
       dockerfile: docker/tracker-dev.Dockerfile
+      additional_contexts:
+        mtgosdk-packages: ../MTGOSDK/packages
     image: videreproject/tracker:wayland-dev
     init: true
     stdin_open: true
     tty: true
-    devices:
-      - /dev/dri:/dev/dri
+    ipc: host
+    tmpfs:
+      - /tmp/runtime-dir:uid=1000,gid=1000,mode=0700
     environment:
       DISPLAY: ${DISPLAY:-}
       WAYLAND_DISPLAY: ${WAYLAND_DISPLAY:-wayland-0}
       XDG_RUNTIME_DIR: /tmp/runtime-dir
       WINEDEBUG: -all
+      LIBGL_ALWAYS_SOFTWARE: "1"
+      QT_X11_NO_MITSHM: "1"
+      GDK_BACKEND: x11
+      MESA_LOADER_DRIVER_OVERRIDE: llvmpipe
+      GALLIUM_DRIVER: llvmpipe
       TRACKER_DISABLE_INSTALLER: "1"
       TRACKER_WINE_COMPAT: "1"
       TRACKER_SKIP_MTGO: ${TRACKER_SKIP_MTGO:-0}
       APP_THEME: Dark
       WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: --disable-gpu
       ASPNETCORE_ENVIRONMENT: Development
-      # The Vite dev server runs on the host (see `pnpm dev:client`); the
-      # container reaches it over the Docker bridge gateway.
-      SPA_PROXY_SERVER_URL: http://host.docker.internal:5279
-      TRACKER_UI_URL: http://host.docker.internal:5279
+      DEV_SERVER_HTTP: "1"
+      # Vite is started inside this container.
+      # Override these to use a host `pnpm dev:client` instead
+      # (e.g. http://host.docker.internal:5279).
+      SPA_PROXY_SERVER_URL: ${TRACKER_UI_URL:-http://127.0.0.1:5279}
+      TRACKER_UI_URL: ${TRACKER_UI_URL:-http://127.0.0.1:5279}
     volumes:
       - .:/workspace
+      - ../platform:/platform
       - ../MTGOSDK/packages:/MTGOSDK/packages:ro
       - tracker-wine-data:/home/wine/.wine
       - ${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR must be set}/${WAYLAND_DISPLAY:-wayland-0}:/tmp/runtime-dir/${WAYLAND_DISPLAY:-wayland-0}
       - /tmp/.X11-unix:/tmp/.X11-unix
+    command:
+      - /bin/bash
+      - /workspace/docker/run-tracker-dev.sh
     ports:
-      - "127.0.0.1:7101:7101"  # .NET API (HTTPS)
+      # .NET API (HTTPS) is exposed to the host for debugging purposes.
+      - "127.0.0.1:7101:7101"
     extra_hosts:
       - "host.docker.internal:host-gateway"
 volumes:
-  mtgo-wine-data:
   tracker-wine-data:
-  tracker-user-data:

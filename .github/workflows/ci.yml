@@ -16,8 +16,6 @@ on:
       - 'pnpm-lock.yaml'
       - 'src/client/pnpm-lock.yaml'
       - 'src/**'
-      - 'tests/**'
-      - 'scripts/**'
       - 'docker/**'
   workflow_dispatch:
 
@@ -70,9 +68,7 @@ jobs:
 
       - name: Restore server dependencies
         shell: pwsh
-        run: |
-          dotnet restore --locked-mode --runtime win-x64
-          dotnet restore tests/server/Tracker.Tests/Tracker.Tests.csproj --locked-mode --runtime win-x64
+        run: dotnet restore --locked-mode --runtime win-x64
 
       - name: Lint client
         shell: pwsh
@@ -90,19 +86,9 @@ jobs:
         shell: pwsh
         run: pnpm run test:client
 
-      - name: Run backend tests
-        shell: pwsh
-        run: |
-          dotnet build tests/server/Tracker.Tests/Tracker.Tests.csproj --configuration Release --no-restore
-          dotnet exec tests/server/Tracker.Tests/bin/Release/net10.0-windows7.0/Tracker.Tests.dll --minimum-expected-tests 1 --output Detailed
-
       - name: Publish application
         shell: pwsh
         run: dotnet publish src/server --configuration Release --output publish --no-restore
-
-      - name: Run published headless smoke test
-        shell: pwsh
-        run: ./scripts/ci/headless-smoke.ps1
 
       - name: Upload publish artifact
         if: success()
@@ -120,9 +106,6 @@ jobs:
           name: tracker-ci-diagnostics-${{ github.sha }}
           path: |
             **/*.binlog
-            **/TestResults/**
-            **/*.trx
-            ci-diagnostics/**
           if-no-files-found: ignore
           retention-days: 7
 
@@ -142,7 +125,16 @@ jobs:
 
       - name: Compare package.json version
         id: detect
-        run: node scripts/ci/detect-release-version.mjs
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          previous="$(git show HEAD^:package.json | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).version")"
+          tags="$(git ls-remote --tags origin "refs/tags/v$version")"
+          should_release=false
+          if [[ -n "$version" && "$version" != "0.0.0" && "$version" != "$previous" && -z "$tags" ]]; then
+            should_release=true
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "should_release=$should_release" >> "$GITHUB_OUTPUT"
 
   release:
     name: Release

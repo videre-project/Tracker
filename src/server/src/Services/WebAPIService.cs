@@ -64,25 +64,20 @@ public static class WebAPIService
     {
       void ConfigureEndpoint(ListenOptions listenOptions)
       {
-        if (!IsCIEnabled())
-        {
-          listenOptions.UseHttps(GetOrCreateLocalhostCertificate(
-            appOptions.UserDataFolder));
-        }
+        listenOptions.UseHttps(GetOrCreateLocalhostCertificate(
+          appOptions.UserDataFolder));
         // Enable HTTP/2 with HTTP/1.1 fallback
         listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
       }
 
-      // Vite and the Linux URL bridge reach Kestrel over the Docker network.
-      // Native and CI runs remain restricted to loopback.
+      // Vite and the Linux URL handler reach Kestrel over the Docker network.
+      // Native runs remain restricted to loopback.
       if (IsContainer())
       {
         options.Listen(IPAddress.Any, appOptions.Url.Port, ConfigureEndpoint);
       }
       else
       {
-        // CI runs without a user certificate and are restricted to the local
-        // process. All normal application runs continue to use HTTPS.
         options.ListenLocalhost(appOptions.Url.Port, ConfigureEndpoint);
       }
     });
@@ -283,16 +278,6 @@ public static class WebAPIService
     api.UseMiddleware<RequestMetricsMiddleware>();
 
     api.MapControllers();
-    if (IsCIEnabled() && options.DisableUI)
-    {
-      api.MapPost("/api/ci/shutdown", (IHostApplicationLifetime lifetime) =>
-      {
-        lifetime.StopApplication();
-        return Results.NoContent();
-      })
-      .RequireHost("localhost")
-      .ExcludeFromDescription();
-    }
 
     if (!options.DisableUI)
     {
@@ -397,13 +382,6 @@ public static class WebAPIService
         Environment.GetEnvironmentVariable("TRACKER_CONTAINER"),
         "true",
         StringComparison.OrdinalIgnoreCase);
-  }
-
-  private static bool IsCIEnabled()
-  {
-    string? value = Environment.GetEnvironmentVariable("TRACKER_CI_TEST");
-    return string.Equals(value, "1", StringComparison.OrdinalIgnoreCase)
-      || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
   }
 
   /// <summary>

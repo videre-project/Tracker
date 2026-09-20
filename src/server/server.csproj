@@ -44,10 +44,14 @@
     <PropertyGroup>
       <ProductInfoGeneratedPath>$(IntermediateOutputPath)ProductInfo.g.cs</ProductInfoGeneratedPath>
     </PropertyGroup>
-    <!-- Read version from package.json (cross-platform) -->
-    <Exec Command="node $(MSBuildProjectDirectory)/scripts/get-version.js" ConsoleToMSBuild="true">
+    <!-- Read version from package.json. Container publishes without Node pass
+         PackageVersion and SkipNodeBuildSteps instead. -->
+    <Exec Command="node $(MSBuildProjectDirectory)/scripts/get-version.js" ConsoleToMSBuild="true"
+          Condition="'$(SkipNodeBuildSteps)' != 'true'">
       <Output TaskParameter="ConsoleOutput" PropertyName="PackageVersion" />
     </Exec>
+    <Error Text="PackageVersion must be passed when SkipNodeBuildSteps is set."
+           Condition="'$(SkipNodeBuildSteps)' == 'true' And '$(PackageVersion)' == ''" />
     <WriteLinesToFile
       File="$(ProductInfoGeneratedPath)"
       Lines='namespace Tracker%3B public static class ProductInfo { public const string Name = "$(AssemblyName)"%3B public const string Version = "$(PackageVersion)"%3B }'
@@ -67,8 +71,9 @@
     <!-- Disable launch command in dev container (external Vite dev server) -->
     <SpaProxyLaunchCommand Condition="'$(TRACKER_DEV_CONTAINER)' == 'true'"></SpaProxyLaunchCommand>
     <SpaProxyServerUrl>https://localhost:5279</SpaProxyServerUrl>
-    <!-- Override for dev container to proxy to external Vite dev server -->
-    <SpaProxyServerUrl Condition="'$(TRACKER_DEV_CONTAINER)' == 'true'">http://vite-dev:5279</SpaProxyServerUrl>
+    <!-- Vite runs in the development container unless its URL is overridden. -->
+    <SpaProxyServerUrl Condition="'$(TRACKER_DEV_CONTAINER)' == 'true'">http://127.0.0.1:5279</SpaProxyServerUrl>
+    <SpaProxyServerUrl Condition="'$(TRACKER_DEV_CONTAINER)' == 'true' And '$(TRACKER_UI_URL)' != ''">$(TRACKER_UI_URL)</SpaProxyServerUrl>
   </PropertyGroup>
   <ItemGroup>
     <!-- Embed the build output of the client project -->
