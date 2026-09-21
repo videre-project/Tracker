@@ -41,6 +41,124 @@ export interface DeckDetail {
   sideboard: CardEntry[]
 }
 
+export type DeckCardZone = "Mainboard" | "Sideboard"
+
+export interface DeckCardMutation {
+  catalogId: number
+  name?: string
+  quantity?: number
+  zone: DeckCardZone
+  annotation?: number
+  cmc?: number
+  colors?: string[]
+  types?: string[]
+  rarity?: string
+}
+
+export interface DeckMutationResponse {
+  revisionId: number
+  netDeckId: number
+  deleted: boolean
+}
+
+export interface ImportDeckCard {
+  catalogId: number
+  name: string
+  quantity: number
+  cmc?: number
+  colors?: string[]
+  types?: string[]
+  rarity?: string
+}
+
+export interface ImportDeckRequest {
+  name: string
+  format: string
+  archetype?: string
+  mainboard: ImportDeckCard[]
+  sideboard: ImportDeckCard[]
+}
+
+export interface ImportDeckResponse {
+  revisionId: number
+  netDeckId: number
+  created: boolean
+}
+
+async function readApiError(response: Response, fallback: string) {
+  const payload = await response.json().catch(() => null) as { error?: string } | null
+  return payload?.error || fallback
+}
+
+export async function addDeckCard(
+  revisionId: string | number,
+  card: DeckCardMutation,
+) {
+  const response = await fetch(getApiUrl(`/api/decks/${revisionId}/cards`), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ quantity: 1, annotation: 0, ...card }),
+  })
+  if (!response.ok) {
+    throw new Error(await readApiError(response, `Failed to add card (HTTP ${response.status})`))
+  }
+  return await response.json() as DeckMutationResponse
+}
+
+export async function removeDeckCard(
+  revisionId: string | number,
+  card: DeckCardMutation,
+) {
+  const response = await fetch(getApiUrl(`/api/decks/${revisionId}/cards`), {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ quantity: 1, annotation: 0, ...card }),
+  })
+  if (!response.ok) {
+    throw new Error(await readApiError(response, `Failed to remove card (HTTP ${response.status})`))
+  }
+  return await response.json() as DeckMutationResponse
+}
+
+export async function moveDeckCards(
+  revisionId: string | number,
+  fromZone: DeckCardZone,
+  toZone: DeckCardZone,
+  cards: Array<{ catalogId: number; quantity: number }>,
+) {
+  const response = await fetch(getApiUrl(`/api/decks/${revisionId}/cards/move`), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fromZone, toZone, cards }),
+  })
+  if (!response.ok) {
+    throw new Error(await readApiError(response, `Failed to move cards (HTTP ${response.status})`))
+  }
+  return await response.json() as DeckMutationResponse
+}
+
+export async function deleteDeck(revisionId: string | number) {
+  const response = await fetch(getApiUrl(`/api/decks/${revisionId}`), {
+    method: "DELETE",
+  })
+  if (!response.ok) {
+    throw new Error(await readApiError(response, `Failed to delete deck (HTTP ${response.status})`))
+  }
+  return await response.json() as DeckMutationResponse
+}
+
+export async function importDeck(request: ImportDeckRequest) {
+  const response = await fetch(getApiUrl("/api/decks/import"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  })
+  if (!response.ok) {
+    throw new Error(await readApiError(response, `Failed to import deck (HTTP ${response.status})`))
+  }
+  return await response.json() as ImportDeckResponse
+}
+
 export interface ManafoldResponse {
   meta?: {
     database: string | null

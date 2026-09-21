@@ -181,8 +181,7 @@ public class DecksController : APIController
   }
 
   /// <summary>
-  /// Imports a Tracker-local deck received through the Linux/desktop
-  /// <c>videre://</c> URL handler, then opens it in the deck editor.
+  /// Imports a Tracker-local deck and opens it in the deck editor.
   /// </summary>
   [HttpPost("import-and-open")]
   [ProducesResponseType(typeof(ImportDeckResponse), StatusCodes.Status200OK)]
@@ -202,6 +201,132 @@ public class DecksController : APIController
       return result.Created
         ? CreatedAtAction(nameof(GetDeck), new { revisionId = result.RevisionId }, result)
         : Ok(result);
+    }
+    catch (ArgumentException exception)
+    {
+      return BadRequest(new { error = exception.Message });
+    }
+    catch (InvalidOperationException exception)
+    {
+      return Conflict(new { error = exception.Message });
+    }
+  }
+
+  /// <summary>
+  /// Add copies of a card to a deck's mainboard or sideboard.
+  /// </summary>
+  [HttpPost("{revisionId:long}/cards")]
+  [ProducesResponseType(typeof(DeckMutationResponse), StatusCodes.Status200OK)]
+  [ProducesResponseType(StatusCodes.Status400BadRequest)]
+  [ProducesResponseType(StatusCodes.Status404NotFound)]
+  [ProducesResponseType(StatusCodes.Status409Conflict)]
+  public async Task<ActionResult<DeckMutationResponse>> AddDeckCard(
+    long revisionId,
+    [FromBody] DeckCardMutationRequest request,
+    CancellationToken cancellationToken)
+  {
+    try
+    {
+      return Ok(await deckService.AddCardAsync(
+        revisionId,
+        request,
+        cancellationToken));
+    }
+    catch (KeyNotFoundException exception)
+    {
+      return NotFound(new { error = exception.Message });
+    }
+    catch (ArgumentException exception)
+    {
+      return BadRequest(new { error = exception.Message });
+    }
+    catch (InvalidOperationException exception)
+    {
+      return Conflict(new { error = exception.Message });
+    }
+  }
+
+  /// <summary>
+  /// Remove copies of a card from a deck's mainboard or sideboard.
+  /// </summary>
+  [HttpDelete("{revisionId:long}/cards")]
+  [ProducesResponseType(typeof(DeckMutationResponse), StatusCodes.Status200OK)]
+  [ProducesResponseType(StatusCodes.Status400BadRequest)]
+  [ProducesResponseType(StatusCodes.Status404NotFound)]
+  [ProducesResponseType(StatusCodes.Status409Conflict)]
+  public async Task<ActionResult<DeckMutationResponse>> RemoveDeckCard(
+    long revisionId,
+    [FromBody] DeckCardMutationRequest request,
+    CancellationToken cancellationToken)
+  {
+    try
+    {
+      return Ok(await deckService.RemoveCardAsync(
+        revisionId,
+        request,
+        cancellationToken));
+    }
+    catch (KeyNotFoundException exception)
+    {
+      return NotFound(new { error = exception.Message });
+    }
+    catch (ArgumentException exception)
+    {
+      return BadRequest(new { error = exception.Message });
+    }
+    catch (InvalidOperationException exception)
+    {
+      return Conflict(new { error = exception.Message });
+    }
+  }
+
+  /// <summary>
+  /// Delete a deck from Tracker and queue deletion from MTGO.
+  /// </summary>
+  [HttpDelete("{revisionId:long}")]
+  [ProducesResponseType(typeof(DeckMutationResponse), StatusCodes.Status200OK)]
+  [ProducesResponseType(StatusCodes.Status404NotFound)]
+  [ProducesResponseType(StatusCodes.Status409Conflict)]
+  public async Task<ActionResult<DeckMutationResponse>> DeleteDeck(
+    long revisionId,
+    CancellationToken cancellationToken)
+  {
+    try
+    {
+      return Ok(await deckService.DeleteLocalDeckAsync(
+        revisionId,
+        cancellationToken));
+    }
+    catch (KeyNotFoundException exception)
+    {
+      return NotFound(new { error = exception.Message });
+    }
+    catch (InvalidOperationException exception)
+    {
+      return Conflict(new { error = exception.Message });
+    }
+  }
+
+  /// <summary>
+  /// Move copies between deck zones in one saved revision.
+  /// </summary>
+  [HttpPost("{revisionId:long}/cards/move")]
+  [ProducesResponseType(typeof(DeckMutationResponse), StatusCodes.Status200OK)]
+  [ProducesResponseType(StatusCodes.Status400BadRequest)]
+  [ProducesResponseType(StatusCodes.Status404NotFound)]
+  [ProducesResponseType(StatusCodes.Status409Conflict)]
+  public async Task<ActionResult<DeckMutationResponse>> MoveDeckCards(
+    long revisionId,
+    [FromBody] DeckCardMoveRequest request,
+    CancellationToken cancellationToken)
+  {
+    try
+    {
+      return Ok(await deckService.MoveCardsAsync(revisionId, request, cancellationToken));
+    }
+    catch (KeyNotFoundException exception)
+    {
+      return NotFound(new { error = exception.Message });
     }
     catch (ArgumentException exception)
     {
@@ -493,21 +618,29 @@ public class DecksController : APIController
 
     var resultList = new List<SortableCardEntry>();
     var sorted = cardDataList.OrderBy(c => GetSortableName(c.Name)).ThenBy(c => c.Id).ToList();
+    await deckService.EnsureCatalogAsync(
+      sorted.Select(card => card.Id),
+      HttpContext.RequestAborted);
     for (int i = 0; i < sorted.Count; i++)
     {
       var c = sorted[i];
+      CardEntry catalog = deckService.GetCatalogCard(c.Id, c.Quantity);
       resultList.Add(new SortableCardEntry
       {
         Index = i,
         OriginalIndex = i,
         CatalogId = c.Id,
-        Name = c.Name,
+        Name = string.IsNullOrWhiteSpace(catalog.name) ? c.Name : catalog.name,
         Quantity = c.Quantity,
         Zone = "Mainboard",
-        Cmc = c.ConvertedManaCost,
-        Colors = c.Colors?.ToCharArray().Select(ch => ch.ToString()).ToList() ?? new List<string>(),
-        Types = c.Types?.ToList() ?? new List<string>(),
-        Rarity = c.Rarity
+        Cmc = catalog.cmc,
+        Colors = catalog.colors is { Count: > 0 }
+          ? catalog.colors
+          : c.Colors?.ToCharArray().Select(ch => ch.ToString()).ToList() ?? new List<string>(),
+        Types = catalog.types is { Count: > 0 }
+          ? catalog.types
+          : c.Types?.ToList() ?? new List<string>(),
+        Rarity = string.IsNullOrWhiteSpace(catalog.rarity) ? c.Rarity : catalog.rarity
       });
     }
 
@@ -560,69 +693,32 @@ public class DecksController : APIController
   {
     return entries
       .GroupBy(c => c.catalogId)
-      .Select(g => new CardEntry(g.Key, g.First().name, g.Sum(c => c.quantity)))
+      .Select(g =>
+      {
+        CardEntry first = g.First();
+        return first with { quantity = g.Sum(c => c.quantity) };
+      })
       .ToList();
   }
 
-  private static ICardData GetCardData(CardEntry entry)
+  private static ICardData GetCardData(CardEntry entry) => CardDataFromEntry(entry);
+
+  private static ICardData CardDataFromEntry(CardEntry entry)
   {
-    var fallbackName = string.IsNullOrWhiteSpace(entry.name)
+    string name = string.IsNullOrWhiteSpace(entry.name)
       ? entry.catalogId.ToString()
       : entry.name;
-
-    try
-    {
-      var card = CollectionManager.GetCard(entry.catalogId);
-      if (card == null)
-      {
-        return new CardDataRecord(entry.catalogId, fallbackName, entry.quantity, 0, "", new List<string>(), "");
-      }
-
-      try
-      {
-        var data = card.SerializeAs<ICardData>();
-        return new CardDataRecord(
-          entry.catalogId,
-          string.IsNullOrWhiteSpace(data.Name) ? fallbackName : data.Name,
-          entry.quantity,
-          data.ConvertedManaCost,
-          data.Colors ?? "",
-          data.Types?.ToList() ?? new List<string>(),
-          data.Rarity ?? ""
-        );
-      }
-      catch (Exception ex)
-      {
-        Log.Trace($"Failed to serialize card metadata for catalog ID {entry.catalogId}: {ex.Message}");
-      }
-
-      try
-      {
-        return new CardDataRecord(
-          entry.catalogId,
-          string.IsNullOrWhiteSpace(card.Name) ? fallbackName : card.Name,
-          entry.quantity,
-          0,
-          card.Colors ?? "",
-          new List<string>(),
-          ""
-        );
-      }
-      catch (Exception ex)
-      {
-        Log.Trace($"Failed to read card fallback metadata for catalog ID {entry.catalogId}: {ex.Message}");
-      }
-    }
-    catch (KeyNotFoundException)
-    {
-      Log.Trace($"Catalog ID {entry.catalogId} was not found while building sortable deck cards.");
-    }
-    catch (Exception ex)
-    {
-      Log.Trace($"Failed to resolve card metadata for catalog ID {entry.catalogId}: {ex.Message}");
-    }
-
-    return new CardDataRecord(entry.catalogId, fallbackName, entry.quantity, 0, "", new List<string>(), "");
+    string colors = entry.colors is { Count: > 0 }
+      ? string.Concat(entry.colors)
+      : "";
+    return new CardDataRecord(
+      entry.catalogId,
+      name,
+      entry.quantity,
+      Math.Max(0, entry.cmc),
+      colors,
+      entry.types ?? new List<string>(),
+      string.IsNullOrWhiteSpace(entry.rarity) ? "common" : entry.rarity);
   }
 
   private async Task<CachedDeck?> GetOrLoadDeck(long revisionId)

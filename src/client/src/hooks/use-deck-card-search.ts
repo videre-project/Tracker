@@ -13,6 +13,9 @@ export type CardSearchResult = {
   setCode: string
   name: string
   type: string
+  types: string[]
+  cmc: number
+  rarity: string
   text: string
   colors: string[]
   imageUrl: string

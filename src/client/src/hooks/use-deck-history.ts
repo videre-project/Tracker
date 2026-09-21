@@ -5,7 +5,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { getApiUrl } from "@/utils/api-config"
-import { useCardMedia } from '@videreproject/ui'
+import { useCardMedia, type DeckDiffEntry, type DeckDiffMap, type DeckZone } from '@videreproject/ui'
 
 export interface DeckHistoryChange {
   catalogId: number
@@ -118,16 +118,16 @@ export function useDeckHistory(revisionId: string | number | null) {
   }, [history, selectedRevisionId])
 
   // Compute card diff map relative to the previous revision (changes introduced in this revision)
-  const diffMap = useMemo(() => {
-    if (!selectedRevision || !selectedRevision.changesFromPrevious?.length) {
-      return new Map<number, { delta: number; zone: string; name: string; cmc?: number; colors?: string[]; types?: string[]; rarity?: string }>()
-    }
-
-    const map = new Map<number, { delta: number; zone: string; name: string; cmc?: number; colors?: string[]; types?: string[]; rarity?: string }>()
-    for (const change of selectedRevision.changesFromPrevious) {
-      map.set(change.catalogId, {
+  const diffMap = useMemo<DeckDiffMap>(() => {
+    const zones = new Map<DeckZone, Map<number, DeckDiffEntry>>()
+    for (const change of selectedRevision?.changesFromPrevious ?? []) {
+      let cards = zones.get(change.zone)
+      if (!cards) {
+        cards = new Map()
+        zones.set(change.zone, cards)
+      }
+      cards.set(change.catalogId, {
         delta: change.quantityDelta,
-        zone: change.zone,
         name: change.name,
         cmc: change.cmc,
         colors: change.colors,
@@ -135,7 +135,7 @@ export function useDeckHistory(revisionId: string | number | null) {
         rarity: change.rarity,
       })
     }
-    return map
+    return zones
   }, [selectedRevision])
 
   const selectedRevisionCards = useMemo(() => {

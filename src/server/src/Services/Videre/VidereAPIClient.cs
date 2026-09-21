@@ -205,7 +205,10 @@ public sealed class VidereAPIClient
             NormalizeOptionalText(card.Set_code)?.ToUpperInvariant(),
             NormalizeOptionalText(card.Rarity)?.ToLowerInvariant(),
             null,
-            card.Image_url);
+            card.Image_url,
+            card.Mana_value,
+            card.Colors,
+            NormalizeOptionalText(card.Type_line));
         }
       }
 
@@ -642,6 +645,8 @@ public sealed class VidereAPIClient
         SetCode = NormalizeOptionalText(card.Set_code)?.ToUpperInvariant() ?? "",
         Name = card.Name,
         Type = string.IsNullOrWhiteSpace(card.Type_line) ? "Card" : card.Type_line,
+        Cmc = Math.Max(0, (int)Math.Floor(card.Mana_value ?? 0)),
+        Rarity = card.Rarity.HasValue ? GetEnumWireValue(card.Rarity.Value) : "common",
         Text = NormalizeCardText(card.Oracle_text ?? card.Flavor_text),
         Power = NormalizeOptionalText(card.Power),
         Toughness = NormalizeOptionalText(card.Toughness),
@@ -734,6 +739,15 @@ public sealed class VidereAPIClient
 
     [System.Text.Json.Serialization.JsonPropertyName("image_url")]
     public string? Image_url { get; set; }
+
+    [System.Text.Json.Serialization.JsonPropertyName("mana_value")]
+    public double? Mana_value { get; set; }
+
+    [System.Text.Json.Serialization.JsonPropertyName("type_line")]
+    public string? Type_line { get; set; }
+
+    [System.Text.Json.Serialization.JsonPropertyName("colors")]
+    public List<string>? Colors { get; set; }
   }
 
   internal static DateTimeOffset GetPriceCacheExpiration(DateTimeOffset now)

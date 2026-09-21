@@ -15,7 +15,10 @@ public class CardSearchResultDTO
   public required string SetCode { get; set; }
   public required string Name { get; set; }
   public required string Type { get; set; }
+  public List<string> Types { get; set; } = new();
   public required string Text { get; set; }
+  public int Cmc { get; set; }
+  public string Rarity { get; set; } = "common";
   public List<string> Colors { get; set; } = new();
   public required string ImageUrl { get; set; }
   public string? Power { get; set; }

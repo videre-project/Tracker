@@ -26,7 +26,10 @@ public sealed record VidereCatalogMetadataResult(
   string? SetCode,
   string? Rarity,
   string? ObjectType,
-  string? ImageUrl
+  string? ImageUrl,
+  double? ManaValue = null,
+  IReadOnlyList<string>? Colors = null,
+  string? TypeLine = null
 );
 
 public sealed record ViderePriceResult(

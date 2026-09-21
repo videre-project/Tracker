@@ -834,10 +834,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Imports a Tracker-local deck received through the Linux/desktop
-         *     `videre://` URL handler, then opens it in the deck editor.
-         */
+        /** Imports a Tracker-local deck and opens it in the deck editor. */
         post: {
             parameters: {
                 query?: never;
@@ -905,22 +902,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/Decks/identifiers": {
+    [path: `/api/Decks/${number}/cards`]: {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Get a flat list of all deck identifiers */
-        get: {
+        get?: never;
+        put?: never;
+        /** Add copies of a card to a deck's mainboard or sideboard. */
+        post: {
             parameters: {
                 query?: never;
                 header?: never;
-                path?: never;
+                path: {
+                    revisionId: number;
+                };
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody?: {
+                content: {
+                    "application/json": DeckCardMutationRequest;
+                    "text/json": DeckCardMutationRequest;
+                    "application/*+json": DeckCardMutationRequest;
+                };
+            };
             responses: {
                 /** @description OK */
                 200: {
@@ -928,16 +935,110 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "text/plain": DeckIdentifierDTO[];
-                        "application/json": DeckIdentifierDTO[];
-                        "text/json": DeckIdentifierDTO[];
+                        "text/plain": DeckMutationResponse;
+                        "application/json": DeckMutationResponse;
+                        "text/json": DeckMutationResponse;
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": ProblemDetails;
+                        "application/json": ProblemDetails;
+                        "text/json": ProblemDetails;
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": ProblemDetails;
+                        "application/json": ProblemDetails;
+                        "text/json": ProblemDetails;
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": ProblemDetails;
+                        "application/json": ProblemDetails;
+                        "text/json": ProblemDetails;
                     };
                 };
             };
         };
-        put?: never;
-        post?: never;
-        delete?: never;
+        /** Remove copies of a card from a deck's mainboard or sideboard. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    revisionId: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": DeckCardMutationRequest;
+                    "text/json": DeckCardMutationRequest;
+                    "application/*+json": DeckCardMutationRequest;
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": DeckMutationResponse;
+                        "application/json": DeckMutationResponse;
+                        "text/json": DeckMutationResponse;
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": ProblemDetails;
+                        "application/json": ProblemDetails;
+                        "text/json": ProblemDetails;
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": ProblemDetails;
+                        "application/json": ProblemDetails;
+                        "text/json": ProblemDetails;
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": ProblemDetails;
+                        "application/json": ProblemDetails;
+                        "text/json": ProblemDetails;
+                    };
+                };
+            };
+        };
         options?: never;
         head?: never;
         patch?: never;
@@ -983,6 +1084,169 @@ export interface paths {
                         "text/plain": ProblemDetails;
                         "application/json": ProblemDetails;
                         "text/json": ProblemDetails;
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        /** Delete a deck from Tracker and queue deletion from MTGO. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    revisionId: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": DeckMutationResponse;
+                        "application/json": DeckMutationResponse;
+                        "text/json": DeckMutationResponse;
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": ProblemDetails;
+                        "application/json": ProblemDetails;
+                        "text/json": ProblemDetails;
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": ProblemDetails;
+                        "application/json": ProblemDetails;
+                        "text/json": ProblemDetails;
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    [path: `/api/Decks/${number}/cards/move`]: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Move copies between deck zones in one saved revision. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    revisionId: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": DeckCardMoveRequest;
+                    "text/json": DeckCardMoveRequest;
+                    "application/*+json": DeckCardMoveRequest;
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": DeckMutationResponse;
+                        "application/json": DeckMutationResponse;
+                        "text/json": DeckMutationResponse;
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": ProblemDetails;
+                        "application/json": ProblemDetails;
+                        "text/json": ProblemDetails;
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": ProblemDetails;
+                        "application/json": ProblemDetails;
+                        "text/json": ProblemDetails;
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": ProblemDetails;
+                        "application/json": ProblemDetails;
+                        "text/json": ProblemDetails;
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/Decks/identifiers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a flat list of all deck identifiers */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": DeckIdentifierDTO[];
+                        "application/json": DeckIdentifierDTO[];
+                        "text/json": DeckIdentifierDTO[];
                     };
                 };
             };
@@ -3159,7 +3423,11 @@ export interface components {
             setCode: string | null;
             name: string | null;
             type: string | null;
+            types?: string[] | null;
             text: string | null;
+            /** Format: int32 */
+            cmc?: number;
+            rarity?: string | null;
             colors?: string[] | null;
             imageUrl: string | null;
             power?: string | null;
@@ -3167,6 +3435,34 @@ export interface components {
             loyalty?: string | null;
             defense?: string | null;
         };
+        "Tracker.Controllers.Models.Decks.DeckCardMoveItem": {
+            /** Format: int32 */
+            catalogId: number;
+            /** Format: int32 */
+            quantity?: number;
+        };
+        "Tracker.Controllers.Models.Decks.DeckCardMoveRequest": {
+            fromZone: DeckCardZone;
+            toZone: DeckCardZone;
+            cards: DeckCardMoveItem[] | null;
+        };
+        "Tracker.Controllers.Models.Decks.DeckCardMutationRequest": {
+            /** Format: int32 */
+            catalogId: number;
+            name?: string | null;
+            /** Format: int32 */
+            quantity?: number;
+            zone?: DeckCardZone;
+            /** Format: int32 */
+            annotation?: number;
+            /** Format: int32 */
+            cmc?: number;
+            colors?: string[] | null;
+            types?: string[] | null;
+            rarity?: string | null;
+        };
+        /** @enum {string} */
+        "Tracker.Controllers.Models.Decks.DeckCardZone": "Mainboard" | "Sideboard";
         "Tracker.Controllers.Models.Decks.DeckColorsDTO": {
             /** Format: int64 */
             revisionId: number;
@@ -3262,6 +3558,13 @@ export interface components {
             netDeckId: number;
             name: string | null;
             format: string | null;
+        };
+        "Tracker.Controllers.Models.Decks.DeckMutationResponse": {
+            /** Format: int64 */
+            revisionId: number;
+            /** Format: int32 */
+            netDeckId: number;
+            deleted: boolean;
         };
         "Tracker.Controllers.Models.Decks.ImportDeckCardDTO": {
             /** Format: int32 */
@@ -3828,6 +4131,10 @@ export type TrackerControllersModelsCollectionCollectionSearchResultDto = Collec
 export type TrackerControllersModelsCollectionCollectionSnapshotDto = CollectionSnapshotDTO;
 export type TrackerControllersModelsDecksAggregatedArchetypeDto = AggregatedArchetypeDTO;
 export type TrackerControllersModelsDecksCardSearchResultDto = CardSearchResultDTO;
+export type TrackerControllersModelsDecksDeckCardMoveItem = DeckCardMoveItem;
+export type TrackerControllersModelsDecksDeckCardMoveRequest = DeckCardMoveRequest;
+export type TrackerControllersModelsDecksDeckCardMutationRequest = DeckCardMutationRequest;
+export type TrackerControllersModelsDecksDeckCardZone = DeckCardZone;
 export type TrackerControllersModelsDecksDeckColorsDto = DeckColorsDTO;
 export type TrackerControllersModelsDecksDeckDto = DeckDTO;
 export type TrackerControllersModelsDecksDeckDetailDto = DeckDetailDTO;
@@ -3835,6 +4142,7 @@ export type TrackerControllersModelsDecksDeckHistoryChangeView = DeckHistoryChan
 export type TrackerControllersModelsDecksDeckHistoryRevisionView = DeckHistoryRevisionView;
 export type TrackerControllersModelsDecksDeckHistoryView = DeckHistoryView;
 export type TrackerControllersModelsDecksDeckIdentifierDto = DeckIdentifierDTO;
+export type TrackerControllersModelsDecksDeckMutationResponse = DeckMutationResponse;
 export type TrackerControllersModelsDecksImportDeckCardDto = ImportDeckCardDTO;
 export type TrackerControllersModelsDecksImportDeckRequest = ImportDeckRequest;
 export type TrackerControllersModelsDecksImportDeckResponse = ImportDeckResponse;
@@ -3921,6 +4229,10 @@ export type CollectionSearchResultDTO = components['schemas']['Tracker.Controlle
 export type CollectionSnapshotDTO = components['schemas']['Tracker.Controllers.Models.Collection.CollectionSnapshotDTO'];
 export type AggregatedArchetypeDTO = components['schemas']['Tracker.Controllers.Models.Decks.AggregatedArchetypeDTO'];
 export type CardSearchResultDTO = components['schemas']['Tracker.Controllers.Models.Decks.CardSearchResultDTO'];
+export type DeckCardMoveItem = components['schemas']['Tracker.Controllers.Models.Decks.DeckCardMoveItem'];
+export type DeckCardMoveRequest = components['schemas']['Tracker.Controllers.Models.Decks.DeckCardMoveRequest'];
+export type DeckCardMutationRequest = components['schemas']['Tracker.Controllers.Models.Decks.DeckCardMutationRequest'];
+export type DeckCardZone = components['schemas']['Tracker.Controllers.Models.Decks.DeckCardZone'];
 export type DeckColorsDTO = components['schemas']['Tracker.Controllers.Models.Decks.DeckColorsDTO'];
 export type DeckDTO = components['schemas']['Tracker.Controllers.Models.Decks.DeckDTO'];
 export type DeckDetailDTO = components['schemas']['Tracker.Controllers.Models.Decks.DeckDetailDTO'];
@@ -3928,6 +4240,7 @@ export type DeckHistoryChangeView = components['schemas']['Tracker.Controllers.M
 export type DeckHistoryRevisionView = components['schemas']['Tracker.Controllers.Models.Decks.DeckHistoryRevisionView'];
 export type DeckHistoryView = components['schemas']['Tracker.Controllers.Models.Decks.DeckHistoryView'];
 export type DeckIdentifierDTO = components['schemas']['Tracker.Controllers.Models.Decks.DeckIdentifierDTO'];
+export type DeckMutationResponse = components['schemas']['Tracker.Controllers.Models.Decks.DeckMutationResponse'];
 export type ImportDeckCardDTO = components['schemas']['Tracker.Controllers.Models.Decks.ImportDeckCardDTO'];
 export type ImportDeckRequest = components['schemas']['Tracker.Controllers.Models.Decks.ImportDeckRequest'];
 export type ImportDeckResponse = components['schemas']['Tracker.Controllers.Models.Decks.ImportDeckResponse'];
