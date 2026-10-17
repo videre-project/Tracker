@@ -7,9 +7,15 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using System.Threading.Tasks;
+
+using Microsoft.EntityFrameworkCore;
 
 using MTGOSDK.API.Chat;
+using MTGOSDK.API.Play;
+using MTGOSDK.API.Play.Games;
 
+using Tracker.Database;
 using Tracker.Database.Models.Events;
 using Tracker.Controllers.Models.Games;
 
@@ -18,6 +24,50 @@ namespace Tracker.Services.MTGO.Events;
 
 internal static class MatchHistorySerialization
 {
+  internal static async Task<Dictionary<int, TimeSpan>> ReadGameDurationsAsync(
+    EventContext context, IEnumerable<int> gameIds)
+  {
+    int[] ids = gameIds.Distinct().ToArray();
+    var ranges = await context.GameStates
+      .Where(state => ids.Contains(state.GameId))
+      .GroupBy(state => state.GameId)
+      .Select(group => new
+      {
+        GameId = group.Key,
+        Start = group.Min(state => state.ClientTimestamp),
+        End = group.Max(state => state.ClientTimestamp)
+      })
+      .ToListAsync();
+
+    return ranges.ToDictionary(range => range.GameId, range => range.End - range.Start);
+  }
+
+  internal static TimeSpan GetGameDuration(
+    GameModel game, GamePlayerResult? result,
+    IReadOnlyDictionary<int, TimeSpan>? recordedDurations = null)
+  {
+    TimeSpan recorded = TimeSpan.Zero;
+    if (recordedDurations != null)
+      recordedDurations.TryGetValue(game.Id, out recorded);
+    else if (game.States.Count >= 2)
+      recorded = game.States.Max(state => state.ClientTimestamp)
+        - game.States.Min(state => state.ClientTimestamp);
+
+    if (recorded > TimeSpan.Zero) return recorded;
+    return result?.Clock > TimeSpan.Zero ? result.Clock : TimeSpan.Zero;
+  }
+
+  internal static string GetMatchResult(MatchModel match, string currentUser, bool isActive)
+  {
+    var result = match.PlayerResults.FirstOrDefault(player => player.Player == currentUser);
+    if (result != null && result.Result != MatchResult.NotSet) return result.Result.ToString();
+    if (isActive) return "In Progress";
+    return match.Games.Count == 0 ? "Cancelled" : "Incomplete";
+  }
+
+  internal static string FormatDuration(TimeSpan duration) =>
+    $"{Math.Floor(duration.TotalMinutes)}m {duration.Seconds}s";
+
   internal static bool IsDifferentPlayer(string? player, string currentUser) =>
     !string.IsNullOrWhiteSpace(player) &&
     !string.Equals(player, currentUser, StringComparison.OrdinalIgnoreCase);

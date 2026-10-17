@@ -3,7 +3,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useClientState } from "./use-client-state"
 import { getApiUrl } from "../utils/api-config"
 import type { MatchHistoryDTO, PaginatedMatchesDTO } from "@/types/api"
@@ -240,6 +240,8 @@ export function useGamesHistory(
   deckRevisionId?: number
 ) {
   const [data, setData] = useState<PaginatedMatches | null>(null)
+  const [refreshKey, setRefreshKey] = useState(0)
+  const refresh = useCallback(() => setRefreshKey(value => value + 1), [])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -312,7 +314,7 @@ export function useGamesHistory(
       active = false
       controller.abort()
     }
-  }, [page, pageSize, timeRange, format, deckRevisionId, clientReady, clientLoading])
+  }, [page, pageSize, timeRange, format, deckRevisionId, clientReady, clientLoading, refreshKey])
 
-  return { data, loading, error }
+  return { data, loading, error, refresh }
 }

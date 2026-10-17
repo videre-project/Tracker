@@ -79,6 +79,9 @@ public class GamesController : APIController
           WHERE EXISTS (
             SELECT 1 FROM json_each(m.PlayerResults)
             WHERE json_extract(value, '$.player') = {0}
+          ) OR EXISTS (
+            SELECT 1 FROM Games g JOIN GamePlayers p ON p.GameId = g.Id
+            WHERE g.MatchId = m.Id AND p.Name = {0}
       )", currentUser)
       .Include(m => m.Event)
       .Include(m => m.Games)
@@ -119,18 +122,21 @@ public class GamesController : APIController
     var deckRevisions = new Dictionary<long, DeckRevisionView>();
     await LoadDeckRevisionsAsync(matches.Select(match => match.Event));
 
+    var recordedDurations = await ReadGameDurationsAsync(
+      context, matches.SelectMany(match => match.Games).Select(game => game.Id));
+
     // Map to DTOs
     var matchDTOs = new List<MatchHistoryDTO>();
     foreach (var match in matches)
     {
       DeckRevisionView? deck = GetDeck(match.Event);
-      var playerResult = match.PlayerResults.FirstOrDefault(p => p.Player == currentUser);
+      bool isActive = GameAPIService.ActiveMatchIds.Contains(match.Id);
       
       TimeSpan matchDuration = TimeSpan.Zero;
       foreach (var game in match.Games)
       {
          var gameResult = game.GamePlayerResults.FirstOrDefault(p => p.Player == currentUser);
-         matchDuration += GetGameDuration(game, gameResult);
+         matchDuration += GetGameDuration(game, gameResult, recordedDurations);
       }
 
       int wins = 0;
@@ -151,7 +157,7 @@ public class GamesController : APIController
         EventName = match.Event.Description,
         Format = match.Event.Format,
         StartTime = match.Event.StartTime,
-        Result = playerResult?.Result.ToString() ?? "Unknown",
+        Result = GetMatchResult(match, currentUser, isActive),
         Record = $"{wins}-{losses}",
         Duration = FormatDuration(matchDuration),
         DeckRevisionId = match.Event.DeckRevisionId,
@@ -159,7 +165,8 @@ public class GamesController : APIController
         DeckColors = deck?.Colors,
         OpponentName = GetOpponentName(match, currentUser),
         OpponentDeckArchetype = match.OpponentDeckArchetype,
-        OpponentDeckColors = match.OpponentDeckColors
+        OpponentDeckColors = match.OpponentDeckColors,
+        IsActive = isActive
       });
     }
 
@@ -169,7 +176,7 @@ public class GamesController : APIController
       var existingMatchIds = new HashSet<int>(matchDTOs.Select(m => m.Id));
       var existingEventIds = new HashSet<int>(matchDTOs.Select(m => m.EventId));
 
-      // Active matches not yet in the completed results
+      // Active matches not yet in the saved history
       var activeMatchIds = GameAPIService.ActiveMatchIds
         .Where(id => !existingMatchIds.Contains(id))
         .ToList();
@@ -188,6 +195,9 @@ public class GamesController : APIController
         await LoadDeckRevisionsAsync(
           activeMatches.Select(match => match.Event));
 
+        var activeDurations = await ReadGameDurationsAsync(
+          context, activeMatches.SelectMany(match => match.Games).Select(game => game.Id));
+
         foreach (var match in activeMatches)
         {
           DeckRevisionView? deck = GetDeck(match.Event);
@@ -196,14 +206,13 @@ public class GamesController : APIController
           foreach (var game in match.Games)
           {
             var gr = game.GamePlayerResults.FirstOrDefault(p => p.Player == currentUser);
+            dur += GetGameDuration(game, gr, activeDurations);
             if (gr != null)
             {
-              dur += gr.Clock;
               if (gr.Result == GameResult.Win) w++;
               else if (gr.Result == GameResult.Loss) l++;
             }
           }
-          var pr = match.PlayerResults.FirstOrDefault(p => p.Player == currentUser);
           matchDTOs.Add(new MatchHistoryDTO
           {
             Id = match.Id,
@@ -211,7 +220,7 @@ public class GamesController : APIController
             EventName = match.Event?.Description ?? "",
             Format = match.Event?.Format ?? "",
             StartTime = match.Event?.StartTime ?? DateTime.Now,
-            Result = pr?.Result.ToString() ?? "In Progress",
+            Result = GetMatchResult(match, currentUser, true),
             Record = $"{w}-{l}",
             Duration = FormatDuration(dur),
             DeckRevisionId = match.Event?.DeckRevisionId,
@@ -425,7 +434,8 @@ public class GamesController : APIController
     // Verify user participated in this match (or it's currently active)
     var playerResult = match.PlayerResults.FirstOrDefault(p => p.Player == currentUser);
     bool isActive = GameAPIService.ActiveMatchIds.Contains(matchId);
-    if (playerResult == null && !isActive)
+    if (playerResult == null && !isActive &&
+        !match.Games.Any(game => game.Players.Any(player => player.Name == currentUser)))
     {
         return StatusCode(StatusCodes.Status403Forbidden,
           "You do not have access to this match.");
@@ -481,7 +491,7 @@ public class GamesController : APIController
       EventName = match.Event.Description,
       Format = match.Event.Format,
       StartTime = match.Event.StartTime,
-      Result = playerResult?.Result.ToString() ?? "In Progress",
+      Result = GetMatchResult(match, currentUser, isActive),
       Record = $"{wins}-{losses}",
       Duration = FormatDuration(matchDuration),
       DeckRevisionId = match.Event.DeckRevisionId,
@@ -678,9 +688,6 @@ public class GamesController : APIController
     }
   }
 
-  private static string FormatDuration(TimeSpan duration) =>
-    $"{Math.Floor(duration.TotalMinutes)}m {duration.Seconds}s";
-
 [HttpGet("/api/games/formats")]
   public async Task<ActionResult<List<string>>> GetFormats()
   {
@@ -805,7 +812,7 @@ public class GamesController : APIController
         var gameResult = game.GamePlayerResults.FirstOrDefault(p => p.Player == currentUser);
         if (gameResult != null)
         {
-          matchDuration += gameResult.Clock;
+          matchDuration += GetGameDuration(game, gameResult);
         }
       }
 
@@ -938,27 +945,6 @@ public class GamesController : APIController
     }
 
     return Ok(trendData);
-  }
-
-  private static TimeSpan GetGameDuration(GameModel game, GamePlayerResult? gameResult)
-  {
-    if (game.States != null && game.States.Count >= 2)
-    {
-      var minTime = game.States.Min(s => s.ClientTimestamp);
-      var maxTime = game.States.Max(s => s.ClientTimestamp);
-      var diff = maxTime - minTime;
-      if (diff > TimeSpan.Zero && diff < TimeSpan.FromHours(12))
-      {
-        return diff;
-      }
-    }
-
-    if (gameResult != null && gameResult.Clock > TimeSpan.Zero)
-    {
-      return gameResult.Clock;
-    }
-
-    return TimeSpan.Zero;
   }
 
   private static string ResolvePlayDraw(

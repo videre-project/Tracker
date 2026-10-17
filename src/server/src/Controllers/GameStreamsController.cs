@@ -115,16 +115,17 @@ public sealed class GameStreamsController(
             ? await deckService.GetRevisionAsync(revisionId)
             : null;
         bool isActive = GameAPIService.ActiveMatchIds.Contains(id);
-        var playerResult = match.PlayerResults.FirstOrDefault(p => p.Player == currentUser);
 
+        var recordedDurations = await ReadGameDurationsAsync(
+          freshContext, match.Games.Select(game => game.Id));
         TimeSpan matchDuration = TimeSpan.Zero;
         int wins = 0, losses = 0;
         foreach (var game in match.Games)
         {
           var gameResult = game.GamePlayerResults.FirstOrDefault(p => p.Player == currentUser);
+          matchDuration += GetGameDuration(game, gameResult, recordedDurations);
           if (gameResult != null)
           {
-            matchDuration += gameResult.Clock;
             if (gameResult.Result == GameResult.Win) wins++;
             else if (gameResult.Result == GameResult.Loss) losses++;
           }
@@ -137,9 +138,9 @@ public sealed class GameStreamsController(
           EventName = match.Event?.Description ?? "",
           Format = match.Event?.Format ?? "",
           StartTime = match.Event?.StartTime ?? DateTime.MinValue,
-          Result = playerResult?.Result.ToString() ?? "In Progress",
+          Result = GetMatchResult(match, currentUser, isActive),
           Record = $"{wins}-{losses}",
-          Duration = $"{Math.Floor(matchDuration.TotalMinutes)}m {matchDuration.Seconds}s",
+          Duration = FormatDuration(matchDuration),
           DeckRevisionId = match.Event?.DeckRevisionId,
           DeckName = deck?.Name,
           DeckColors = deck?.Colors,

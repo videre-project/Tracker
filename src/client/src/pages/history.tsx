@@ -53,52 +53,11 @@ export default function History() {
   }, [formats, gameType])
 
   const effectiveRange = dateRange || "ALL"
-  const { data, loading, error } = useGamesHistory(page, pageSize, effectiveRange, selectedFormat)
-  const [liveItems, setLiveItems] = useState<MatchHistoryItem[]>([])
+  const { data, loading, error, refresh } = useGamesHistory(page, pageSize, effectiveRange, selectedFormat)
   const { isReady: clientReady } = useClientState()
 
   // Subscribe to event/match creation/completion SSE stream
-  const onSSEMessage = useCallback((dto: MatchHistoryItem) => {
-    setLiveItems(prev => {
-      if (dto.isEvent) {
-        const idx = prev.findIndex(m => m.isEvent && m.eventId === dto.eventId)
-        if (idx !== -1) {
-          const updated = [...prev]
-          updated[idx] = dto
-          return updated
-        }
-        return [dto, ...prev]
-      }
-
-      const parentIdx = prev.findIndex(m => m.isEvent && m.eventId === dto.eventId)
-      if (parentIdx !== -1) {
-        const updated = [...prev]
-        const parent = { ...updated[parentIdx] }
-        const children = [...(parent.matches || [])]
-        const childIdx = children.findIndex(c => c.id === dto.id)
-        if (childIdx !== -1) {
-          children[childIdx] = dto
-        } else {
-          children.push(dto)
-        }
-        parent.matches = children
-        if (children.some(c => c.isActive)) {
-          parent.isActive = true
-          parent.result = "In Progress"
-        }
-        updated[parentIdx] = parent
-        return updated
-      }
-
-      const idx = prev.findIndex(m => m.id === dto.id)
-      if (idx !== -1) {
-        const updated = [...prev]
-        updated[idx] = dto
-        return updated
-      }
-      return [dto, ...prev]
-    })
-  }, [])
+  const onSSEMessage = useCallback(() => refresh(), [refresh])
 
   useNDJSONStream<MatchHistoryItem>({
     url: getApiUrl("/api/games/history/watch"),
@@ -110,22 +69,11 @@ export default function History() {
     useConstantRetry: true,
   })
 
-  const mergedItems = useMemo(() => {
-    const fetched = data?.items || []
-    const fetchedEventIds = new Set(fetched.map((m: MatchHistoryItem) => m.eventId))
-    const fetchedMatchIds = new Set(fetched.map((m: MatchHistoryItem) => m.id))
-
-    const newLive = liveItems.filter(m => {
-      if (m.isEvent) return !fetchedEventIds.has(m.eventId)
-      return !fetchedMatchIds.has(m.id)
-    })
-    return [...newLive, ...fetched]
-  }, [data, liveItems])
+  const mergedItems = data?.items ?? []
 
   const handleFormatSelect = (f: string) => {
     setSelectedFormat(f)
     setPage(1)
-    setLiveItems([])
   }
 
   const handleGameTypeSelect = (value: GameType) => {
@@ -138,14 +86,12 @@ export default function History() {
       handleFormatSelect("")
     } else {
       setPage(1)
-      setLiveItems([])
     }
   }
 
   const handleDateChange = (range: DateRange | undefined) => {
     setDateRange(range)
     setPage(1)
-    setLiveItems([])
   }
 
   const handleRowClick = useCallback(
