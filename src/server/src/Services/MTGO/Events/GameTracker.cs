@@ -39,7 +39,6 @@ public class GameTracker : IDisposable
   private readonly int _gameId;
   private readonly BlockingCollection<GameLogEntry> _eventLog;
   private readonly EventDatabaseWriter _dbWriter;
-  private readonly DateTime _trackerStartTime = DateTime.Now;
 
   private readonly HashSet<int> _seenCardIds = new();
   private readonly HashSet<int> _seenPlayerIndices = new();
@@ -102,15 +101,6 @@ public class GameTracker : IDisposable
     DateTime CapturedAt);
 
   /// <summary>
-  /// Eagerly initializes the static hooks used by GameTracker so that
-  /// the IPC type-dump cost is paid at startup, not on first game join.
-  /// </summary>
-  public static void EnsureHooksInitialized()
-  {
-    Game.GameResultsChanged.EnsureInitialize();
-  }
-
-  /// <summary>
   /// Initializes a new instance of the <see cref="GameTracker"/> class.
   /// </summary>
   /// <param name="game">The game to track.</param>
@@ -150,7 +140,6 @@ public class GameTracker : IDisposable
 
     // Still need direct Game events for lifecycle
     game.GameStatusChanged += OnGameStatusChanged;
-    game.OnGameResultsChanged += OnGameResultsChanged;
 
     // All processors are registered — allow the drain loop to start
     // processing queued hooks. Before this call, hooks are buffered but
@@ -189,8 +178,7 @@ public class GameTracker : IDisposable
     if (_disposed) return;
 
     // Drain any remaining hooks before shutting down event handlers.
-    // OnGameStatusChanged already waits up to 30s, but Dispose() may
-    // also be called directly (e.g. service shutdown).
+    // This also runs when the service shuts down before a game finishes.
     GameProcessor.ForGame(_game).WaitForPendingProcessing(TimeSpan.FromSeconds(30));
 
     lock (_flushLock)
@@ -823,74 +811,13 @@ public class GameTracker : IDisposable
   //
   // Direct Game event handlers (lifecycle)
   //
-  private volatile bool _resultsWritten = false;
-
   private void OnGameStatusChanged()
   {
     if (_game.Status == GameStatus.Finished)
     {
-      Task.Run(() =>
-      {
-        // Wait for the drain loop to finish processing all remaining
-        // hooks. This replaces the old fixed 5-second delay — the drain
-        // may take much longer if there's a large hook buffer at game end.
-        GameProcessor.ForGame(_game).WaitForPendingProcessing(TimeSpan.FromSeconds(30));
-
-        // Brief grace period for OnGameResultsChanged to fire.
-        // Results are computed before the status change in MTGO, but
-        // the callbacks arrive from separate hooks and can race.
-        Thread.Sleep(2_000);
-
-        if (!_resultsWritten)
-        {
-          var fallbackResults = MatchTracker.BuildFallbackResults(_game);
-          if (fallbackResults != null)
-          {
-            if (_dbWriter.TryUpdateGameResults(_game, fallbackResults))
-            {
-              _resultsWritten = true;
-              Log.Debug("Updated fallback game results for {Id}", _gameId);
-            }
-          }
-        }
-
-        Dispose();
-      });
-    }
-  }
-
-  private void OnGameResultsChanged(IList<GamePlayerResult> results)
-  {
-    GameLogModel[] pendingLogs;
-    lock (_flushLock)
-      pendingLogs = _pendingStates.Values.SelectMany(state => state.Logs).ToArray();
-    TimeSpan actualDuration;
-    if (_game.CompletedDuration.HasValue && _game.CompletedDuration.Value > TimeSpan.Zero)
-    {
-      actualDuration = _game.CompletedDuration.Value;
-    }
-    else if (pendingLogs.Length >= 2)
-    {
-      var minLog = pendingLogs.Min(l => l.Timestamp);
-      var maxLog = pendingLogs.Max(l => l.Timestamp);
-      actualDuration = maxLog - minLog;
-    }
-    else
-    {
-      actualDuration = DateTime.Now - _trackerStartTime;
-    }
-
-    if (actualDuration < TimeSpan.Zero) actualDuration = TimeSpan.Zero;
-
-    var computedResults = results.Select(r => new GamePlayerResult(
-      r.Player, r.PlayDraw, r.Result, actualDuration
-    )).ToList();
-
-    if (_dbWriter.TryUpdateGameResults(_game, computedResults))
-    {
-      _resultsWritten = true;
-      string jsonRes = JsonSerializer.Serialize(computedResults);
-      Log.Debug("Updated game results for {Id}: {Results}", _gameId, jsonRes);
+      // Result subscriptions belong to the service and survive recorder teardown.
+      // Dispose drains the processor and writer without delaying result delivery.
+      _ = Task.Run(Dispose);
     }
   }
 

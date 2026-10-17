@@ -400,49 +400,14 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
   }
 
   /// <summary>
-  /// Waits for the game to contain a non-empty GamePlayerResults entry.
+  /// Reads recorded games for a match, including their saved results.
   /// </summary>
-  public async Task<bool> WaitForGameCompletionAsync
-  (
-    int gameId,
-    CancellationToken cancellationToken = default)
+  public async Task<List<GameModel>> GetGamesAsync(int matchId)
   {
-    using (var scope = serviceProvider.CreateScope())
-    {
-      var context = scope.ServiceProvider.GetRequiredService<EventContext>();
-
-      // Wait until the GamePlayerResults entry is non-empty
-      return await WaitUntilAsync(async () =>
-        await context.Games
-          .AnyAsync(g => g.Id == gameId && g.GamePlayerResults.Count > 0,
-                    cancellationToken),
-        delay: 250,
-        retries: 8,
-        ct: cancellationToken
-      );
-    }
-  }
-
-  //
-  //
-  //
-
-  public async Task<IEnumerable<GameModel>> GetGamesAsync(
-    int matchId,
-    CancellationToken cancellationToken = default)
-  {
-    using (var scope = serviceProvider.CreateScope())
-    {
-      var context = scope.ServiceProvider.GetRequiredService<EventContext>();
-
-      // Check if the match ID is already in the map
-      if (!s_matchIdMap.ContainsKey(matchId)) return Enumerable.Empty<GameModel>();
-
-      // Fetch games related to the match ID
-      return await context.Games
-        .Where(g => g.MatchId == matchId)
-        .ToListAsync(cancellationToken);
-    }
+    using var scope = serviceProvider.CreateScope();
+    var context = scope.ServiceProvider.GetRequiredService<EventContext>();
+    return await context.Games.AsNoTracking()
+      .Where(game => game.MatchId == matchId).ToListAsync();
   }
 
   //
@@ -857,8 +822,10 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
   // Table mutations
   //
 
-  public bool TryUpdateGameResults(Game game, IList<GamePlayerResult> results)
+  public bool TryUpdateGameResults(
+    int gameId, IList<GamePlayerResult> results, out int matchId)
   {
+    matchId = 0;
     using (var scope = serviceProvider.CreateScope())
     {
       var context = scope.ServiceProvider.GetRequiredService<EventContext>();
@@ -868,35 +835,52 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
         using var transaction = context.Database.BeginTransaction();
 
         // Check if game already exists
-        var existingGame = context.Games.FirstOrDefault(g => g.Id == game.Id);
+        var existingGame = context.Games.FirstOrDefault(g => g.Id == gameId);
 
         if (existingGame == null)
         {
-          Log.Warning("Game {Id} not found for updating results", game.Id);
+          Log.Warning("Game {Id} not found for updating results", gameId);
           return false;
         }
 
-        // Update player results
-        existingGame.GamePlayerResults.Clear();
-        foreach (var result in results)
+        var recorded = context.GameStates
+          .Where(state => state.GameId == gameId)
+          .GroupBy(state => state.GameId)
+          .Select(group => new
+          {
+            Start = group.Min(state => state.ClientTimestamp),
+            End = group.Max(state => state.ClientTimestamp)
+          }).FirstOrDefault();
+        TimeSpan? recordedDuration = recorded != null && recorded.End > recorded.Start
+          ? recorded.End - recorded.Start : null;
+
+        // Match-server rankings can arrive after game-server results. Preserve
+        // play/draw from the richer message rather than replacing it with Unknown.
+        existingGame.GamePlayerResults = results.Select(result =>
         {
-          existingGame.GamePlayerResults.Add(result);
-        }
+          var previous = existingGame.GamePlayerResults
+            .FirstOrDefault(entry => entry.Player == result.Player);
+          var playDraw = result.PlayDraw == PlayDrawResult.Unknown && previous != null
+            ? previous.PlayDraw : result.PlayDraw;
+          return new GamePlayerResult(result.Player, playDraw, result.Result,
+            recordedDuration ?? result.Clock);
+        }).ToList();
 
         context.Entry(existingGame).State = EntityState.Modified;
         context.SaveChanges();
         transaction.Commit();
+        matchId = existingGame.MatchId;
         return true;
       }
       catch (DbUpdateConcurrencyException ex)
       {
         Log.Warning("Concurrency conflict occurred while updating game results for game {GameId}: {Message}",
-                  game.Id, ex.Message);
+                  gameId, ex.Message);
         return false;
       }
       catch (Exception ex)
       {
-        Log.Error(ex, "Error updating game results for game {GameId}", game.Id);
+        Log.Error(ex, "Error updating game results for game {GameId}", gameId);
         Log.Debug(ex.Message + "\n" + ex.StackTrace);
         return false;
       }
@@ -944,7 +928,7 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
     }
   }
 
-  public bool TryUpdateMatchResults(Match match, IList<PlayerResult> results)
+  public bool TryUpdateMatchResults(int matchId, IList<PlayerResult> results)
   {
     using (var scope = serviceProvider.CreateScope())
     {
@@ -955,11 +939,11 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
         using var transaction = context.Database.BeginTransaction();
 
         // Check if match already exists
-        var existingMatch = context.Matches.FirstOrDefault(m => m.Id == match.Id);
+        var existingMatch = context.Matches.FirstOrDefault(m => m.Id == matchId);
 
         if (existingMatch == null)
         {
-          Log.Warning("Match {Id} not found for updating results", match.Id);
+          Log.Warning("Match {Id} not found for updating results", matchId);
           return false;
         }
 
@@ -978,12 +962,12 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
       catch (DbUpdateConcurrencyException ex)
       {
         Log.Warning("Concurrency conflict occurred while updating match results for match {MatchId}: {Message}",
-                  match.Id, ex.Message);
+                  matchId, ex.Message);
         return false;
       }
       catch (Exception ex)
       {
-        Log.Error(ex, "Error updating match results for match {MatchId}", match.Id);
+        Log.Error(ex, "Error updating match results for match {MatchId}", matchId);
         return false;
       }
     }

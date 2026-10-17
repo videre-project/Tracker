@@ -88,7 +88,7 @@ public static class GameAPIService
   public static EventHandler<int>? MatchCreated;
 
   /// <summary>
-  /// An event that is raised when match results are persisted to the database.
+  /// An event that is raised when game or match results are persisted to the database.
   /// The event argument is the match ID.
   /// </summary>
   public static EventHandler<int>? MatchResultUpdated;
@@ -429,8 +429,17 @@ public static class GameAPIService
     {
       _dbWriter.TryAddMatch(match, eventId, out var _);
       MatchCreated?.Invoke(null, match.Id);
+      if (_matchTrackers.ContainsKey(match.Id))
+      {
+        // A queued game-join callback can arrive after the match completed.
+        if (match.IsComplete) RemoveActiveMatch(match.Id);
+        return;
+      }
       MatchTracker tracker = new(match, _dbWriter);
       _matchTrackers.TryAdd(match.Id, tracker);
+      ReconcileCompletedGameResults(match);
+      if (match.IsComplete)
+        OnMatchResultsChanged(match.Id, match.Results);
     }
 
     private void CreateGameTracker(Game game, int? matchId = null)
@@ -440,6 +449,11 @@ public static class GameAPIService
       _dbWriter.TryAddGame(game, matchId.Value, out var _);
       GameTracker tracker = new(game, _eventLog, _dbWriter);
       _gameTrackers.TryAdd(game.Id, tracker);
+      if (game.Status == GameStatus.Finished)
+      {
+        SaveGameResults(game.Id, game.Results);
+        _ = Task.Run(tracker.Dispose);
+      }
     }
 
     private void OnEventJoined(Event e, DateTime timestamp)
@@ -507,8 +521,55 @@ public static class GameAPIService
       }
     }
 
+    private void OnGameResultsChanged(Game game, IList<GamePlayerResult> results)
+    {
+      int gameId = game.Id;
+      if (!_activeGames.ContainsKey(gameId) || results.Count == 0) return;
+      SaveGameResults(gameId, results);
+    }
+
+    private void SaveGameResults(int gameId, IList<GamePlayerResult> results)
+    {
+      if (results.Count == 0) return;
+      if (!_dbWriter.TryUpdateGameResults(gameId, results, out int matchId)) return;
+      MatchResultUpdated?.Invoke(this, matchId);
+      Log.Debug("Updated game results for {Id}: {Results}", gameId,
+        System.Text.Json.JsonSerializer.Serialize(results));
+    }
+
+    private void ReconcileCompletedGameResults(Match match)
+    {
+      // Only reconcile existing recordings; attaching does not create past games.
+      var missing = _dbWriter.GetGamesAsync(match.Id).GetAwaiter().GetResult()
+        .Where(game => game.GamePlayerResults.Count == 0)
+        .Select(game => game.Id).ToHashSet();
+      foreach (var game in match.Games)
+      {
+        if (missing.Contains(game.Id) && game.Status == GameStatus.Finished)
+          SaveGameResults(game.Id, game.Results);
+      }
+    }
+
+    private void OnMatchResultsChanged(int matchId, IList<PlayerResult> results)
+    {
+      if (!_matchTrackers.ContainsKey(matchId) || results.Count == 0) return;
+      if (!_dbWriter.TryUpdateMatchResults(matchId, results)) return;
+      RemoveActiveMatch(matchId);
+      MatchResultUpdated?.Invoke(this, matchId);
+      Log.Debug("Updated match results for {Id}: {Results}", matchId,
+        System.Text.Json.JsonSerializer.Serialize(results));
+    }
+
     private void OnEventRemoved(Event e, DateTime timestamp)
     {
+      if (e is Match match)
+      {
+        _activeMatches.TryRemove(match.Id, out _);
+        if (_matchTrackers.TryGetValue(match.Id, out var matchTracker))
+          matchTracker.OnRemoved();
+        MatchResultUpdated?.Invoke(this, match.Id);
+      }
+
       int eventId = e.GetDatabaseId();
       if (_eventTrackers.TryRemove(eventId, out var tracker))
       {
@@ -541,6 +602,9 @@ public static class GameAPIService
       {
         EventManager.EventJoined += OnEventJoined;
         EventManager.EventRemoved += OnEventRemoved;
+        Game.GameResultsChanged += OnGameResultsChanged;
+        Game.PlayerRankingsChanged += OnGameResultsChanged;
+        Match.MatchResultsChanged += OnMatchResultsChanged;
         EventManager.GameJoined += OnGameJoined;
         
         // Monitor all featured events for player count changes using event discovery.
@@ -669,7 +733,9 @@ public static class GameAPIService
       PromptProcessor.EnsureHookInitialized();
       LogMessageProcessor.EnsureHookInitialized();
       MatchTracker.EnsureHooksInitialized();
-      GameTracker.EnsureHooksInitialized();
+      Game.GameResultsChanged.EnsureInitialize();
+      Game.PlayerRankingsChanged.EnsureInitialize();
+      Match.EnsureResultHooksInitialized();
       Tournament.StandingsChanged.EnsureInitialize();
       Tournament.RoundChanged.EnsureInitialize();
       Tournament.StateChanged.EnsureInitialize();
@@ -682,6 +748,10 @@ public static class GameAPIService
       // Unsubscribe from events — safe even if the remote process is dead.
       Try(() => EventManager.EventJoined -= OnEventJoined);
       Try(() => EventManager.GameJoined -= OnGameJoined);
+      Try(() => EventManager.EventRemoved -= OnEventRemoved);
+      Try(() => Game.GameResultsChanged -= OnGameResultsChanged);
+      Try(() => Game.PlayerRankingsChanged -= OnGameResultsChanged);
+      Try(() => Match.MatchResultsChanged -= OnMatchResultsChanged);
 
       if (s_playerEventsCreatedHandler != null)
       {
