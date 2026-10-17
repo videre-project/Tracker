@@ -3195,6 +3195,13 @@ export interface components {
         };
         /** @enum {string} */
         "MTGOSDK.API.Collection.SetType": "NotSet" | "CoreSet" | "LargeExpansionSet" | "SmallExpansionSet" | "EventTicket" | "TestSet" | "Supplemental" | "PromotionalSet" | "Ancillary" | "FixedAncillary" | "Placeholder";
+        /** @enum {string} */
+        "MTGOSDK.API.Interface.Controls.PromptButtonGroup": "Standard" | "Mana";
+        "MTGOSDK.API.Interface.Controls.PromptControlId": {
+            group?: PromptButtonGroup;
+            /** Format: int32 */
+            index?: number;
+        };
         "MTGOSDK.API.Interface.ViewModels.ChatSessionViewModel": {
             readonly name?: string | null;
             channel?: Channel;
@@ -3223,6 +3230,12 @@ export interface components {
             readonly isParticipant?: boolean;
             readonly isEliminated?: boolean;
         };
+        /** @enum {string} */
+        "MTGOSDK.API.Play.Games.ActionType": "Invalid" | "ChooseOption" | "CardAction" | "OrderTargets" | "DistributeAmongTargets" | "ChooseNumber" | "ChoosePlayer" | "ChoosePile" | "PayMana" | "SelectFromList" | "WishCard" | "OKWithManaBurnPrompt" | "CardSelector" | "PromptControl";
+        /** @enum {string} */
+        "MTGOSDK.API.Play.Games.CardZone": "Invalid" | "Hand" | "Library" | "Graveyard" | "Exile" | "LocalExileCanBePlayed" | "OpponentExileCanBePlayed" | "Battlefield" | "Stack" | "Command" | "Commander" | "Planar" | "Effects" | "LocalTriggers" | "OpponentTriggers" | "Aside" | "Revealed" | "Pile1" | "Pile2" | "Pile3" | "Nowhere" | "Sideboard" | "Mutate" | "Companion";
+        /** @enum {string} */
+        "MTGOSDK.API.Play.Games.InteractionMode": "None" | "SelectTargets" | "SelectAction" | "SelectPlayer" | "SelectFromList" | "OrderTargets" | "ChoosePile" | "WishCard" | "CardSelector" | "Distributing" | "Undefined";
         "MTGOSDK.API.Play.PlayFormat": {
             readonly name?: string | null;
             readonly code?: string | null;
@@ -3829,6 +3842,8 @@ export interface components {
             initialZone: string | null;
             initialPower?: string | null;
             initialToughness?: string | null;
+            initialCounters?: string | null;
+            initialAbilities?: string | null;
             /** Format: int32 */
             ownerId?: number;
             /** Format: int32 */
@@ -3882,6 +3897,8 @@ export interface components {
             index?: number;
             /** Format: int32 */
             nonce?: number;
+            /** Format: int32 */
+            serverNonce?: number | null;
             /** Format: date-time */
             timestamp?: string;
             /** Format: int32 */
@@ -3890,8 +3907,9 @@ export interface components {
             /** Format: int32 */
             promptedPlayer?: number;
             promptText: string | null;
-            /** @description JSON array of available prompt actions, e.g. [{"type":"ChooseOption","name":"OK"}]. */
-            promptOptions?: string | null;
+            /** @description Captured native prompt actions and local prompt controls. */
+            promptOptions?: PromptOptionData[] | null;
+            interaction?: GameInteractionData;
             zoneTransfers?: ZoneTransferData[] | null;
             cardChanges?: CardChangeData[] | null;
             playerChanges?: PlayerChangeData[] | null;
@@ -4035,6 +4053,20 @@ export interface components {
         "Tracker.Database.Models.Trades.TradeEscrowKind": "Player" | "NonPlayer";
         /** @enum {string} */
         "Tracker.Database.Models.Trades.TradeEscrowResult": "InProgress" | "Completed" | "Cancelled" | "Failed" | "ClosedUnknown" | "Interrupted";
+        /** @description Display identity and visual flags for an ability awaiting placement on the stack. */
+        "Tracker.Services.MTGO.Events.AbilityInteractionData": {
+            logicalAddress?: string | null;
+            zone?: CardZone;
+            name?: string | null;
+            rulesText?: string | null;
+            /** Format: int32 */
+            catalogId?: number | null;
+            isSelectable?: boolean;
+            isTargetable?: boolean;
+            isTargeted?: boolean;
+            isBeingCast?: boolean;
+            isActive?: boolean;
+        };
         /**
          * @description Data payload item for Tracker.Services.MTGO.Events.GameLogType.CardChange events.
          *     Each event contains an array of these representing property diffs.
@@ -4047,8 +4079,23 @@ export interface components {
             oldValue?: string | null;
             newValue?: string | null;
         };
+        /**
+         * @description Complete replay interaction flags, with display data for pending abilities.
+         *     Empty lists clear the preceding state's flags.
+         */
+        "Tracker.Services.MTGO.Events.GameInteractionData": {
+            mode?: InteractionMode;
+            promptText?: string | null;
+            selectable?: number[] | null;
+            targetable?: number[] | null;
+            targeted?: number[] | null;
+            casting?: number[] | null;
+            dimmed?: number[] | null;
+            abilities?: AbilityInteractionData[] | null;
+            players?: PlayerInteractionData[] | null;
+        };
         /** @enum {string} */
-        "Tracker.Services.MTGO.Events.GameLogType": "GameState" | "GameAction" | "ZoneChange" | "CardChange" | "PlayerChange" | "LogMessage" | "DamageAssignment" | "Reveal";
+        "Tracker.Services.MTGO.Events.GameLogType": "GameState" | "GameAction" | "ZoneChange" | "CardChange" | "PlayerChange" | "LogMessage" | "DamageAssignment" | "Reveal" | "Interaction";
         /**
          * @description Data payload for Tracker.Services.MTGO.Events.GameLogType.GameState events.
          *     Emitted when the turn number or phase changes between snapshots.
@@ -4072,6 +4119,34 @@ export interface components {
             property: string | null;
             oldValue?: string | null;
             newValue?: string | null;
+        };
+        "Tracker.Services.MTGO.Events.PlayerInteractionData": {
+            /** Format: int32 */
+            playerIndex?: number;
+            isTargetable?: boolean;
+            isTargeted?: boolean;
+            isActive?: boolean;
+        };
+        /**
+         * @description A captured prompt option with typed action identity and local control fields.
+         *     Native action-specific fields retain the schema emitted by MTGOSDK's ToJSON().
+         */
+        "Tracker.Services.MTGO.Events.PromptOptionData": {
+            type: ActionType;
+            name?: string | null;
+            $type?: string | null;
+            /** Format: int32 */
+            actionId?: number | null;
+            enabled?: boolean | null;
+            controlId?: PromptControlId;
+            buttonType?: string | null;
+            color?: string | null;
+            /** Format: int32 */
+            promptNonce?: number | null;
+            /** @description Decimal representation of the SDK's 64-bit revision, preserved across JavaScript clients. */
+            clientRevision?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * @description Data payload item for Tracker.Services.MTGO.Events.GameLogType.ZoneChange events.
@@ -4106,8 +4181,13 @@ export type MtgosdkApiCollectionDeckRegion = DeckRegion;
 export type MtgosdkApiCollectionItemCollection = ItemCollection;
 export type MtgosdkApiCollectionSet = Set;
 export type MtgosdkApiCollectionSetType = SetType;
+export type MtgosdkApiInterfaceControlsPromptButtonGroup = PromptButtonGroup;
+export type MtgosdkApiInterfaceControlsPromptControlId = PromptControlId;
 export type MtgosdkApiInterfaceViewModelsChatSessionViewModel = ChatSessionViewModel;
 export type MtgosdkApiPlayEvent = Event;
+export type MtgosdkApiPlayGamesActionType = ActionType;
+export type MtgosdkApiPlayGamesCardZone = CardZone;
+export type MtgosdkApiPlayGamesInteractionMode = InteractionMode;
 export type MtgosdkApiPlayPlayFormat = PlayFormat;
 export type MtgosdkApiPlayPlayFormatType = PlayFormatType;
 export type MtgosdkApiPlayTournamentsTournamentState = TournamentState;
@@ -4183,10 +4263,14 @@ export type TrackerDatabaseModelsTradesTradeAttributionStatus = TradeAttribution
 export type TrackerDatabaseModelsTradesTradeEscrowItemRole = TradeEscrowItemRole;
 export type TrackerDatabaseModelsTradesTradeEscrowKind = TradeEscrowKind;
 export type TrackerDatabaseModelsTradesTradeEscrowResult = TradeEscrowResult;
+export type TrackerServicesMtgoEventsAbilityInteractionData = AbilityInteractionData;
 export type TrackerServicesMtgoEventsCardChangeData = CardChangeData;
+export type TrackerServicesMtgoEventsGameInteractionData = GameInteractionData;
 export type TrackerServicesMtgoEventsGameLogType = GameLogType;
 export type TrackerServicesMtgoEventsGameStateData = GameStateData;
 export type TrackerServicesMtgoEventsPlayerChangeData = PlayerChangeData;
+export type TrackerServicesMtgoEventsPlayerInteractionData = PlayerInteractionData;
+export type TrackerServicesMtgoEventsPromptOptionData = PromptOptionData;
 export type TrackerServicesMtgoEventsZoneTransferData = ZoneTransferData;
 export type $defs = Record<string, never>;
 export type operations = Record<string, never>;
@@ -4204,8 +4288,13 @@ export type DeckRegion = components['schemas']['MTGOSDK.API.Collection.DeckRegio
 export type ItemCollection = components['schemas']['MTGOSDK.API.Collection.ItemCollection'];
 export type Set = components['schemas']['MTGOSDK.API.Collection.Set'];
 export type SetType = components['schemas']['MTGOSDK.API.Collection.SetType'];
+export type PromptButtonGroup = components['schemas']['MTGOSDK.API.Interface.Controls.PromptButtonGroup'];
+export type PromptControlId = components['schemas']['MTGOSDK.API.Interface.Controls.PromptControlId'];
 export type ChatSessionViewModel = components['schemas']['MTGOSDK.API.Interface.ViewModels.ChatSessionViewModel'];
 export type Event = components['schemas']['MTGOSDK.API.Play.Event'];
+export type ActionType = components['schemas']['MTGOSDK.API.Play.Games.ActionType'];
+export type CardZone = components['schemas']['MTGOSDK.API.Play.Games.CardZone'];
+export type InteractionMode = components['schemas']['MTGOSDK.API.Play.Games.InteractionMode'];
 export type PlayFormat = components['schemas']['MTGOSDK.API.Play.PlayFormat'];
 export type PlayFormatType = components['schemas']['MTGOSDK.API.Play.PlayFormatType'];
 export type TournamentState = components['schemas']['MTGOSDK.API.Play.Tournaments.TournamentState'];
@@ -4281,8 +4370,12 @@ export type TradeAttributionStatus = components['schemas']['Tracker.Database.Mod
 export type TradeEscrowItemRole = components['schemas']['Tracker.Database.Models.Trades.TradeEscrowItemRole'];
 export type TradeEscrowKind = components['schemas']['Tracker.Database.Models.Trades.TradeEscrowKind'];
 export type TradeEscrowResult = components['schemas']['Tracker.Database.Models.Trades.TradeEscrowResult'];
+export type AbilityInteractionData = components['schemas']['Tracker.Services.MTGO.Events.AbilityInteractionData'];
 export type CardChangeData = components['schemas']['Tracker.Services.MTGO.Events.CardChangeData'];
+export type GameInteractionData = components['schemas']['Tracker.Services.MTGO.Events.GameInteractionData'];
 export type GameLogType = components['schemas']['Tracker.Services.MTGO.Events.GameLogType'];
 export type GameStateData = components['schemas']['Tracker.Services.MTGO.Events.GameStateData'];
 export type PlayerChangeData = components['schemas']['Tracker.Services.MTGO.Events.PlayerChangeData'];
+export type PlayerInteractionData = components['schemas']['Tracker.Services.MTGO.Events.PlayerInteractionData'];
+export type PromptOptionData = components['schemas']['Tracker.Services.MTGO.Events.PromptOptionData'];
 export type ZoneTransferData = components['schemas']['Tracker.Services.MTGO.Events.ZoneTransferData'];

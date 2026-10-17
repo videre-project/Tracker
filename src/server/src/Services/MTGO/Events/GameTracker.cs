@@ -6,17 +6,19 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
+using MTGOSDK.API.Interface.Controls;
 using MTGOSDK.API.Chat;
 using MTGOSDK.API.Play.Games;
 using MTGOSDK.API.Play.Games.Processors;
 using MTGOSDK.API.Play.Games.Processors.Events;
-using MTGOSDK.API.Play.Games.Processors.Snapshots;
 using MTGOSDK.API.Play.Games.Processors.Partials;
+using MTGOSDK.API.Play.Games.Processors.Snapshots;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection.Serialization;
 using static MTGOSDK.Core.Reflection.DLRWrapper;
@@ -28,52 +30,50 @@ namespace Tracker.Services.MTGO.Events;
 
 /// <summary>
 /// Tracks game events via GameProcessor and writes structured data to the
-/// database. Replaces the manual event subscription approach with the
-/// snapshot-based processor pipeline.
+/// database. Completed SDK publications pair gameplay changes with captured
+/// actions and client selection state.
 /// </summary>
 public class GameTracker : IDisposable
 {
   private readonly Game _game;
+  private readonly int _gameId;
   private readonly BlockingCollection<GameLogEntry> _eventLog;
   private readonly EventDatabaseWriter _dbWriter;
   private readonly DateTime _trackerStartTime = DateTime.Now;
 
-  // State tracking
   private readonly HashSet<int> _seenCardIds = new();
   private readonly HashSet<int> _seenPlayerIndices = new();
-  private readonly HashSet<int> _currentZoneTransferCardIds = new();
-  private int _currentNonce;
-  private int _previousNonce;
+  private int? _lastPublishedNonce;
   private int _lastTurnNumber;
   private string? _lastPhase;
 
-  // Pending models buffered per snapshot tick — enqueued for async write
-  private GameStateSnapshot? _pendingSnapshot;
-  private readonly ConcurrentDictionary<int, GamePrompt> _promptsByNonce = new();
+  // Gameplay events accumulate by snapshot until the SDK publishes its
+  // completed state. Later local captures use that snapshot without its deltas.
+  private readonly object _flushLock = new();
+  private readonly Dictionary<GameStateSnapshot, PendingState> _pendingStates =
+    new(ReferenceEqualityComparer.Instance);
 
-  /// <summary>
-  /// Guards <see cref="EnqueueFlush"/> so that <see cref="ForceFlush"/>
-  /// (API thread) cannot interleave with drain-loop callers that read/clear
-  /// <c>_pending*</c> buffers.
-  /// </summary>
-  private readonly object _flushLock = new object();
-  private readonly List<GameCardModel> _pendingCards = new();
-  private readonly List<GamePlayerModel> _pendingPlayers = new();
-  private readonly List<ZoneTransferModel> _pendingZoneTransfers = new();
-  private readonly List<CardStateChangeModel> _pendingCardChanges = new();
-  private readonly List<PlayerStateChangeModel> _pendingPlayerChanges = new();
-  private readonly List<GameAction> _pendingActions = new();
-  private readonly List<GameLogModel> _pendingLogs = new();
+  private sealed class PendingState(GameStateSnapshot snapshot)
+  {
+    public GameStateSnapshot Snapshot { get; } = snapshot;
+    public HashSet<int> ZoneTransferCardIds { get; } = new();
+    public List<GameCardModel> Cards { get; } = new();
+    public List<GamePlayerModel> Players { get; } = new();
+    public List<ZoneTransferModel> ZoneTransfers { get; } = new();
+    public List<CardStateChangeModel> CardChanges { get; } = new();
+    public List<PlayerStateChangeModel> PlayerChanges { get; } = new();
+    public List<GameAction> Actions { get; } = new();
+    public List<GameLogModel> Logs { get; } = new();
+    public List<GameLogEntry> Events { get; } = new();
+  }
 
   // Background writer — decouples processor thread from DB I/O
   private readonly BlockingCollection<object> _flushQueue = new();
   private readonly Thread _writerThread;
 
   /// <summary>
-  /// Queued for immediate serialization + SSE emission on the writer
-  /// thread when an action is finalized. The serialized model is cached
-  /// in <see cref="_preSerializedActions"/> for reuse by the next
-  /// <see cref="FlushBatch"/>, avoiding double serialization.
+  /// Queued for serialization and SSE emission on the writer
+  /// thread when an action is finalized, and reused when its state is persisted.
   /// </summary>
   private sealed record ActionEmit(
     int GameId,
@@ -81,37 +81,25 @@ public class GameTracker : IDisposable
     int AssignedNonce,
     DateTime SnapshotTimestamp);
 
-  /// <summary>
-  /// Sentinel enqueued by <see cref="ForceFlush"/> after the flush batch.
-  /// The writer thread signals the event after processing all preceding
-  /// items, guaranteeing that DB writes have committed before the API
-  /// query runs.
-  /// </summary>
-  private sealed record FlushComplete(ManualResetEventSlim Signal);
-
+  // A queue barrier lets API callers wait for all preceding database writes.
+  private sealed record FlushComplete(TaskCompletionSource Signal);
 
   // Writer-thread-local cache of action models serialized via ActionEmit.
-  // Keyed by GameAction reference identity so the FlushBatch can look up
-  // the pre-serialized model instead of re-serializing.
+  // Keyed by GameAction reference identity to avoid serializing it twice.
   private readonly Dictionary<GameAction, GameActionModel>
     _preSerializedActions = new();
 
-  /// <summary>
-  /// A snapshot of all buffered models for a single snapshot tick,
-  /// transferred to the writer thread for async DB insertion.
-  /// </summary>
+  // Writer-thread state: an SDK UI update can leave all recorded values unchanged.
+  private GameStateSnapshot? _lastRecordedSnapshot;
+  private IReadOnlyList<PromptOptionData>? _lastRecordedPromptOptions;
+  private GameInteractionData? _lastRecordedInteraction;
+  private int? _lastRecordedNonce;
+  private int? _lastSkippedNonce;
+
   private sealed record FlushBatch(
-    int GameId,
-    GameStateSnapshot Snapshot,
-    int PreviousNonce,
-    List<GameCardModel> Cards,
-    List<GamePlayerModel> Players,
-    List<ZoneTransferModel> ZoneTransfers,
-    List<CardStateChangeModel> CardChanges,
-    List<PlayerStateChangeModel> PlayerChanges,
-    List<GameAction> Actions,
-    List<GameLogModel> Logs,
-    GamePrompt? Prompt);
+    PendingState State,
+    GameStateChangedEventArgs? Update,
+    DateTime CapturedAt);
 
   /// <summary>
   /// Eagerly initializes the static hooks used by GameTracker so that
@@ -134,23 +122,23 @@ public class GameTracker : IDisposable
     EventDatabaseWriter dbWriter)
   {
     _game = game;
+    _gameId = game.Id;
     _eventLog = eventLog;
     _dbWriter = dbWriter;
+    // Reattachment can finalize an action before its first new publication.
+    _lastPublishedNonce = _dbWriter.GetLastRecordedNonce(_gameId);
 
     // Start the background writer thread
     _writerThread = new Thread(ProcessFlushQueue)
     {
-      Name = $"GameTracker-Writer-{game.Id}",
+      Name = $"GameTracker-Writer-{_gameId}",
       IsBackground = true
     };
     _writerThread.Start();
 
-    Log.Debug("Configuring game {Id} GameProcessor events", game.Id);
+    Log.Debug("Configuring game {Id} GameProcessor events", _gameId);
 
-    // Subscribe to GameProcessor events (lazy activation via ProcessorEvent).
-    // Registration order determines processing order within each snapshot:
-    //   RevealedZoneTracker -> ZoneChangeTracker -> PropertyChangeTracker ->
-    //   ActionProcessor -> LogMessageProcessor -> PromptProcessor
+    // Register gameplay processors before subscribing to completed publications.
     game.OnRevealedCards += OnRevealedCards;
     game.OnZoneChanged += OnZoneChanged;
     game.OnCardChanged += OnCardChanged;
@@ -158,7 +146,7 @@ public class GameTracker : IDisposable
     game.OnActionFinalized += OnActionFinalized;
     game.OnLogMessage += OnLogMessage;
     game.OnDamageAssignment += OnDamageAssignment;
-    game.OnPromptChanged += OnPromptChanged;
+    game.OnStateChanged += OnGameStateChanged;
 
     // Still need direct Game events for lifecycle
     game.GameStatusChanged += OnGameStatusChanged;
@@ -170,29 +158,28 @@ public class GameTracker : IDisposable
     // processor set.
     GameProcessor.ForGame(game).Ready();
 
-    Log.Debug("Game {Id} GameProcessor events configured", game.Id);
+    Log.Debug("Game {Id} GameProcessor events configured", _gameId);
   }
 
   /// <summary>
-  /// Forces the current tick's buffered data to be flushed to the database
-  /// synchronously. Called from API endpoints to ensure data is available
-  /// before querying the DB. Safe to call from any thread.
+  /// Waits for completed SDK updates to reach the database before API queries.
+  /// Incomplete gameplay buffers are retained until their publication arrives.
   /// </summary>
   internal void ForceFlush()
   {
     if (_disposed) return;
 
-    // Wait for the GameProcessor drain loop to finish processing all
-    // currently-pending hooks. This ensures that all processor events
-    // (including PromptProcessor) have fired and their data is buffered
-    // before we flush. Without this, ForceFlush can race ahead of the
-    // 25ms drain-loop holdback and flush an empty or incomplete snapshot.
+    // Let the SDK finish pending gameplay before placing the writer barrier.
     GameProcessor.ForGame(_game).WaitForPendingProcessing(TimeSpan.FromMilliseconds(200));
 
-    using var signal = new ManualResetEventSlim(false);
-    EnqueueFlush();
-    _flushQueue.Add(new FlushComplete(signal));
-    signal.Wait(TimeSpan.FromSeconds(5));
+    var signal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+    lock (_flushLock)
+    {
+      if (_disposed) return;
+      _flushQueue.Add(new FlushComplete(signal));
+    }
+    if (!signal.Task.Wait(TimeSpan.FromSeconds(5)))
+      throw new TimeoutException("Timed out waiting for game state persistence.");
   }
 
   private volatile bool _disposed = false;
@@ -206,11 +193,16 @@ public class GameTracker : IDisposable
     // also be called directly (e.g. service shutdown).
     GameProcessor.ForGame(_game).WaitForPendingProcessing(TimeSpan.FromSeconds(30));
 
-    _disposed = true;
-
-    // Enqueue final batch, then signal the writer thread to finish.
-    EnqueueFlush();
-    _flushQueue.CompleteAdding();
+    lock (_flushLock)
+    {
+      if (_disposed) return;
+      _disposed = true;
+      // Final messages can contain gameplay changes without a prompt.
+      foreach (var pending in _pendingStates.Values)
+        _flushQueue.Add(new FlushBatch(pending, null, pending.Snapshot.ClientTimestamp));
+      _pendingStates.Clear();
+      _flushQueue.CompleteAdding();
+    }
     _writerThread.Join();
 
     // Clears EventProxy, EventHookWrapper, ProcessorEvent handlers and
@@ -220,116 +212,18 @@ public class GameTracker : IDisposable
     GC.SuppressFinalize(this);
   }
 
-  /// <summary>
-  /// Ensures the current snapshot tick matches the incoming event's nonce.
-  /// When the nonce changes, enqueues the previous tick's buffered data
-  /// for async DB write.
-  /// </summary>
-  private void EnsureGameState(GameEventArgs args)
+  private PendingState EnsureGameState(GameEventArgs args)
   {
-    int nonce = args.Nonce;
-    if (nonce == _currentNonce && _pendingSnapshot != null)
-      return;
+    if (_pendingStates.TryGetValue(args.Snapshot, out var pending))
+      return pending;
 
-    // Same nonce but snapshot was flushed mid-processing (by ForceFlush).
-    // Recreate the pending snapshot so subsequent events continue accumulating.
-    // FlushStateData handles the existing DB record by adding child rows and
-    // merging PromptOptions. Don't touch _previousNonce or zone-transfer
-    // tracking — earlier events in this nonce already set them correctly.
-    if (nonce == _currentNonce && _pendingSnapshot == null)
-    {
-      _pendingSnapshot = args.Snapshot;
-      return;
-    }
-
-    // Nonce changed — enqueue previous tick's data for async write
-    EnqueueFlush();
-
-    // New nonce — clear zone transfer tracking for new snapshot tick
-    _currentZoneTransferCardIds.Clear();
-    _previousNonce = _currentNonce;
-    _currentNonce = nonce;
-    _pendingSnapshot = args.Snapshot;
-
-    // Emit GameState SSE immediately for turn/phase changes
-    string phase = _pendingSnapshot.CurrentPhase.ToString();
-    if (_pendingSnapshot.TurnNumber != _lastTurnNumber || phase != _lastPhase)
-    {
-      _eventLog.Add(new GameLogEntry(_game.Id,
-        _pendingSnapshot.ClientTimestamp, GameLogType.GameState,
-        JsonSerializer.Serialize(new GameStateData
-        {
-          Turn = _pendingSnapshot.TurnNumber,
-          Phase = phase,
-          PreviousTurn = _lastTurnNumber,
-          PreviousPhase = _lastPhase
-        }, JsonSerializerOptions.Web), _currentNonce));
-
-      _lastTurnNumber = _pendingSnapshot.TurnNumber;
-      _lastPhase = phase;
-    }
+    pending = new PendingState(args.Snapshot);
+    _pendingStates.Add(args.Snapshot, pending);
+    return pending;
   }
 
   /// <summary>
-  /// Transfers all buffered models into a <see cref="FlushBatch"/> and
-  /// enqueues it for the background writer thread. Returns immediately.
-  /// Also emits SSE events for all buffered data — zone/card/player/state
-  /// changes are POCO serializations (no IPC), safe on the processor thread.
-  /// </summary>
-  private void EnqueueFlush()
-  {
-    lock (_flushLock)
-    {
-      if (_pendingSnapshot == null) return;
-
-      // Look up prompt for this snapshot's nonce — just a reference, no IPC.
-      // Serialization happens on the writer thread.
-      _promptsByNonce.TryRemove(_currentNonce, out var prompt);
-
-      // Ownership transfer: copy current buffers into the batch
-      var batch = new FlushBatch(
-        _game.Id,
-        _pendingSnapshot,
-        _previousNonce,
-        new List<GameCardModel>(_pendingCards),
-        new List<GamePlayerModel>(_pendingPlayers),
-        new List<ZoneTransferModel>(_pendingZoneTransfers),
-        new List<CardStateChangeModel>(_pendingCardChanges),
-        new List<PlayerStateChangeModel>(_pendingPlayerChanges),
-        new List<GameAction>(_pendingActions),
-        new List<GameLogModel>(_pendingLogs),
-        prompt);
-
-      _flushQueue.Add(batch);
-
-      // Clear local buffers for the next tick
-      _pendingSnapshot = null;
-      _pendingCards.Clear();
-      _pendingPlayers.Clear();
-      _pendingZoneTransfers.Clear();
-      _pendingCardChanges.Clear();
-      _pendingPlayerChanges.Clear();
-      _pendingActions.Clear();
-      _pendingLogs.Clear();
-    }
-  }
-
-
-  /// <summary>
-  /// Background writer thread entry point. Drains <see cref="_flushQueue"/>
-  /// and processes items sequentially. Item types:
-  /// <list type="bullet">
-  ///   <item><see cref="ActionEmit"/> — serialize the action (IPC-heavy),
-  ///   emit SSE immediately, and cache the model for DB reuse.</item>
-  ///   <item><see cref="FlushBatch"/> — write the snapshot's data
-  ///   (including prompt options) to the database, reusing any
-  ///   pre-serialized action models.</item>
-  ///   <item><see cref="FlushComplete"/> — signal that all preceding
-  ///   items have been processed (used by ForceFlush).</item>
-  /// </list>
-  /// ActionEmit items are always enqueued before their FlushBatch, so
-  /// <see cref="_preSerializedActions"/> is populated before the batch
-  /// needs them.
+  /// Serializes detached SDK values and persists completed updates in order.
   /// </summary>
   private void ProcessFlushQueue()
   {
@@ -337,7 +231,7 @@ public class GameTracker : IDisposable
     {
       if (item is FlushComplete fc)
       {
-        fc.Signal.Set();
+        fc.Signal.TrySetResult();
         continue;
       }
 
@@ -349,9 +243,12 @@ public class GameTracker : IDisposable
           var actionTs = ae.Action.ClientTimestamp != default
               ? ae.Action.ClientTimestamp
               : ae.SnapshotTimestamp;
+          // A skipped UI update has no replay row; retain the preceding state's nonce.
+          int actionNonce = ae.AssignedNonce == _lastSkippedNonce
+            ? _lastRecordedNonce ?? ae.AssignedNonce : ae.AssignedNonce;
           _eventLog.Add(new GameLogEntry(
               ae.GameId, actionTs, GameLogType.GameAction,
-              model.Data, ae.AssignedNonce));
+              model.Data, actionNonce));
           _preSerializedActions[ae.Action] = model;
         }
         catch (Exception ex)
@@ -363,12 +260,13 @@ public class GameTracker : IDisposable
       }
 
       if (item is not FlushBatch batch) continue;
+      var state = batch.State;
       try
       {
         // Reuse pre-serialized action models from ActionEmit processing.
         // Fall back to serializing here if the ActionEmit failed.
-        var actionModels = new List<GameActionModel>(batch.Actions.Count);
-        foreach (var action in batch.Actions)
+        var actionModels = new List<GameActionModel>(state.Actions.Count);
+        foreach (var action in state.Actions)
         {
           try
           {
@@ -385,45 +283,108 @@ public class GameTracker : IDisposable
           catch (Exception ex)
           {
             Log.Error(ex, "Error building action model for game {Id}",
-              batch.GameId);
+              _gameId);
           }
         }
 
-        // Serialize prompt options on the writer thread (IPC-heavy, ~500ms).
-        // Deferred from OnPromptChanged to avoid racing with EnqueueFlush.
-        string? promptOptions = null;
-        if (batch.Prompt != null)
+        var update = batch.Update;
+        var promptOptions = update is null ? null : CapturePromptOptions(update.Options);
+        var interaction = update is null ? null : GameInteractionData.FromSnapshot(update.Interaction);
+        if (update is not null && ShouldSkipRecording(state, promptOptions, interaction))
         {
-          try
+          _lastSkippedNonce = update.Nonce;
+          continue;
+        }
+        string? interactionJson = interaction is null ? null
+          : JsonSerializer.Serialize(interaction, JsonSerializerOptions.Web);
+
+        int stateId = _dbWriter.FlushStateData(
+          _gameId,
+          state.Snapshot,
+          state.Cards,
+          state.Players,
+          state.ZoneTransfers,
+          state.CardChanges,
+          state.PlayerChanges,
+          actionModels,
+          state.Logs,
+          promptOptions: promptOptions,
+          nonce: update?.Nonce,
+          interaction: interaction,
+          capturedAt: batch.CapturedAt);
+
+        if (stateId >= 0)
+        {
+          int nonce = update?.Nonce ?? state.Snapshot.Nonce;
+          _lastRecordedSnapshot = state.Snapshot;
+          _lastRecordedPromptOptions = promptOptions;
+          _lastRecordedInteraction = interaction;
+          _lastRecordedNonce = nonce;
+          _lastSkippedNonce = null;
+          foreach (var notification in state.Events)
           {
-            promptOptions = SerializePromptOptions(batch.Prompt);
+            var entry = notification;
+            entry.Nonce = nonce;
+            _eventLog.Add(entry);
           }
-          catch (Exception ex)
-          {
-            Log.Error(ex, "Error serializing prompt options for game {Id}",
-              batch.GameId);
-          }
+          // Reattachment can replace initial observations with reconciled deltas.
+          // Serialize the final change lists only after their transaction commits.
+          if (state.CardChanges.Count > 0)
+            _eventLog.Add(new GameLogEntry(_gameId,
+              state.Snapshot.ClientTimestamp, GameLogType.CardChange,
+              JsonSerializer.Serialize(state.CardChanges.Select(change => new CardChangeData
+              {
+                CardId = change.CardId, CardName = change.CardName,
+                Property = change.Property, OldValue = change.OldValue,
+                NewValue = change.NewValue
+              }), JsonSerializerOptions.Web), nonce));
+          if (state.PlayerChanges.Count > 0)
+            _eventLog.Add(new GameLogEntry(_gameId,
+              state.Snapshot.ClientTimestamp, GameLogType.PlayerChange,
+              JsonSerializer.Serialize(state.PlayerChanges.Select(change => new PlayerChangeData
+              {
+                PlayerIndex = change.PlayerIndex, PlayerName = change.PlayerName,
+                Property = change.Property, OldValue = change.OldValue,
+                NewValue = change.NewValue
+              }), JsonSerializerOptions.Web), nonce));
+          // Local-only captures also need to refresh replay after commit.
+          if (update is not null)
+            _eventLog.Add(new GameLogEntry(_gameId, batch.CapturedAt,
+              GameLogType.Interaction, interactionJson!, update.Nonce));
         }
 
-        _dbWriter.FlushStateData(
-          batch.GameId,
-          batch.Snapshot,
-          batch.Cards,
-          batch.Players,
-          batch.ZoneTransfers,
-          batch.CardChanges,
-          batch.PlayerChanges,
-          actionModels,
-          batch.Logs,
-          promptOptions);
       }
       catch (Exception ex)
       {
         Log.Error(ex, "Error writing game state batch for game {Id}",
-          batch.GameId);
+          _gameId);
       }
     }
   }
+
+  private bool ShouldSkipRecording(PendingState state, IReadOnlyList<PromptOptionData>? promptOptions, GameInteractionData? interaction)
+  {
+    var previous = _lastRecordedSnapshot;
+    var current = state.Snapshot;
+    return previous is not null
+      && state.Cards.Count == 0 && state.Players.Count == 0
+      && state.ZoneTransfers.Count == 0 && state.CardChanges.Count == 0
+      && state.PlayerChanges.Count == 0 && state.Actions.Count == 0
+      && state.Logs.Count == 0 && state.Events.Count == 0
+      && previous.Nonce == current.Nonce
+      && previous.TurnNumber == current.TurnNumber
+      && previous.CurrentPhase == current.CurrentPhase
+      && previous.PromptedPlayer == current.PromptedPlayer
+      && previous.PromptText == current.PromptText
+      && SamePromptOptions(_lastRecordedPromptOptions, promptOptions)
+      && _lastRecordedInteraction is not null && interaction is not null
+      && _lastRecordedInteraction.HasSameDecision(interaction);
+  }
+
+  private static bool SamePromptOptions(IReadOnlyList<PromptOptionData>? left, IReadOnlyList<PromptOptionData>? right) =>
+    left is not null && right is not null
+      ? left.Count == right.Count && left.Zip(right).All(pair => pair.First.HasSameValue(pair.Second))
+      : left is null && right is null;
 
   //
   // GameProcessor event handlers
@@ -431,420 +392,432 @@ public class GameTracker : IDisposable
 
   private void OnRevealedCards(RevealedCardsEventArgs e)
   {
-    if (_disposed) return;
-    try
+    lock (_flushLock)
     {
-      EnsureGameState(e);
-
-      var newTransfers = new List<ZoneTransferModel>();
-
-      foreach (var card in e.Arrived)
+      if (_disposed) return;
+      try
       {
-        _currentZoneTransferCardIds.Add(card.Id);
-        EnsureCardTracked(card, e.Snapshot, initialZoneOverride: "Revealed");
+        var pending = EnsureGameState(e);
 
-        var zt = new ZoneTransferModel
+        var newTransfers = new List<ZoneTransferModel>();
+
+        foreach (var card in e.Arrived)
         {
-          CardId = card.Id,
-          CardName = card.Name,
-          FromZone = card.Zone?.Name,
-          ToZone = "Revealed",
-          SourceId = null,
-          Type = "Arrived"
-        };
-        _pendingZoneTransfers.Add(zt);
-        newTransfers.Add(zt);
-      }
+          pending.ZoneTransferCardIds.Add(card.Id);
+          EnsureCardTracked(pending, card, e.Snapshot, initialZoneOverride: "Revealed");
 
-      foreach (var card in e.Departed)
-      {
-        _currentZoneTransferCardIds.Add(card.Id);
-
-        var zt = new ZoneTransferModel
-        {
-          CardId = card.Id,
-          CardName = card.Name,
-          FromZone = "Revealed",
-          ToZone = card.Zone?.Name,
-          SourceId = null,
-          Type = "Departed"
-        };
-        _pendingZoneTransfers.Add(zt);
-        newTransfers.Add(zt);
-      }
-
-      if (newTransfers.Count > 0)
-      {
-        _eventLog.Add(new GameLogEntry(_game.Id,
-          e.Snapshot.ClientTimestamp, GameLogType.Reveal,
-          JsonSerializer.Serialize(newTransfers.Select(zt => new ZoneTransferData
+          var zt = new ZoneTransferModel
           {
-            CardId = zt.CardId, CardName = zt.CardName,
-            FromZone = zt.FromZone, ToZone = zt.ToZone,
-            SourceId = zt.SourceId, Type = zt.Type
-          }), JsonSerializerOptions.Web), e.Nonce));
-      }
+            CardId = card.Id,
+            CardName = card.Name,
+            FromZone = card.Zone?.Name,
+            ToZone = "Revealed",
+            SourceId = null,
+            Type = "Arrived"
+          };
+          pending.ZoneTransfers.Add(zt);
+          newTransfers.Add(zt);
+        }
 
-      Log.Trace("[Game {Id}] {Count} revealed zone transfers (nonce {Nonce})",
-        _game.Id, newTransfers.Count, e.Nonce);
-    }
-    catch (Exception ex)
-    {
-      Log.Error(ex, "Error processing revealed cards for game {Id}", _game.Id);
+        foreach (var card in e.Departed)
+        {
+          pending.ZoneTransferCardIds.Add(card.Id);
+
+          var zt = new ZoneTransferModel
+          {
+            CardId = card.Id,
+            CardName = card.Name,
+            FromZone = "Revealed",
+            ToZone = card.Zone?.Name,
+            SourceId = null,
+            Type = "Departed"
+          };
+          pending.ZoneTransfers.Add(zt);
+          newTransfers.Add(zt);
+        }
+
+        if (newTransfers.Count > 0)
+        {
+          pending.Events.Add(new GameLogEntry(_gameId,
+            e.Snapshot.ClientTimestamp, GameLogType.Reveal,
+            JsonSerializer.Serialize(newTransfers.Select(zt => new ZoneTransferData
+            {
+              CardId = zt.CardId, CardName = zt.CardName,
+              FromZone = zt.FromZone, ToZone = zt.ToZone,
+              SourceId = zt.SourceId, Type = zt.Type
+            }), JsonSerializerOptions.Web), e.Nonce));
+        }
+
+        Log.Trace("[Game {Id}] {Count} revealed zone transfers (nonce {Nonce})",
+          _gameId, newTransfers.Count, e.Nonce);
+      }
+      catch (Exception ex)
+      {
+        Log.Error(ex, "Error processing revealed cards for game {Id}", _gameId);
+      }
     }
   }
 
   private void OnZoneChanged(ZoneChangeEventArgs e)
   {
-    if (_disposed) return;
-    try
+    lock (_flushLock)
     {
-      EnsureGameState(e);
-
-      var newTransfers = new List<ZoneTransferModel>();
-
-      // Arrived = new card entering the board
-      foreach (var card in e.Arrived)
+      if (_disposed) return;
+      try
       {
-        _currentZoneTransferCardIds.Add(card.Id);
-        EnsureCardTracked(card, e.Snapshot);
+        var pending = EnsureGameState(e);
 
-        var zt = new ZoneTransferModel
+        var newTransfers = new List<ZoneTransferModel>();
+
+        // Arrived = new card entering the board
+        foreach (var card in e.Arrived)
         {
-          CardId = card.Id,
-          CardName = card.Name,
-          FromZone = null,
-          ToZone = card.Zone?.Name,
-          SourceId = card.SourceId > 0 ? card.SourceId : null,
-          Type = "Arrived"
-        };
-        _pendingZoneTransfers.Add(zt);
-        newTransfers.Add(zt);
-      }
+          pending.ZoneTransferCardIds.Add(card.Id);
+          EnsureCardTracked(pending, card, e.Snapshot);
 
-      // Departed = card leaving the board
-      foreach (var card in e.Departed)
-      {
-        _currentZoneTransferCardIds.Add(card.Id);
-
-        var zt = new ZoneTransferModel
-        {
-          CardId = card.Id,
-          CardName = card.Name,
-          FromZone = card.Zone?.Name,
-          ToZone = null,
-          SourceId = null,
-          Type = "Departed"
-        };
-        _pendingZoneTransfers.Add(zt);
-        newTransfers.Add(zt);
-      }
-
-      // Moved = card changed zones (gets a new ThingID)
-      foreach (var (from, to) in e.Moved)
-      {
-        _currentZoneTransferCardIds.Add(to.Id);
-        EnsureCardTracked(to, e.Snapshot);
-
-        var zt = new ZoneTransferModel
-        {
-          CardId = to.Id,
-          CardName = to.Name,
-          FromZone = from.Zone?.Name,
-          ToZone = to.Zone?.Name,
-          SourceId = from.Id,
-          Type = "Moved"
-        };
-        _pendingZoneTransfers.Add(zt);
-        newTransfers.Add(zt);
-      }
-
-      // Emit SSE immediately (don't wait for next nonce)
-      if (newTransfers.Count > 0)
-      {
-        _eventLog.Add(new GameLogEntry(_game.Id,
-          e.Snapshot.ClientTimestamp, GameLogType.ZoneChange,
-          JsonSerializer.Serialize(newTransfers.Select(zt => new ZoneTransferData
+          var zt = new ZoneTransferModel
           {
-            CardId = zt.CardId, CardName = zt.CardName,
-            FromZone = zt.FromZone, ToZone = zt.ToZone,
-            SourceId = zt.SourceId, Type = zt.Type
-          }), JsonSerializerOptions.Web), e.Nonce));
-      }
+            CardId = card.Id,
+            CardName = card.Name,
+            FromZone = null,
+            ToZone = card.Zone?.Name,
+            SourceId = card.SourceId > 0 ? card.SourceId : null,
+            Type = "Arrived"
+          };
+          pending.ZoneTransfers.Add(zt);
+          newTransfers.Add(zt);
+        }
 
-      Log.Trace("[Game {Id}] {Count} zone transfers (nonce {Nonce})",
-        _game.Id, _pendingZoneTransfers.Count, e.Nonce);
-    }
-    catch (Exception ex)
-    {
-      Log.Error(ex, "Error processing zone change for game {Id}", _game.Id);
+        // Departed = card leaving the board
+        foreach (var card in e.Departed)
+        {
+          pending.ZoneTransferCardIds.Add(card.Id);
+
+          var zt = new ZoneTransferModel
+          {
+            CardId = card.Id,
+            CardName = card.Name,
+            FromZone = card.Zone?.Name,
+            ToZone = null,
+            SourceId = null,
+            Type = "Departed"
+          };
+          pending.ZoneTransfers.Add(zt);
+          newTransfers.Add(zt);
+        }
+
+        // Moved = card changed zones (gets a new ThingID)
+        foreach (var (from, to) in e.Moved)
+        {
+          pending.ZoneTransferCardIds.Add(to.Id);
+          EnsureCardTracked(pending, to, e.Snapshot);
+
+          var zt = new ZoneTransferModel
+          {
+            CardId = to.Id,
+            CardName = to.Name,
+            FromZone = from.Zone?.Name,
+            ToZone = to.Zone?.Name,
+            SourceId = from.Id,
+            Type = "Moved"
+          };
+          pending.ZoneTransfers.Add(zt);
+          newTransfers.Add(zt);
+        }
+
+        // Buffer notifications with the completed state.
+        if (newTransfers.Count > 0)
+        {
+          pending.Events.Add(new GameLogEntry(_gameId,
+            e.Snapshot.ClientTimestamp, GameLogType.ZoneChange,
+            JsonSerializer.Serialize(newTransfers.Select(zt => new ZoneTransferData
+            {
+              CardId = zt.CardId, CardName = zt.CardName,
+              FromZone = zt.FromZone, ToZone = zt.ToZone,
+              SourceId = zt.SourceId, Type = zt.Type
+            }), JsonSerializerOptions.Web), e.Nonce));
+        }
+
+        Log.Trace("[Game {Id}] {Count} zone transfers (nonce {Nonce})",
+          _gameId, pending.ZoneTransfers.Count, e.Nonce);
+      }
+      catch (Exception ex)
+      {
+        Log.Error(ex, "Error processing zone change for game {Id}", _gameId);
+      }
     }
   }
 
   private void OnCardChanged(CardChangedEventArgs e)
   {
-    if (_disposed) return;
-    try
+    lock (_flushLock)
     {
-      EnsureGameState(e);
-      EnsureCardTracked(e.Current, e.Snapshot);
-
-      bool hasZoneTransfer = _currentZoneTransferCardIds.Contains(e.Current.Id);
-      var changes = DiffCard(e.Previous, e.Current, hasZoneTransfer);
-
-      if (changes.Count > 0)
+      if (_disposed) return;
+      try
       {
-        _pendingCardChanges.AddRange(changes);
+        var pending = EnsureGameState(e);
+        EnsureCardTracked(pending, e.Current, e.Snapshot);
 
-        // Emit SSE immediately (don't wait for next nonce)
-        _eventLog.Add(new GameLogEntry(_game.Id,
-          e.Snapshot.ClientTimestamp, GameLogType.CardChange,
-          JsonSerializer.Serialize(changes.Select(cc => new CardChangeData
-          {
-            CardId = cc.CardId, CardName = cc.CardName,
-            Property = cc.Property, OldValue = cc.OldValue,
-            NewValue = cc.NewValue
-          }), JsonSerializerOptions.Web), e.Nonce));
+        bool hasZoneTransfer = pending.ZoneTransferCardIds.Contains(e.Current.Id);
+        var changes = DiffCard(e.Previous, e.Current, hasZoneTransfer);
 
-        Log.Trace("[Game {Id}] {Count} card changes for {Card} (nonce {Nonce})",
-          _game.Id, changes.Count, e.Current.Name, e.Nonce);
+        if (changes.Count > 0)
+        {
+          pending.CardChanges.AddRange(changes);
+
+          Log.Trace("[Game {Id}] {Count} card changes for {Card} (nonce {Nonce})",
+            _gameId, changes.Count, e.Current.Name, e.Nonce);
+        }
       }
-    }
-    catch (Exception ex)
-    {
-      Log.Error(ex, "Error processing card change for game {Id}", _game.Id);
+      catch (Exception ex)
+      {
+        Log.Error(ex, "Error processing card change for game {Id}", _gameId);
+      }
     }
   }
 
   private void OnPlayerChanged(PlayerChangedEventArgs e)
   {
-    if (_disposed) return;
-    try
+    lock (_flushLock)
     {
-      EnsureGameState(e);
-
-      // Track new player (PropertyChangeTracker emits prev==curr for new players)
-      bool isNewPlayer = _seenPlayerIndices.Add(e.PlayerIndex);
-      if (isNewPlayer)
+      if (_disposed) return;
+      try
       {
-        _pendingPlayers.Add(
-          EventDatabaseWriter.BuildGamePlayerModel(
-            _game.Id, e.Current, e.PlayerIndex));
-        Log.Trace("[Game {Id}] New player {Name} (index {Index})",
-          _game.Id, e.Current.Name, e.PlayerIndex);
-      }
+        var pending = EnsureGameState(e);
 
-      var changes = isNewPlayer
-        ? BuildInitialPlayerChanges(e.Current, e.PlayerIndex)
-        : DiffPlayer(e.Previous, e.Current, e.PlayerIndex);
-      if (changes.Count > 0)
+        // Track new player (PropertyChangeProcessor emits prev==curr for new players)
+        bool isNewPlayer = _seenPlayerIndices.Add(e.PlayerIndex);
+        if (isNewPlayer)
+        {
+          pending.Players.Add(
+            EventDatabaseWriter.BuildGamePlayerModel(
+              _gameId, e.Current, e.PlayerIndex));
+          Log.Trace("[Game {Id}] New player {Name} (index {Index})",
+            _gameId, e.Current.Name, e.PlayerIndex);
+        }
+
+        var changes = isNewPlayer
+          ? BuildInitialPlayerChanges(e.Current, e.PlayerIndex)
+          : DiffPlayer(e.Previous, e.Current, e.PlayerIndex);
+        if (changes.Count > 0)
+        {
+          pending.PlayerChanges.AddRange(changes);
+
+          Log.Trace("[Game {Id}] {Count} player changes for {Name} (nonce {Nonce})",
+            _gameId, changes.Count, e.Current.Name, e.Nonce);
+        }
+      }
+      catch (Exception ex)
       {
-        _pendingPlayerChanges.AddRange(changes);
-
-        // Emit SSE immediately (don't wait for next nonce)
-        _eventLog.Add(new GameLogEntry(_game.Id,
-          e.Snapshot.ClientTimestamp, GameLogType.PlayerChange,
-          JsonSerializer.Serialize(changes.Select(pc => new PlayerChangeData
-          {
-            PlayerIndex = pc.PlayerIndex, PlayerName = pc.PlayerName,
-            Property = pc.Property, OldValue = pc.OldValue,
-            NewValue = pc.NewValue
-          }), JsonSerializerOptions.Web), e.Nonce));
-
-        Log.Trace("[Game {Id}] {Count} player changes for {Name} (nonce {Nonce})",
-          _game.Id, changes.Count, e.Current.Name, e.Nonce);
+        Log.Error(ex, "Error processing player change for game {Id}", _gameId);
       }
-    }
-    catch (Exception ex)
-    {
-      Log.Error(ex, "Error processing player change for game {Id}", _game.Id);
     }
   }
 
   private void OnActionFinalized(ActionFinalizedEventArgs e)
   {
-    if (_disposed) return;
-    try
+    lock (_flushLock)
     {
-      EnsureGameState(e);
+      if (_disposed) return;
+      try
+      {
+        var pending = EnsureGameState(e);
 
-      // Buffer the raw action for DB persistence in the next flush batch.
-      _pendingActions.Add(e.Action);
+        // Buffer the raw action for DB persistence in the next flush batch.
+        pending.Actions.Add(e.Action);
 
-      // Queue for immediate serialization + SSE emission on the writer
-      // thread. This avoids blocking the processor drain loop with IPC
-      // (ToJSON, Card, Targets) while still emitting SSE as soon as the
-      // writer thread picks up the item — before the next FlushBatch.
-      //
-      // ActionProcessor only finalizes pending actions when it encounters
-      // a TurnStep — so every action was performed during the *previous*
-      // state. Assign the previous nonce so the action groups visually
-      // with the state it was executed in rather than the one it produced.
-      var assignedNonce = _previousNonce != 0 ? _previousNonce : e.Nonce;
-      _flushQueue.Add(new ActionEmit(
-          _game.Id, e.Action, assignedNonce, e.Snapshot.ClientTimestamp));
+        // Serialize off the processor thread and reuse the model for persistence.
+        // The action was performed in the last published decision state.
+        var assignedNonce = _lastPublishedNonce ?? e.Nonce;
+        _flushQueue.Add(new ActionEmit(
+            _gameId, e.Action, assignedNonce, e.Snapshot.ClientTimestamp));
 
-      Log.Trace("[Game {Id}] Action finalized: {Name} (nonce {Nonce})",
-        _game.Id, e.Action.Name, e.Nonce);
-    }
-    catch (Exception ex)
-    {
-      Log.Error(ex, "Error processing action for game {Id}", _game.Id);
+        Log.Trace("[Game {Id}] Action finalized: {Name} (nonce {Nonce})",
+          _gameId, e.Action.Name, e.Nonce);
+      }
+      catch (Exception ex)
+      {
+        Log.Error(ex, "Error processing action for game {Id}", _gameId);
+      }
     }
   }
 
   private void OnLogMessage(LogMessageCorrelatedEventArgs e)
   {
-    if (_disposed) return;
-
-    try
+    lock (_flushLock)
     {
-      EnsureGameState(e);
+      if (_disposed) return;
 
-      // Use the message's own client-side arrival timestamp rather than
-      // the correlated snapshot's timestamp. Both are in the same client
-      // time domain (__timestamp), but the message's timestamp reflects
-      // when the chat channel actually received the message — placing it
-      // at its true chronological position instead of inheriting the
-      // (potentially wrong) correlated snapshot's time.
-      var timestamp = e.MessageClientTimestamp;
-      var messageText = ChatTextNormalizer.Normalize(e.Message.Text);
-
-      _pendingLogs.Add(new GameLogModel
+      try
       {
-        Timestamp = timestamp,
-        GameLogType = "LogMessage",
-        Data = messageText
-      });
-      Log.Trace("[Game {Id}] Log: {Text} (nonce {Nonce})",
-        _game.Id, messageText, e.Nonce);
+        var pending = EnsureGameState(e);
 
-      // Notify SSE stream
-      _eventLog.Add(new GameLogEntry(
-        _game.Id,
-        timestamp,
-        GameLogType.LogMessage,
-        messageText,
-        e.Nonce));
-    }
-    catch (Exception ex)
-    {
-      Log.Error(ex, "Error processing log message for game {Id}", _game.Id);
+        // Use the message's own client-side arrival timestamp rather than
+        // the correlated snapshot's timestamp. Both are in the same client
+        // time domain (__timestamp), but the message's timestamp reflects
+        // when the chat channel actually received the message — placing it
+        // at its true chronological position instead of inheriting the
+        // (potentially wrong) correlated snapshot's time.
+        var timestamp = e.MessageClientTimestamp;
+        var messageText = ChatTextNormalizer.Normalize(e.Message.Text);
+
+        pending.Logs.Add(new GameLogModel
+        {
+          Timestamp = timestamp,
+          GameLogType = "LogMessage",
+          Data = messageText
+        });
+        Log.Trace("[Game {Id}] Log: {Text} (nonce {Nonce})",
+          _gameId, messageText, e.Nonce);
+
+        // Buffer the notification with the completed state.
+        pending.Events.Add(new GameLogEntry(
+          _gameId,
+          timestamp,
+          GameLogType.LogMessage,
+          messageText,
+          e.Nonce));
+      }
+      catch (Exception ex)
+      {
+        Log.Error(ex, "Error processing log message for game {Id}", _gameId);
+      }
     }
   }
 
   private void OnDamageAssignment(DamageAssignmentEventArgs e)
   {
-    if (_disposed) return;
-
-    try
+    lock (_flushLock)
     {
-      EnsureGameState(e);
+      if (_disposed) return;
 
-      var data = JsonSerializer.Serialize(e.Assignments.Select(a =>
+      try
       {
-        string? sourceName = null;
-        if (e.Snapshot.Cards.TryGetValue(a.Source.Id, out var srcCard))
-          sourceName = srcCard.Name;
+        var pending = EnsureGameState(e);
 
-        return new
+        var data = JsonSerializer.Serialize(e.Assignments.Select(a =>
         {
-          sourceId = a.Source.Id,
-          sourceName,
-          totalDamage = a.MinimumTotal,
-          targets = a.Distributions.Select(d =>
+          string? sourceName = null;
+          if (e.Snapshot.Cards.TryGetValue(a.Source.Id, out var srcCard))
+            sourceName = srcCard.Name;
+
+          return new
           {
-            string? targetName = null;
-            int targetId = d.Target.Id;
-            if (e.Snapshot.Cards.TryGetValue(targetId, out var tgtCard))
-              targetName = tgtCard.Name;
-            else if (e.Snapshot.Players.TryGetValue(targetId, out var tgtPlayer))
-              targetName = tgtPlayer.Name;
-
-            return new
+            sourceId = a.Source.Id,
+            sourceName,
+            totalDamage = a.MinimumTotal,
+            targets = a.Distributions.Select(d =>
             {
-              targetId,
-              targetName,
-              amount = d.Value,
-              minimum = d.Minimum,
-              maximum = d.Maximum,
-            };
-          })
-        };
-      }), JsonSerializerOptions.Web);
+              string? targetName = null;
+              int targetId = d.Target.Id;
+              if (e.Snapshot.Cards.TryGetValue(targetId, out var tgtCard))
+                targetName = tgtCard.Name;
+              else if (e.Snapshot.Players.TryGetValue(targetId, out var tgtPlayer))
+                targetName = tgtPlayer.Name;
 
-      _pendingLogs.Add(new GameLogModel
+              return new
+              {
+                targetId,
+                targetName,
+                amount = d.Value,
+                minimum = d.Minimum,
+                maximum = d.Maximum,
+              };
+            })
+          };
+        }), JsonSerializerOptions.Web);
+
+        pending.Logs.Add(new GameLogModel
+        {
+          Timestamp = e.Snapshot.ClientTimestamp,
+          GameLogType = "DamageAssignment",
+          Data = data
+        });
+
+        pending.Events.Add(new GameLogEntry(
+          _gameId,
+          e.Snapshot.ClientTimestamp,
+          GameLogType.DamageAssignment,
+          data,
+          e.Nonce));
+
+        Log.Trace("[Game {Id}] {Count} damage assignments (nonce {Nonce})",
+          _gameId, e.Assignments.Count, e.Nonce);
+      }
+      catch (Exception ex)
       {
-        Timestamp = e.Snapshot.ClientTimestamp,
-        GameLogType = "DamageAssignment",
-        Data = data
-      });
-
-      _eventLog.Add(new GameLogEntry(
-        _game.Id,
-        e.Snapshot.ClientTimestamp,
-        GameLogType.DamageAssignment,
-        data,
-        e.Nonce));
-
-      Log.Trace("[Game {Id}] {Count} damage assignments (nonce {Nonce})",
-        _game.Id, e.Assignments.Count, e.Nonce);
-    }
-    catch (Exception ex)
-    {
-      Log.Error(ex, "Error processing damage assignment for game {Id}", _game.Id);
+        Log.Error(ex, "Error processing damage assignment for game {Id}", _gameId);
+      }
     }
   }
 
-  private void OnPromptChanged(PromptChangedEventArgs e)
+  private void OnGameStateChanged(GameStateChangedEventArgs update)
   {
-    if (_disposed) return;
-    if (e.Prompt == null) return;
-
-    // Store the prompt for the normal flush path — the next
-    // EnqueueFlush will pick it up via _promptsByNonce.TryRemove.
-    _promptsByNonce[e.Nonce] = e.Prompt;
+    lock (_flushLock)
+    {
+      if (_disposed) return;
+      var pending = EnsureGameState(update);
+      _pendingStates.Remove(update.Snapshot);
+      string phase = update.Snapshot.CurrentPhase.ToString();
+      if (update.Snapshot.TurnNumber != _lastTurnNumber || phase != _lastPhase)
+      {
+        pending.Events.Insert(0, new GameLogEntry(_gameId,
+          update.Snapshot.ClientTimestamp, GameLogType.GameState,
+          JsonSerializer.Serialize(new GameStateData
+          {
+            Turn = update.Snapshot.TurnNumber,
+            Phase = phase,
+            PreviousTurn = _lastTurnNumber,
+            PreviousPhase = _lastPhase
+          }, JsonSerializerOptions.Web), update.Nonce));
+        _lastTurnNumber = update.Snapshot.TurnNumber;
+        _lastPhase = phase;
+      }
+      _lastPublishedNonce = update.Nonce;
+      _flushQueue.Add(new FlushBatch(pending, update, DateTime.UtcNow));
+    }
   }
 
   /// <summary>
-  /// Serializes prompt options to a JSON array using each action's ToJSON().
-  /// Preserves full action data (card names, targets, choices, etc.) so the
-  /// frontend can render selection prompts correctly.
+  /// Captures typed prompt options, retaining native action-specific JSON fields.
   /// </summary>
-  private static string? SerializePromptOptions(GamePrompt prompt)
+  private static IReadOnlyList<PromptOptionData> CapturePromptOptions(PromptOptionsSnapshot captured)
   {
-    IReadOnlyDictionary<ActionType, IReadOnlyList<IPromptOption>> options;
-    try
+    var options = new List<PromptOptionData>();
+    foreach (var kvp in captured.Options)
     {
-      options = prompt.Options;
-    }
-    catch (Exception ex)
-    {
-      Log.Error("[PromptOptions] Options getter threw: {Exception}", ex.ToString());
-      return null;
-    }
-
-    var jsonObjects = new List<string>();
-    foreach (var kvp in options)
-    {
-      foreach (var action in kvp.Value)
+      foreach (IPromptOption option in kvp.Value)
       {
-        if (action is not GameAction gameAction) continue;
         try
         {
-          jsonObjects.Add(gameAction.ToJSON());
+          if (option is GameAction action)
+          {
+            options.Add(PromptOptionData.FromAction(action));
+          }
+          else if (option is PromptControl control)
+          {
+            options.Add(new PromptOptionData
+            {
+              Type = control.Type,
+              Name = control.Name,
+              Enabled = control.Enabled,
+              ControlId = control.Id,
+              ButtonType = control.ButtonType,
+              Color = control.Color,
+              PromptNonce = captured.PromptNonce,
+              ClientRevision = captured.ClientRevision.ToString(CultureInfo.InvariantCulture)
+            });
+          }
         }
         catch (Exception ex)
         {
-          Log.Error(ex, "[PromptOptions] ToJSON() threw for {Type}",
+          Log.Error(ex, "[PromptOptions] serialization threw for {Type}",
             kvp.Key);
         }
       }
     }
 
-    return jsonObjects.Count > 0
-      ? "[" + string.Join(",", jsonObjects) + "]"
-      : null;
+    return options;
   }
 
   //
@@ -876,7 +849,7 @@ public class GameTracker : IDisposable
             if (_dbWriter.TryUpdateGameResults(_game, fallbackResults))
             {
               _resultsWritten = true;
-              Log.Debug("Updated fallback game results for {Id}", _game.Id);
+              Log.Debug("Updated fallback game results for {Id}", _gameId);
             }
           }
         }
@@ -888,15 +861,18 @@ public class GameTracker : IDisposable
 
   private void OnGameResultsChanged(IList<GamePlayerResult> results)
   {
+    GameLogModel[] pendingLogs;
+    lock (_flushLock)
+      pendingLogs = _pendingStates.Values.SelectMany(state => state.Logs).ToArray();
     TimeSpan actualDuration;
     if (_game.CompletedDuration.HasValue && _game.CompletedDuration.Value > TimeSpan.Zero)
     {
       actualDuration = _game.CompletedDuration.Value;
     }
-    else if (_pendingLogs.Count >= 2)
+    else if (pendingLogs.Length >= 2)
     {
-      var minLog = _pendingLogs.Min(l => l.Timestamp);
-      var maxLog = _pendingLogs.Max(l => l.Timestamp);
+      var minLog = pendingLogs.Min(l => l.Timestamp);
+      var maxLog = pendingLogs.Max(l => l.Timestamp);
       actualDuration = maxLog - minLog;
     }
     else
@@ -914,7 +890,7 @@ public class GameTracker : IDisposable
     {
       _resultsWritten = true;
       string jsonRes = JsonSerializer.Serialize(computedResults);
-      Log.Debug("Updated game results for {Id}: {Results}", _game.Id, jsonRes);
+      Log.Debug("Updated game results for {Id}: {Results}", _gameId, jsonRes);
     }
   }
 
@@ -923,7 +899,7 @@ public class GameTracker : IDisposable
   //
 
   private void EnsureCardTracked(
-    GameCard card, GameStateSnapshot snapshot,
+    PendingState pending, GameCard card, GameStateSnapshot snapshot,
     string? initialZoneOverride = null)
   {
     if (!_seenCardIds.Add(card.Id)) return;
@@ -939,16 +915,16 @@ public class GameTracker : IDisposable
     if (ctrlIdx < 0)
       ctrlIdx = FindPlayerIndex(snapshot, () => card.Controller);
 
-    _pendingCards.Add(
+    pending.Cards.Add(
       EventDatabaseWriter.BuildGameCardModel(
-        _game.Id, card, ownerIdx, ctrlIdx, initialZoneOverride));
+        _gameId, card, ownerIdx, ctrlIdx, initialZoneOverride));
     Log.Trace("[Game {Id}] New card {Name} (id {CardId}, zone {Zone})",
-      _game.Id, card.Name, card.Id, card.Zone?.Name);
+      _gameId, card.Name, card.Id, card.Zone?.Name);
 
     // Emit initial card changes for non-default properties that the frontend
     // needs but can't derive from the card model (e.g. associations set at
     // creation time, which DiffCard would never see change).
-    EmitInitialCardChanges(card);
+    EmitInitialCardChanges(pending, card);
   }
 
   /// <summary>
@@ -956,25 +932,21 @@ public class GameTracker : IDisposable
   /// first appears. Without this, properties like Associations that are set at
   /// card creation and never change would be invisible to the frontend.
   /// </summary>
-  private void EmitInitialCardChanges(GameCard card)
+  private void EmitInitialCardChanges(PendingState pending, GameCard card)
   {
     try
     {
-      object inner = Unbind(card);
-      if (inner is GameCardPartial partial)
+      var assoc = EventDatabaseWriter.BuildCardAssociations(card);
+      if (assoc.Count > 0)
       {
-        var assoc = partial.ResolveAssociations();
-        if (assoc.Count > 0)
+        pending.CardChanges.Add(new CardStateChangeModel
         {
-          _pendingCardChanges.Add(new CardStateChangeModel
-          {
-            CardId = card.Id,
-            CardName = card.Name,
-            Property = "Associations",
-            OldValue = "{}",
-            NewValue = JsonSerializer.Serialize(assoc, JsonSerializerOptions.Web)
-          });
-        }
+          CardId = card.Id,
+          CardName = card.Name,
+          Property = "Associations",
+          OldValue = "{}",
+          NewValue = JsonSerializer.Serialize(assoc, JsonSerializerOptions.Web)
+        });
       }
     }
     catch { }
@@ -985,7 +957,7 @@ public class GameTracker : IDisposable
       var typeLine = card.TypeLine;
       if (!string.IsNullOrEmpty(typeLine))
       {
-        _pendingCardChanges.Add(new CardStateChangeModel
+        pending.CardChanges.Add(new CardStateChangeModel
         {
           CardId = card.Id,
           CardName = card.Name,
@@ -998,7 +970,7 @@ public class GameTracker : IDisposable
     catch (Exception ex)
     {
       Log.Error(ex, "[Game {Id}] TypeLine failed for {Name} (id {CardId})",
-        _game.Id, card.Name, card.Id);
+        _gameId, card.Name, card.Id);
     }
   }
 
@@ -1224,29 +1196,23 @@ public class GameTracker : IDisposable
     }
     catch { }
 
-    // Complex: Associations (attachment/association map from MagicProperty IDs)
+    // Complex: Associations, including the SDK's display attachment parent.
     try
     {
-      object prevInner = Unbind(prev);
-      object currInner = Unbind(curr);
-      if (prevInner is GameCardPartial prevPartial
-          && currInner is GameCardPartial currPartial)
+      var prevAssoc = EventDatabaseWriter.BuildCardAssociations(prev);
+      var currAssoc = EventDatabaseWriter.BuildCardAssociations(curr);
+      var prevJson = JsonSerializer.Serialize(prevAssoc, JsonSerializerOptions.Web);
+      var currJson = JsonSerializer.Serialize(currAssoc, JsonSerializerOptions.Web);
+      if (prevJson != currJson)
       {
-        var prevAssoc = prevPartial.ResolveAssociations();
-        var currAssoc = currPartial.ResolveAssociations();
-        var prevJson = JsonSerializer.Serialize(prevAssoc, JsonSerializerOptions.Web);
-        var currJson = JsonSerializer.Serialize(currAssoc, JsonSerializerOptions.Web);
-        if (prevJson != currJson)
+        changes.Add(new CardStateChangeModel
         {
-          changes.Add(new CardStateChangeModel
-          {
-            CardId = cardId,
-            CardName = cardName,
-            Property = "Associations",
-            OldValue = prevJson,
-            NewValue = currJson
-          });
-        }
+          CardId = cardId,
+          CardName = cardName,
+          Property = "Associations",
+          OldValue = prevJson,
+          NewValue = currJson
+        });
       }
     }
     catch { }
@@ -1306,8 +1272,8 @@ public class GameTracker : IDisposable
         PlayerIndex = playerIndex,
         PlayerName = playerName,
         Property = "ClockRemaining",
-        OldValue = prevClock.ToString("F1"),
-        NewValue = currClock.ToString("F1")
+        OldValue = prevClock.ToString("F1", CultureInfo.InvariantCulture),
+        NewValue = currClock.ToString("F1", CultureInfo.InvariantCulture)
       });
     }
 

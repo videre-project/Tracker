@@ -58,14 +58,20 @@ public sealed class GameReplayController(
 
   private static ReplayDataDTO BuildReplayData(GameModel game, string? currentUser)
   {
-    var statesOrdered = game.States.OrderBy(s => s.Timestamp).ToList();
+    var statesOrdered = game.States.OrderBy(s => s.Timestamp).ThenBy(s => s.Id).ToList();
 
     // Map state DB IDs to sequential indices for firstSeenSnapshotIndex
     var stateIdToIndex = new Dictionary<int, int>();
     for (int i = 0; i < statesOrdered.Count; i++)
       stateIdToIndex[statesOrdered[i].Id] = i;
 
-    var cards = game.Cards.Select(c => new ReplayCardDTO
+    // Older recordings can contain another observation of the same identity
+    // after reconnecting. Reconstruct it from its original first-seen state.
+    var cards = game.Cards
+      .OrderBy(card => stateIdToIndex.GetValueOrDefault(card.FirstSeenStateId, 0))
+      .ThenBy(card => card.Id)
+      .DistinctBy(card => card.CardId)
+      .Select(c => new ReplayCardDTO
     {
       CardId = c.CardId,
       Name = c.Name,
@@ -75,6 +81,8 @@ public sealed class GameReplayController(
       InitialZone = c.InitialZone,
       InitialPower = c.InitialPower,
       InitialToughness = c.InitialToughness,
+      InitialCounters = c.InitialCounters,
+      InitialAbilities = c.InitialAbilities,
       OwnerId = c.OwnerId,
       SourceId = c.SourceId,
       IsTapped = c.IsTapped,
@@ -93,7 +101,11 @@ public sealed class GameReplayController(
           currentUser,
           StringComparison.OrdinalIgnoreCase))?.PlayerIndex;
 
-    var players = game.Players.Select(p => new ReplayPlayerDTO
+    var players = game.Players
+      .OrderBy(player => stateIdToIndex.GetValueOrDefault(player.FirstSeenStateId, 0))
+      .ThenBy(player => player.Id)
+      .DistinctBy(player => player.PlayerIndex)
+      .Select(p => new ReplayPlayerDTO
     {
       PlayerIndex = p.PlayerIndex,
       Name = p.Name,
@@ -122,12 +134,14 @@ public sealed class GameReplayController(
       {
         Index = i,
         Nonce = state.Nonce,
+        ServerNonce = state.ServerNonce,
         Timestamp = state.ClientTimestamp,
         TurnNumber = state.TurnNumber,
         CurrentPhase = state.CurrentPhase,
         PromptedPlayer = state.PromptedPlayer,
         PromptText = state.PromptText,
         PromptOptions = state.PromptOptions,
+        Interaction = state.Interaction,
         ZoneTransfers = state.ZoneTransfers.Select(zt =>
           new ZoneTransferData
           {

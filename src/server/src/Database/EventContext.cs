@@ -8,10 +8,12 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 
 using Tracker.Database.Models;
 using Tracker.Database.Models.Events;
 using Tracker.Database.Extensions;
+using Tracker.Services.MTGO.Events;
 
 using MTGOSDK.API.Play;
 using MTGOSDK.API.Play.Games;
@@ -44,6 +46,23 @@ public class EventContext(DbContextOptions<EventContext> options)
       new JsonStringEnumConverter(),
     }
   };
+
+  private static readonly JsonSerializerOptions s_gameStateJsonOptions = new(JsonSerializerDefaults.Web)
+  {
+    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+  };
+
+  private static string SerializeGameState<T>(T value) =>
+    JsonSerializer.Serialize(value, s_gameStateJsonOptions);
+
+  private static T DeserializeGameState<T>(string json) =>
+    JsonSerializer.Deserialize<T>(json, s_gameStateJsonOptions)!;
+
+  // JSON values are compared and copied by content so collection changes are tracked.
+  private static ValueComparer<T> GameStateComparer<T>() where T : class => new(
+    (left, right) => SerializeGameState(left) == SerializeGameState(right),
+    value => SerializeGameState(value).GetHashCode(),
+    value => DeserializeGameState<T>(SerializeGameState(value)));
 
   protected override void OnModelCreating(ModelBuilder modelBuilder)
   {
@@ -137,6 +156,20 @@ public class EventContext(DbContextOptions<EventContext> options)
     modelBuilder.Entity<GameStateModel>()
       .HasIndex(s => new { s.GameId, s.Nonce })
       .IsUnique();
+
+    modelBuilder.Entity<GameStateModel>()
+      .Property(state => state.PromptOptions)
+      .HasConversion(
+        value => SerializeGameState(value),
+        json => DeserializeGameState<IReadOnlyList<PromptOptionData>>(json))
+      .Metadata.SetValueComparer(GameStateComparer<IReadOnlyList<PromptOptionData>>());
+
+    modelBuilder.Entity<GameStateModel>()
+      .Property(state => state.Interaction)
+      .HasConversion(
+        value => SerializeGameState(value),
+        json => GameInteractionData.Deserialize(json, s_gameStateJsonOptions))
+      .Metadata.SetValueComparer(GameStateComparer<GameInteractionData>());
 
     //
     // Match relationships

@@ -7,6 +7,7 @@
 using System;
 using System.Collections.Generic;
 
+using Tracker.Services.MTGO.Events;
 
 namespace Tracker.Database.Models.Events;
 
@@ -18,12 +19,17 @@ public class GameStateModel
   public GameModel Game { get; set; }
 
   /// <summary>
-  /// Deterministic hash from (InteractionTimestamp, PromptedPlayer, PromptText).
+  /// SDK publication identity, including client-local interaction changes.
   /// </summary>
   public int Nonce { get; set; }
 
   /// <summary>
-  /// Server game timestamp (monotonically increasing).
+  /// The originating server prompt nonce. Null for older recordings.
+  /// </summary>
+  public int? ServerNonce { get; set; }
+
+  /// <summary>
+  /// Server gameplay timestamp. Local interaction updates can share this value.
   /// </summary>
   public long Timestamp { get; set; }
 
@@ -43,10 +49,16 @@ public class GameStateModel
   public string PromptText { get; set; }
 
   /// <summary>
-  /// JSON-serialized array of available prompt actions (button labels).
-  /// Each entry has { type, name } from GamePrompt.Options.
+  /// Captured native prompt actions and local prompt controls.
+  /// Stored as JSON by the database mapping; null for uncaptured prompts.
   /// </summary>
-  public string? PromptOptions { get; set; }
+  public IReadOnlyList<PromptOptionData>? PromptOptions { get; set; }
+
+  /// <summary>
+  /// Complete visual flag lists and pending abilities for this update.
+  /// Null for recordings made before interaction capture was supported.
+  /// </summary>
+  public GameInteractionData? Interaction { get; set; }
 
   // Child collections
   public List<GameActionModel> Actions { get; set; } = new();

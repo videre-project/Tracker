@@ -16,6 +16,8 @@ public class ReplayCardDTO
   public required string InitialZone { get; set; }
   public string? InitialPower { get; set; }
   public string? InitialToughness { get; set; }
+  public string? InitialCounters { get; set; }
+  public string? InitialAbilities { get; set; }
   public int OwnerId { get; set; }
   public int? SourceId { get; set; }
   public bool IsTapped { get; set; }

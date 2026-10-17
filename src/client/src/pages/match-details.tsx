@@ -29,6 +29,7 @@ import type {
   SideboardChangeDTO,
 } from "@/types/api"
 import { getApiUrl } from "@/utils/api-config"
+import { readReplayData } from "@/utils/replay-data"
 import {
   getCatalogIdByCardId,
   getOpeningHandCards,
@@ -235,8 +236,9 @@ export default function MatchDetails() {
     fetch(getApiUrl(`/api/games/game/${selectedGameKey}/replay`), { signal: controller.signal })
       .then(response => {
         if (!response.ok) throw new Error(`HTTP ${response.status}`)
-        return response.json() as Promise<ReplayData>
+        return response.json()
       })
+      .then(readReplayData)
       .then(setSelectedGameReplay)
       .catch(requestError => {
         if (requestError instanceof Error && requestError.name === "AbortError") return

@@ -15,5 +15,6 @@ public enum GameLogType
   PlayerChange,
   LogMessage,
   DamageAssignment,
-  Reveal
+  Reveal,
+  Interaction
 }

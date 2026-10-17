@@ -6,6 +6,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Net.Http;
 using System.Text.Json;
@@ -21,8 +22,8 @@ using MTGOSDK.API.Play.Games;
 using MTGOSDK.API.Play.Leagues;
 using MTGOSDK.API.Play.Games.Processors;
 using MTGOSDK.API.Play.Games.Processors.Partials;
-using MTGOSDK.API.Play.Games.Processors.Snapshots;
 using MTGOSDK.API.Play.Tournaments;
+using MTGOSDK.API.Play.Games.Processors.Snapshots;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Reflection.Serialization;
@@ -448,6 +449,28 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
   // Structured game state methods
   //
 
+  internal int? GetLastRecordedNonce(int gameId)
+  {
+    using var scope = serviceProvider.CreateScope();
+    var context = scope.ServiceProvider.GetRequiredService<EventContext>();
+    return context.GameStates.Where(state => state.GameId == gameId)
+      .OrderByDescending(state => state.Timestamp).ThenByDescending(state => state.Id)
+      .Select(state => (int?)state.Nonce).FirstOrDefault();
+  }
+
+  /// <summary>
+  /// Builds replay associations, including the SDK's display attachment parent.
+  /// </summary>
+  internal static Dictionary<string, List<int>> BuildCardAssociations(GameCard card)
+  {
+    var associations = card.Associations
+      .GroupBy(association => association.Association.ToString())
+      .ToDictionary(group => group.Key, group => group.Select(association => association.TargetId).ToList());
+    int attachedToId = card.AttachedToId;
+    if (attachedToId > 0) associations["AttachedTo"] = [attachedToId];
+    return associations;
+  }
+
   /// <summary>
   /// Builds a GameCardModel from a GameCard without touching the database.
   /// FirstSeenStateId is set during flush.
@@ -457,6 +480,7 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
     int ownerIndex, int controllerIndex,
     string? initialZoneOverride = null)
   {
+    bool hasState = Unbind(card) is not GameCardPartial { HasResolvedState: false };
     string? countersJson = null;
     try
     {
@@ -481,7 +505,7 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
     string? manaCost = null;
     try
     {
-      manaCost = card.Definition.ManaCost;
+      if (hasState) manaCost = card.Definition?.ManaCost;
     }
     catch { }
 
@@ -503,22 +527,22 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
       SourceId = card.SourceId > 0 ? card.SourceId : null,
       CardId = card.Id,
       Name = card.Name,
-      RulesText = !string.IsNullOrEmpty(card.RulesText) ? card.RulesText : null,
+      RulesText = hasState && !string.IsNullOrEmpty(card.RulesText) ? card.RulesText : null,
       ManaCost = !string.IsNullOrEmpty(manaCost) ? manaCost : null,
       TextureId = ctn > 0 ? ctn : null,
       CatalogId = catalogId,
       InitialZone = initialZoneOverride ?? card.Zone?.Name ?? "Unknown",
-      InitialPower = card.Toughness != 0 ? card.Power.ToString() : null,
-      InitialToughness = card.Toughness != 0 ? card.Toughness.ToString() : null,
+      InitialPower = hasState && card.Toughness != 0 ? card.Power.ToString() : null,
+      InitialToughness = hasState && card.Toughness != 0 ? card.Toughness.ToString() : null,
       InitialCounters = countersJson,
       InitialAbilities = abilitiesJson,
       OwnerId = ownerIndex,
       ControllerId = controllerIndex,
-      IsTapped = card.IsTapped,
-      IsToken = card.IsToken,
-      IsLand = card.IsLand,
-      IsActivatedAbility = card.IsActivatedAbility,
-      IsTriggeredAbility = card.IsTriggeredAbility
+      IsTapped = hasState && card.IsTapped,
+      IsToken = hasState && card.IsToken,
+      IsLand = hasState && card.IsLand,
+      IsActivatedAbility = hasState && card.IsActivatedAbility,
+      IsTriggeredAbility = hasState && card.IsTriggeredAbility
     };
   }
 
@@ -566,8 +590,8 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
   }
 
   /// <summary>
-  /// Flushes all buffered models for a single snapshot tick in one
-  /// scope + transaction. Creates the GameStateModel and sets all child FKs.
+  /// Persists a completed publication and its buffered gameplay changes in one
+  /// transaction. Server-only final messages can omit the publication metadata.
   /// Returns the GameStateModel's database ID, or -1 on failure.
   /// </summary>
   public int FlushStateData(
@@ -580,7 +604,10 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
     List<PlayerStateChangeModel> playerChanges,
     List<GameActionModel> actions,
     List<GameLogModel> logs,
-    string? promptOptions = null)
+    IReadOnlyList<PromptOptionData>? promptOptions = null,
+    int? nonce = null,
+    GameInteractionData? interaction = null,
+    DateTime? capturedAt = null)
   {
     using var scope = serviceProvider.CreateScope();
     var context = scope.ServiceProvider.GetRequiredService<EventContext>();
@@ -591,33 +618,34 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
 
       // Get or create the GameStateModel
       var state = context.GameStates
-        .FirstOrDefault(s => s.GameId == gameId && s.Nonce == snapshot.Nonce);
+        .FirstOrDefault(s => s.GameId == gameId && s.Nonce == (nonce ?? snapshot.Nonce));
 
       if (state == null)
       {
         state = new GameStateModel
         {
           GameId = gameId,
-          Nonce = snapshot.Nonce,
+          Nonce = nonce ?? snapshot.Nonce,
+          ServerNonce = nonce.HasValue ? snapshot.Nonce : null,
           Timestamp = snapshot.Timestamp,
           ActionTimestamp = snapshot.ActionTimestamp,
-          ClientTimestamp = snapshot.ClientTimestamp,
+          ClientTimestamp = capturedAt ?? snapshot.ClientTimestamp,
           TurnNumber = snapshot.TurnNumber,
           CurrentPhase = snapshot.CurrentPhase.ToString(),
           PromptedPlayer = snapshot.PromptedPlayer,
           PromptText = snapshot.PromptText,
-          PromptOptions = promptOptions
+          PromptOptions = promptOptions,
+          Interaction = interaction
         };
         context.GameStates.Add(state);
         // SaveChanges to get the auto-generated state.Id for child FKs
         context.SaveChanges();
       }
-      else if (promptOptions != null && state.PromptOptions == null)
+      else
       {
-        // Re-flush from ForceFlush recovery — merge prompt options that
-        // were missing from the initial flush into the existing record.
-        state.PromptOptions = promptOptions;
-        context.SaveChanges();
+        state.PromptOptions ??= promptOptions;
+        state.Interaction ??= interaction;
+        state.ServerNonce ??= nonce.HasValue ? snapshot.Nonce : null;
       }
 
       int stateId = state.Id;
@@ -639,8 +667,28 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
         log.GameStateId = stateId;
 
       // Batch insert everything
-      if (cards.Count > 0) context.GameCards.AddRange(cards);
-      if (players.Count > 0) context.GamePlayers.AddRange(players);
+      // Reconnecting observes existing cards and players again. Keep their
+      // original metadata and first-seen state rather than adding new identities.
+      if (cards.Count > 0)
+      {
+        var recordedCards = context.GameCards.Where(card => card.GameId == gameId)
+          .OrderBy(card => card.FirstSeenStateId).ThenBy(card => card.Id)
+          .ToList().DistinctBy(card => card.CardId).ToDictionary(card => card.CardId);
+        ReconcileCardObservations(context, gameId, stateId, snapshot,
+          cards, recordedCards, cardChanges);
+        var cardIds = recordedCards.Keys.ToHashSet();
+        context.GameCards.AddRange(cards.Where(card => cardIds.Add(card.CardId)));
+      }
+      if (players.Count > 0)
+      {
+        var recordedPlayers = context.GamePlayers.Where(player => player.GameId == gameId)
+          .OrderBy(player => player.FirstSeenStateId).ThenBy(player => player.Id)
+          .ToList().DistinctBy(player => player.PlayerIndex).ToDictionary(player => player.PlayerIndex);
+        ReconcilePlayerObservations(context, gameId, stateId, snapshot,
+          players, recordedPlayers, playerChanges);
+        var playerIndices = recordedPlayers.Keys.ToHashSet();
+        context.GamePlayers.AddRange(players.Where(player => playerIndices.Add(player.PlayerIndex)));
+      }
       if (zoneTransfers.Count > 0) context.ZoneTransfers.AddRange(zoneTransfers);
       if (cardChanges.Count > 0) context.CardStateChanges.AddRange(cardChanges);
       if (playerChanges.Count > 0) context.PlayerStateChanges.AddRange(playerChanges);
@@ -659,6 +707,151 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
       return -1;
     }
   }
+
+  // A resumed SDK processor reports existing cards as initial observations.
+  // Keep their original rows, and record changes from their latest saved values.
+  private static void ReconcileCardObservations(
+    EventContext context, int gameId, int stateId, GameStateSnapshot snapshot,
+    List<GameCardModel> observations, Dictionary<int, GameCardModel> recordedCards,
+    List<CardStateChangeModel> changes)
+  {
+    var observedIds = observations.Where(card => recordedCards.ContainsKey(card.CardId))
+      .Select(card => card.CardId).ToArray();
+    if (observedIds.Length == 0) return;
+
+    var latestChanges = context.CardStateChanges
+      .Where(change => change.GameState.GameId == gameId
+        && observedIds.Contains(change.CardId))
+      .OrderByDescending(change => change.GameState.Timestamp)
+      .ThenByDescending(change => change.GameStateId).ThenByDescending(change => change.Id)
+      .ToList().DistinctBy(change => (change.CardId, change.Property))
+      .ToDictionary(change => (change.CardId, change.Property), change => (string?)change.NewValue);
+
+    foreach (var observed in observations.Where(card => recordedCards.ContainsKey(card.CardId)))
+    {
+      // Revealed placeholders establish identity without supplying card state.
+      var captured = snapshot.Cards.GetValueOrDefault(observed.CardId)
+        ?? snapshot.HiddenCards.GetValueOrDefault(observed.CardId)
+        ?? snapshot.RevealedCards.Values.FirstOrDefault(card => card.Id == observed.CardId);
+      if (captured is not null
+        && Unbind(captured) is GameCardPartial { HasResolvedState: false })
+        continue;
+
+      var previous = CardObservationValues(recordedCards[observed.CardId]);
+      var current = CardObservationValues(observed);
+      if (captured is not null)
+      {
+        current["Associations"] = JsonSerializer.Serialize(BuildCardAssociations(captured), JsonSerializerOptions.Web);
+        previous["Associations"] = "{}";
+      }
+      var pending = changes.Where(change => change.CardId == observed.CardId).ToArray();
+      // Initial property rows (for example TypeLine) also carry current values.
+      foreach (var change in pending)
+      {
+        current[change.Property] = change.NewValue;
+        previous.TryAdd(change.Property, change.OldValue);
+      }
+      changes.RemoveAll(change => change.CardId == observed.CardId);
+
+      foreach (var (property, value) in current)
+      {
+        string? oldValue = latestChanges.GetValueOrDefault((observed.CardId, property),
+          previous.GetValueOrDefault(property));
+        if (string.Equals(oldValue, value, StringComparison.Ordinal)) continue;
+        changes.Add(new CardStateChangeModel
+        {
+          GameStateId = stateId, CardId = observed.CardId, CardName = observed.Name,
+          Property = property, OldValue = oldValue, NewValue = value ?? ""
+        });
+      }
+    }
+  }
+
+  private static Dictionary<string, string?> CardObservationValues(GameCardModel card) => new()
+  {
+    ["Name"] = card.Name,
+    ["IsTapped"] = card.IsTapped.ToString(),
+    ["Power"] = card.InitialPower,
+    ["Toughness"] = card.InitialToughness,
+    ["Counters"] = card.InitialCounters ?? "{}",
+    ["Abilities"] = card.InitialAbilities ?? "[]",
+    ["RulesText"] = card.RulesText,
+    ["TypeLine"] = card.TypeLine,
+    ["IsToken"] = card.IsToken.ToString(),
+    ["IsLand"] = card.IsLand.ToString(),
+    ["IsActivatedAbility"] = card.IsActivatedAbility.ToString(),
+    ["IsTriggeredAbility"] = card.IsTriggeredAbility.ToString()
+  };
+
+  // Reattachment supplies a fresh player baseline. Preserve the original row
+  // and replace initial changes with deltas from the last recorded values.
+  private static void ReconcilePlayerObservations(
+    EventContext context, int gameId, int stateId, GameStateSnapshot snapshot,
+    List<GamePlayerModel> observations, Dictionary<int, GamePlayerModel> recordedPlayers,
+    List<PlayerStateChangeModel> changes)
+  {
+    var observedIndices = observations.Where(player => recordedPlayers.ContainsKey(player.PlayerIndex))
+      .Select(player => player.PlayerIndex).ToArray();
+    if (observedIndices.Length == 0) return;
+
+    var latestChanges = context.PlayerStateChanges
+      .Where(change => change.GameState.GameId == gameId
+        && observedIndices.Contains(change.PlayerIndex))
+      .OrderByDescending(change => change.GameState.Timestamp)
+      .ThenByDescending(change => change.GameStateId).ThenByDescending(change => change.Id)
+      .ToList().DistinctBy(change => (change.PlayerIndex, change.Property))
+      .ToDictionary(change => (change.PlayerIndex, change.Property), change => change.NewValue);
+
+    foreach (var observed in observations.Where(player => recordedPlayers.ContainsKey(player.PlayerIndex)))
+    {
+      var previous = PlayerObservationValues(recordedPlayers[observed.PlayerIndex]);
+      var current = PlayerObservationValues(observed);
+      var captured = snapshot.Players[observed.PlayerIndex];
+      current["HasPriority"] = captured.HasPriority.ToString();
+      current["Counters"] = JsonSerializer.Serialize(captured.Counters, JsonSerializerOptions.Web);
+      changes.RemoveAll(change => change.PlayerIndex == observed.PlayerIndex);
+
+      foreach (var (property, value) in current)
+      {
+        string oldValue = latestChanges.GetValueOrDefault((observed.PlayerIndex, property), previous[property]);
+        if (SamePlayerValue(property, oldValue, value)) continue;
+
+        changes.Add(new PlayerStateChangeModel
+        {
+          GameStateId = stateId, PlayerIndex = observed.PlayerIndex, PlayerName = observed.Name,
+          Property = property, OldValue = oldValue, NewValue = value
+        });
+      }
+    }
+  }
+
+  private static Dictionary<string, string> PlayerObservationValues(GamePlayerModel player) => new()
+  {
+    ["Life"] = player.InitialLife.ToString(CultureInfo.InvariantCulture),
+    ["HandCount"] = player.InitialHandCount.ToString(CultureInfo.InvariantCulture),
+    ["LibraryCount"] = player.InitialLibraryCount.ToString(CultureInfo.InvariantCulture),
+    ["GraveyardCount"] = player.InitialGraveyardCount.ToString(CultureInfo.InvariantCulture),
+    ["ManaPool"] = player.InitialManaPool ?? "[]",
+    ["IsActivePlayer"] = player.IsActivePlayer.ToString(),
+    ["ClockRemaining"] = player.ClockRemaining.ToString("F1", CultureInfo.InvariantCulture),
+    ["HasPriority"] = bool.FalseString,
+    ["Counters"] = "{}"
+  };
+
+  private static bool SamePlayerValue(string property, string previous, string current) => property switch
+  {
+    "ManaPool" => NormalizeRecordedManaPool(previous) == NormalizeRecordedManaPool(current),
+    "Counters" => JsonElement.DeepEquals(JsonSerializer.Deserialize<JsonElement>(previous),
+      JsonSerializer.Deserialize<JsonElement>(current)),
+    _ => string.Equals(previous, current, StringComparison.Ordinal)
+  };
+
+  private static string NormalizeRecordedManaPool(string json) =>
+    JsonSerializer.Serialize(JsonSerializer.Deserialize<JsonElement>(json).EnumerateArray()
+      .GroupBy(mana => mana.GetProperty("symbol").GetString())
+      .OrderBy(group => group.Key)
+      .Select(group => new { Symbol = group.Key, Amount = group.Sum(mana => mana.GetProperty("amount").GetInt32()) }),
+      JsonSerializerOptions.Web);
 
   //
   // Table mutations

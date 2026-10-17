@@ -45,7 +45,7 @@ internal static class MatchHistorySerialization
     int lastTurn = 0;
     string lastPhase = "";
 
-    var statesOrdered = game.States.OrderBy(s => s.Timestamp).ToList();
+    var statesOrdered = game.States.OrderBy(s => s.Timestamp).ThenBy(s => s.Id).ToList();
     int previousNonce = 0;
 
     foreach (var state in statesOrdered)

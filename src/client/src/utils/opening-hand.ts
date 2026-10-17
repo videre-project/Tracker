@@ -14,6 +14,7 @@ const TYPE_ORDER: Record<GameLogType, number> = {
   PlayerChange: 4,
   LogMessage: 5,
   DamageAssignment: 6,
+  Interaction: 7,
 }
 
 export type OpeningHandCard = {

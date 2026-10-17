@@ -15,15 +15,17 @@ public class ReplaySnapshotDTO
 {
   public int Index { get; set; }
   public int Nonce { get; set; }
+  public int? ServerNonce { get; set; }
   public DateTime Timestamp { get; set; }
   public int TurnNumber { get; set; }
   public required string CurrentPhase { get; set; }
   public int PromptedPlayer { get; set; }
   public required string PromptText { get; set; }
   /// <summary>
-  /// JSON array of available prompt actions, e.g. [{"type":"ChooseOption","name":"OK"}].
+  /// Captured native prompt actions and local prompt controls.
   /// </summary>
-  public string? PromptOptions { get; set; }
+  public IReadOnlyList<PromptOptionData>? PromptOptions { get; set; }
+  public GameInteractionData? Interaction { get; set; }
   public List<ZoneTransferData> ZoneTransfers { get; set; } = new();
   public List<CardChangeData> CardChanges { get; set; } = new();
   public List<PlayerChangeData> PlayerChanges { get; set; } = new();

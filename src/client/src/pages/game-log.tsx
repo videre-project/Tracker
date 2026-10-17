@@ -42,6 +42,8 @@ export default function GameLog() {
   const onMessage = useCallback(
     (dto: GameLogDTO) => {
       if (selectedGameId != null && (dto.gameId ?? 0) !== selectedGameId) return
+      // Selection publications refresh replay, but are not performed game actions.
+      if (dto.gameLogType === "Interaction") return
 
       const ts = new Date(dto.timestamp ?? Date.now())
       const seq = seqRef.current++

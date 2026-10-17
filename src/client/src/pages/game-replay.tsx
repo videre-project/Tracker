@@ -7,6 +7,7 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import { createPortal } from "react-dom"
 import { useParams, useNavigate, useLocation } from "react-router-dom"
 import { getApiUrl } from "@/utils/api-config"
+import { readReplayData } from "@/utils/replay-data"
 import { useClientState } from "@/hooks/use-client-state"
 import { useNDJSONStream } from "@/hooks/use-ndjson-stream"
 import { ArrowLeft } from "lucide-react"
@@ -134,6 +135,7 @@ export default function GameReplay() {
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         return res.json()
       })
+      .then(readReplayData)
       .then((data: ReplayData) => {
         const isRefresh = !isFirstLoadRef.current
         isFirstLoadRef.current = false
