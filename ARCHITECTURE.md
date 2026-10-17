@@ -479,51 +479,134 @@ These analytics can be used to improve deck construction, gameplay decisions, an
 
 ## 6. Extensibility
 
-The Tracker is architected for extensibility at multiple levels, enabling new features, integrations, and analytics without modification to the core system. Extensibility is achieved through a plugin-friendly design leveraging C# interfaces, dependency injection, and a discoverable module structure.
+### 6.1 Backend plugin host
 
-### 6.1 Plugin System Overview
+Tracker loads backend plugins at startup. Plugins register C# services and public
+ASP.NET controllers through the `Tracker.Plugins` NuGet package. MTGOSDK supplies
+the shared game types, state processors, events, and actions. Tracker's package
+adds service registration, plugin configuration, and access to its existing session.
 
-<div align="center">
+The host implementation lives in
+`src/server/src/Services/PluginService.cs`. The public library lives
+in `src/plugins/` and depends on MTGOSDK. Plugin authors consume the API as a NuGet package; plugins do not need Tracker's
+source or executable.
+All public Tracker integration types use the `Tracker.Plugins` namespace.
 
-<!-- Create a simple diagram that shows how plugins can be injected into the Tracker system. -->
-```mermaid
-flowchart TB
-  subgraph Tracker
-    subgraph PluginSystem[Plugin System]
-      PluginManager["Plugin Manager<br>(Handles Plugin Discovery)"]
-      PluginLoader["Plugin Loader<br>(Loads Plugins at Runtime)"]
-    end
-    subgraph CoreServices[Core Services]
-      ConfigurationService[Configuration Service]
-      LoggingService[Logging Service]
-      DatabaseService[Database Service]
-    end
-  end
+Build the package with:
 
-  PluginManager --> PluginLoader
-  PluginLoader --> CoreServices
-  CoreServices --> PluginSystem
+```sh
+dotnet pack src/plugins -c Release -o packages
 ```
 
-</div>
+Tracker references the API project directly so clean, locked restores do not
+depend on the content hash of a locally rebuilt NuGet package. External plugins
+consume the NuGet package, whose version is defined in `Directory.Packages.props`.
+CI packs and uploads the `.nupkg` as a downloadable artifact and verifies that its
+API DLL matches the host build. The release workflow publishes that artifact to
+NuGet.org using Trusted Publishing before creating the GitHub release. Configure
+the NuGet policy and `release` environment as described in
+[`docs/plugin-publishing.md`](docs/plugin-publishing.md).
+Unpublished MTGOSDK builds need their local feed.
 
-To ensure a consistent and maintainable plugin architecture, this system is built around several key principles:
+```mermaid
+flowchart LR
+  Loader[Plugin discovery] --> DI[Tracker service container]
+  DI --> Controllers[Plugin controllers]
+  DI --> Hosted[Plugin hosted services]
+  MTGO[Tracker MTGO session] --> Capability[IMTGOContext]
+  Capability --> Controllers
+  Capability --> Hosted
+```
 
-- **Interface-Based Contracts:** All extensible components (such as additional trackers, analytics modules, or data processors) must implement well-defined C# interfaces. This allows the core application to discover and interact with plugins in a type-safe, version-tolerant way.
-- **Plugin Discovery and Registration:** At startup, the application scans designated plugin directories for assemblies (DLLs) containing types that implement the relevant interfaces (e.g., `IGameEventTracker`, `IAnalyticsModule`, etc.).
-  - Reflection and convention-based loading are used for hooking into the application's services without recompilation, meaning plugins can be added or removed dynamically.
-  - Discovered plugins are registered with the application's dependency injection container, enabling them to declare dependencies on core services such as configuration, logging, or database access.
-- **Lifecycle Management:** Plugins implement interfaces (such as `IPlugin`) with lifecycle hooks (e.g., `Initialize(IServiceProvider)`, `Dispose()`). The host application then manages plugin initialization, dependency injection, and teardown.
-  - Plugins can subscribe to domain events (such as game state changes or user actions) using strongly-typed event interfaces to observe, augment, or respond to core workflows.
-  - By relying on interfaces and serialization contracts, the system can support backward and forward compatibility for plugins across tracker upgrades.
+Each immediate subdirectory of the user-data `Plugins` folder may contain a
+`plugin.json` manifest:
 
-The plugin model makes it easy for the community to develop and share new features, analytics modules, or data integrations, accelerating the Tracker’s evolution.
+```json
+{
+  "id": "example",
+  "assembly": "Example.dll",
+  "entryPoint": "Example.ExamplePlugin",
+  "apiVersion": 1,
+  "enabled": true
+}
+```
 
-### 6.2 Examples of Extensible Components
+`Plugins:Directory` overrides the installation directory. Standard .NET
+configuration sources apply, including the `Plugins__Directory` environment
+variable. Each plugin receives its own `Plugins:{id}` configuration section and
+persistent `PluginData/{id}` storage directory through `PluginContext`.
 
-- **Game Event Trackers:** Custom trackers can be implemented to capture additional game events or specialized data (e.g., custom formats, alternative game modes). These trackers can subscribe to the core event stream and process data in real-time.
-- **Analytics Modules:** New analytics can be added to compute additional statistics or insights from the game data. These modules can register themselves to receive game events and perform calculations, storing results in the database or exposing them via the API.
-- **Data Exporters:** Plugins can implement data exporters to transform and export game data into different formats (e.g., CSV, JSON, XML) or integrate with external systems (e.g., analytics platforms, cloud storage).
-- **UI Enhancements:** Additional UI components or pages can be developed as plugins, allowing for custom visualizations, dashboards, or user workflows that leverage the core game data without modifying the main application.
+The public entry point implements `ITrackerPlugin.ConfigureServices`:
 
-This extensibility model ensures that the Tracker can evolve rapidly, support specialized workflows, and integrate with new MTGO features or user needs without compromising the stability or maintainability of the core system.
+```csharp
+public sealed class ExamplePlugin : ITrackerPlugin
+{
+  public void ConfigureServices(IServiceCollection services, PluginContext context)
+  {
+    services.AddHostedService<ExampleService>();
+  }
+}
+```
+
+- Service registration runs before Tracker builds its service provider.
+- Public controllers in the entry assembly are discovered automatically. Their
+  relative attribute routes are prefixed with `/api/plugins/{id}`. Absolute
+  controller/action routes are rejected.
+- Startup, cancellation, shutdown and disposal use the standard .NET
+  `IHostedService`, `IDisposable` and `IAsyncDisposable` lifecycles. Configuration
+  entry points do not own a second application or service provider.
+- Private managed and native dependencies resolve through the plugin's published
+  dependency manifest. Framework assemblies, plugin contracts, and MTGOSDK assemblies share the
+  host's identity. Other dependencies resolve from the plugin first, including
+  libraries that happen to also be used by Tracker. The shared framework list is
+  generated from the host's framework references, preserving single-file support.
+- Disabled manifests are skipped. `Plugins:Enabled=false` skips all discovery
+  and plugin execution. Invalid plugins are reported and skipped. Registrations
+  are staged and validated, including MVC routes, before committing to the host.
+  Plugins cannot remove or replace host services. Hosted-service startup and
+  background execution are contained by an error boundary, so a failed plugin
+  does not stop Tracker or healthy plugins. Failures are reported by
+  `GET /api/plugins/status`; full exceptions are saved to `PluginData/plugin-errors.log`.
+- `GET /api/plugins` lists the loaded plugin IDs and assembly versions.
+- Plugins load once per process. Installation, removal, and enablement changes
+  require a Tracker restart. In-process plugins run with the host's permissions;
+  dependency isolation is not a security sandbox.
+
+Publish plugins with `EnableDynamicLoading=true` and retain their dependencies,
+`.deps.json`, native runtime files and manifest together. Plugins can depend on
+Tracker's supported ASP.NET Core and Windows desktop frameworks. Tracker retains
+those desktop assemblies when publishing because plugins can use types that are
+absent from Tracker's own static references.
+
+### 6.2 MTGO capability
+
+Plugins that need the session Tracker owns request `IMTGOContext` from the same
+`Tracker.Plugins` package through dependency injection:
+
+- `Client` is Tracker's ready client, or null while disconnected.
+- `UserId` is the ready session's cached user identity, avoiding another remote
+  query when a plugin checks whether a player can act.
+- `Games` provides the exact game wrapper instances used by recording, after
+  their processors are initialized. A new wrapper for the same game ID would
+  create a different processing scope.
+- `Changed` notifies subscribers about connection and game-list changes. Subscribe
+  before reading the current list; unsubscribe during service disposal.
+
+The context exposes SDK objects directly. Plugins can read existing processors
+and subscribe to SDK events. They must remove only their own subscriptions and
+must not dispose the borrowed client, clear game events, or replace recording
+processors. Tracker clears the published game list during connection recovery.
+Notification failures are logged and isolated from other context subscribers.
+MTGOSDK-dependent plugins must build against the SDK package version used by the
+host; the loader checks `.deps.json` before activation because SDK assembly
+versions alone do not identify package releases. API generation 1 keeps assembly
+version `1.0.0.0` across compatible API package releases. Breaking changes require
+a new assembly major and manifest generation; older compatible packages remain
+supported on newer hosts with the same SDK. Newer packages may require newer hosts.
+
+Tracker owns the MTGO connection, game processing, recording, and HTTP server.
+Plugins consume the initialized games and their existing captured state. Plugin
+installation, configuration, and behavior belong in each plugin's documentation.
+
+This initial implementation supports backend extensions. Runtime React bundles,
+UI page registration, and hot unloading are not implemented.

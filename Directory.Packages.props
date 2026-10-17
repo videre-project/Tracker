@@ -13,6 +13,10 @@
     <MTGOSDKVersion>1.8.0.20261018</MTGOSDKVersion>
   </PropertyGroup>
 
+  <PropertyGroup Label="PluginVersions">
+    <TrackerPluginsVersion>0.1.0-preview.1</TrackerPluginsVersion>
+  </PropertyGroup>
+
   <ItemGroup Label="PackageVersions">
     <!-- ASP.NET Web API -->
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi"

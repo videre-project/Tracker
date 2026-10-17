@@ -405,6 +405,8 @@ public static class GameAPIService
 
     private readonly IClientAPIProvider _clientProvider =
       serviceProvider.GetRequiredService<IClientAPIProvider>();
+    private readonly MTGOContext _context =
+      serviceProvider.GetRequiredService<MTGOContext>();
 
     /// <inheritdoc />
     public override void Dispose()
@@ -450,8 +452,9 @@ public static class GameAPIService
         game.StartTime = DateTime.SpecifyKind(startTime, DateTimeKind.Utc);
       GameProcessor.ForGame(game).Initialize();
       _dbWriter.TryAddGame(game, matchId.Value, out var _);
-      GameTracker tracker = new(game, _eventLog, _dbWriter);
+      GameTracker tracker = new(game, _eventLog, _dbWriter, _context);
       _gameTrackers.TryAdd(game.Id, tracker);
+      _context.AddGame(game);
       if (game.Status == GameStatus.Finished)
       {
         SaveGameResults(game.Id, game.Results);
@@ -746,6 +749,7 @@ public static class GameAPIService
 
     private void ResetService()
     {
+      _context.ClearGames();
       Log.Information("Resetting Game API service state...");
 
       // Unsubscribe from events — safe even if the remote process is dead.

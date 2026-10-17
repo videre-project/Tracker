@@ -2763,6 +2763,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/plugins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": PluginHostStatus;
+                        "application/json": PluginHostStatus;
+                        "text/json": PluginHostStatus;
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/trades/history": {
         parameters: {
             query?: never;
@@ -3916,6 +3986,11 @@ export interface components {
             actions?: ReplayActionDTO[] | null;
             logs?: ReplayLogDTO[] | null;
         };
+        /** @description Whether this process allows installed plugins to run. */
+        "Tracker.Controllers.PluginHostStatus": {
+            enabled?: boolean;
+            failures?: PluginFailure[] | null;
+        };
         "Tracker.Controllers.TradeHistoryDetailDTO": {
             summary?: TradeHistorySummaryDTO;
             /** Format: uuid */
@@ -4162,6 +4237,11 @@ export interface components {
             sourceId?: number | null;
             type: string | null;
         };
+        /** @description Identifies a failed installation and its actionable error. */
+        "Tracker.Services.PluginService.PluginFailure": {
+            path?: string | null;
+            message?: string | null;
+        };
     };
     responses: never;
     parameters: never;
@@ -4246,6 +4326,7 @@ export type TrackerControllersModelsReplaysReplayDataDto = ReplayDataDTO;
 export type TrackerControllersModelsReplaysReplayLogDto = ReplayLogDTO;
 export type TrackerControllersModelsReplaysReplayPlayerDto = ReplayPlayerDTO;
 export type TrackerControllersModelsReplaysReplaySnapshotDto = ReplaySnapshotDTO;
+export type TrackerControllersPluginHostStatus = PluginHostStatus;
 export type TrackerControllersTradeHistoryDetailDto = TradeHistoryDetailDTO;
 export type TrackerControllersTradeHistoryEffectDto = TradeHistoryEffectDTO;
 export type TrackerControllersTradeHistoryErrorDto = TradeHistoryErrorDTO;
@@ -4272,6 +4353,7 @@ export type TrackerServicesMtgoEventsPlayerChangeData = PlayerChangeData;
 export type TrackerServicesMtgoEventsPlayerInteractionData = PlayerInteractionData;
 export type TrackerServicesMtgoEventsPromptOptionData = PromptOptionData;
 export type TrackerServicesMtgoEventsZoneTransferData = ZoneTransferData;
+export type TrackerServicesPluginServicePluginFailure = PluginFailure;
 export type $defs = Record<string, never>;
 export type operations = Record<string, never>;
 
@@ -4353,6 +4435,7 @@ export type ReplayDataDTO = components['schemas']['Tracker.Controllers.Models.Re
 export type ReplayLogDTO = components['schemas']['Tracker.Controllers.Models.Replays.ReplayLogDTO'];
 export type ReplayPlayerDTO = components['schemas']['Tracker.Controllers.Models.Replays.ReplayPlayerDTO'];
 export type ReplaySnapshotDTO = components['schemas']['Tracker.Controllers.Models.Replays.ReplaySnapshotDTO'];
+export type PluginHostStatus = components['schemas']['Tracker.Controllers.PluginHostStatus'];
 export type TradeHistoryDetailDTO = components['schemas']['Tracker.Controllers.TradeHistoryDetailDTO'];
 export type TradeHistoryEffectDTO = components['schemas']['Tracker.Controllers.TradeHistoryEffectDTO'];
 export type TradeHistoryErrorDTO = components['schemas']['Tracker.Controllers.TradeHistoryErrorDTO'];
@@ -4379,3 +4462,4 @@ export type PlayerChangeData = components['schemas']['Tracker.Services.MTGO.Even
 export type PlayerInteractionData = components['schemas']['Tracker.Services.MTGO.Events.PlayerInteractionData'];
 export type PromptOptionData = components['schemas']['Tracker.Services.MTGO.Events.PromptOptionData'];
 export type ZoneTransferData = components['schemas']['Tracker.Services.MTGO.Events.ZoneTransferData'];
+export type PluginFailure = components['schemas']['Tracker.Services.PluginService.PluginFailure'];

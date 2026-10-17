@@ -1,0 +1,7 @@
+{
+  "id": "session-observer",
+  "assembly": "SessionObserver.dll",
+  "entryPoint": "Example.ExamplePlugin",
+  "apiVersion": 1,
+  "enabled": true
+}

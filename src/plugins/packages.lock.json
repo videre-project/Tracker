@@ -1,0 +1,153 @@
+{
+  "version": 2,
+  "dependencies": {
+    "net10.0-windows7.0": {
+      "MTGOSDK": {
+        "type": "Direct",
+        "requested": "[1.8.0.20261018, )",
+        "resolved": "1.8.0.20261018",
+        "contentHash": "MwATr178Bf2ileqhEJjl7+mGtkLu8JJ0ADKrpre6i6RF08RUbCdug4y88LVtTpFU0gDxCdcaclMlSEiOOIki/Q==",
+        "dependencies": {
+          "ImpromptuInterface": "8.0.6",
+          "MTGOSDK.Win32": "1.8.0.20261018",
+          "MessagePack": "3.1.7",
+          "MessagePack.Annotations": "3.1.7",
+          "Microsoft.Bcl.AsyncInterfaces": "10.0.1",
+          "Microsoft.Diagnostics.Runtime": "4.0.0-beta.24360.3"
+        }
+      },
+      "Azure.Core": {
+        "type": "Transitive",
+        "resolved": "1.38.0",
+        "contentHash": "IuEgCoVA0ef7E4pQtpC3+TkPbzaoQfa77HlfJDmfuaJUCVJmn7fT0izamZiryW5sYUFKizsftIxMkXKbgIcPMQ==",
+        "dependencies": {
+          "Microsoft.Bcl.AsyncInterfaces": "1.1.1",
+          "System.ClientModel": "1.0.0",
+          "System.Memory.Data": "1.0.2"
+        }
+      },
+      "Azure.Identity": {
+        "type": "Transitive",
+        "resolved": "1.11.4",
+        "contentHash": "Sf4BoE6Q3jTgFkgBkx7qztYOFELBCo+wQgpYDwal/qJ1unBH73ywPztIJKXBXORRzAeNijsuxhk94h0TIMvfYg==",
+        "dependencies": {
+          "Azure.Core": "1.38.0",
+          "Microsoft.Identity.Client": "4.61.3",
+          "Microsoft.Identity.Client.Extensions.Msal": "4.61.3",
+          "System.Security.Cryptography.ProtectedData": "4.7.0"
+        }
+      },
+      "Dynamitey": {
+        "type": "Transitive",
+        "resolved": "3.0.3",
+        "contentHash": "ocF4rRKgnmBkblk8RrgRP9YxxeJBvoaoCNLXgmUMgQCjZRw2v6Rtqxt5Kni6/TtbvICeWVN9X/69G5jltUEnbQ=="
+      },
+      "Iced": {
+        "type": "Transitive",
+        "resolved": "1.21.0",
+        "contentHash": "dv5+81Q1TBQvVMSOOOmRcjJmvWcX3BZPZsIq31+RLc5cNft0IHAyNlkdb7ZarOWG913PyBoFDsDXoCIlKmLclg=="
+      },
+      "ImpromptuInterface": {
+        "type": "Transitive",
+        "resolved": "8.0.6",
+        "contentHash": "bo8oslg7bwQD8ODMDowVk5c4B+9ZhNHPfgvhmTBbNWLXyEDAwY0gAhgyEn297/eS1HSIHqqxjPcdhGcYvgSE0A==",
+        "dependencies": {
+          "Dynamitey": "3.0.3"
+        }
+      },
+      "MessagePack": {
+        "type": "Transitive",
+        "resolved": "3.1.7",
+        "contentHash": "gXpifaxbhfBqh8bVToQn9j+OgCnhXWMbRCV7RQIbCVa9CNJG1fY6oHAYYl+ER3Tb9uUIHiQ5QbGiGwwFhoagbA==",
+        "dependencies": {
+          "MessagePack.Annotations": "3.1.7",
+          "MessagePackAnalyzer": "3.1.7",
+          "Microsoft.NET.StringTools": "17.11.4"
+        }
+      },
+      "MessagePack.Annotations": {
+        "type": "Transitive",
+        "resolved": "3.1.7",
+        "contentHash": "IW1yX9viarFl/Dsio5G+pM90JkOSW4xhAiJcKxPPF5rzyp2/yCpieWju8G99QLEmaQeze2uQMEskUBA59YZmkw=="
+      },
+      "MessagePackAnalyzer": {
+        "type": "Transitive",
+        "resolved": "3.1.7",
+        "contentHash": "ZF+OOJTRS7Ogzb4gG36hPKVQk3kEbp6kkUcdRjhddDq/uSGcV4BKIdYiyJipExXyE/zsqYb0ic215O9kI+fjPA=="
+      },
+      "Microsoft.Bcl.AsyncInterfaces": {
+        "type": "Transitive",
+        "resolved": "10.0.1",
+        "contentHash": "E1HSLkPHXEO30JEij2pWbOuzz1Z5ND4a5l7IP1T2RgQuE0a0NzEIvtO64RNy3Otn6PFezbT80cfm3M/Cgt70PA=="
+      },
+      "Microsoft.Diagnostics.NETCore.Client": {
+        "type": "Transitive",
+        "resolved": "0.2.510501",
+        "contentHash": "juoqJYMDs+lRrrZyOkXXMImJHneCF23cuvO4waFRd2Ds7j+ZuGIPbJm0Y/zz34BdeaGiiwGWraMUlln05W1PCQ=="
+      },
+      "Microsoft.Diagnostics.Runtime": {
+        "type": "Transitive",
+        "resolved": "4.0.0-beta.24360.3",
+        "contentHash": "tDbQoOQCL7i/begOMXIo3usBw74r9mD2/Pz1HQhb+f9mLUriXxjDEdQErk7/nc3hHc4BHX0nFyS1htB5hOGb4A==",
+        "dependencies": {
+          "Azure.Identity": "1.11.4",
+          "Microsoft.Diagnostics.NETCore.Client": "0.2.510501"
+        }
+      },
+      "Microsoft.Identity.Client": {
+        "type": "Transitive",
+        "resolved": "4.61.3",
+        "contentHash": "naJo/Qm35Caaoxp5utcw+R8eU8ZtLz2ALh8S+gkekOYQ1oazfCQMWVT4NJ/FnHzdIJlm8dMz0oMpMGCabx5odA==",
+        "dependencies": {
+          "Microsoft.IdentityModel.Abstractions": "6.35.0"
+        }
+      },
+      "Microsoft.Identity.Client.Extensions.Msal": {
+        "type": "Transitive",
+        "resolved": "4.61.3",
+        "contentHash": "PWnJcznrSGr25MN8ajlc2XIDW4zCFu0U6FkpaNLEWLgd1NgFCp5uDY3mqLDgM8zCN8hqj8yo5wHYfLB2HjcdGw==",
+        "dependencies": {
+          "Microsoft.Identity.Client": "4.61.3",
+          "System.Security.Cryptography.ProtectedData": "4.5.0"
+        }
+      },
+      "Microsoft.IdentityModel.Abstractions": {
+        "type": "Transitive",
+        "resolved": "6.35.0",
+        "contentHash": "xuR8E4Rd96M41CnUSCiOJ2DBh+z+zQSmyrYHdYhD6K4fXBcQGVnRCFQ0efROUYpP+p0zC1BLKr0JRpVuujTZSg=="
+      },
+      "Microsoft.NET.StringTools": {
+        "type": "Transitive",
+        "resolved": "17.11.4",
+        "contentHash": "mudqUHhNpeqIdJoUx2YDWZO/I9uEDYVowan89R6wsomfnUJQk6HteoQTlNjZDixhT2B4IXMkMtgZtoceIjLRmA=="
+      },
+      "System.ClientModel": {
+        "type": "Transitive",
+        "resolved": "1.0.0",
+        "contentHash": "I3CVkvxeqFYjIVEP59DnjbeoGNfo/+SZrCLpRz2v/g0gpCHaEMPtWSY0s9k/7jR1rAsLNg2z2u1JRB76tPjnIw==",
+        "dependencies": {
+          "System.Memory.Data": "1.0.2"
+        }
+      },
+      "System.Memory.Data": {
+        "type": "Transitive",
+        "resolved": "1.0.2",
+        "contentHash": "JGkzeqgBsiZwKJZ1IxPNsDFZDhUvuEdX8L8BDC8N3KOj+6zMcNU28CNN59TpZE/VJYy9cP+5M+sbxtWJx3/xtw=="
+      },
+      "System.Security.Cryptography.ProtectedData": {
+        "type": "Transitive",
+        "resolved": "4.7.0",
+        "contentHash": "ehYW0m9ptxpGWvE4zgqongBVWpSDU/JCFD4K7krxkQwSz/sFQjEXCUqpvencjy6DYDbn7Ig09R8GFffu8TtneQ=="
+      },
+      "MTGOSDK.Win32": {
+        "type": "CentralTransitive",
+        "requested": "[1.8.0.20261018, )",
+        "resolved": "1.8.0.20261018",
+        "contentHash": "oRa8YvI0slmgZajXBgnosixpOLbp13N9N8g7LIcYQihGzhN04oJJ5sDOkmPcXASbQJg+1DRlMuYY0Kxq5/j/XA==",
+        "dependencies": {
+          "Iced": "1.21.0"
+        }
+      }
+    }
+  }
+}

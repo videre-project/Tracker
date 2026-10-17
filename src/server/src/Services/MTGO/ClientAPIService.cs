@@ -17,6 +17,8 @@ using MTGOSDK.Core.Exceptions;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Remoting;
 
+using Tracker.Plugins;
+
 
 namespace Tracker.Services.MTGO;
 
@@ -31,6 +33,9 @@ public static class ClientAPIService
   {
     var provider = new ClientAPIProvider();
     builder.Services.AddSingleton<IClientAPIProvider>(provider);
+    builder.Services.AddSingleton<MTGOContext>();
+    builder.Services.AddSingleton<IMTGOContext>(services =>
+      services.GetRequiredService<MTGOContext>());
     builder.Services.AddSingleton<IClientCommandGateway, ClientCommandGateway>();
 
     // Register the client state monitor as scoped (per-request)

@@ -66,9 +66,13 @@ jobs:
         shell: pwsh
         run: pnpm install --frozen-lockfile
 
+      - name: Pack plugin API
+        shell: pwsh
+        run: dotnet pack src/plugins --configuration Release --output packages
+
       - name: Restore server dependencies
         shell: pwsh
-        run: dotnet restore --locked-mode --runtime win-x64
+        run: dotnet restore --locked-mode
 
       - name: Lint client
         shell: pwsh
@@ -89,6 +93,14 @@ jobs:
       - name: Publish application
         shell: pwsh
         run: dotnet publish src/server --configuration Release --output publish --no-restore
+
+      - name: Upload plugin API package
+        uses: actions/upload-artifact@v4
+        with:
+          name: tracker-plugin-api-${{ github.sha }}
+          path: packages/*.nupkg
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Upload publish artifact
         if: success()

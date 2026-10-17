@@ -39,6 +39,7 @@ public class GameTracker : IDisposable
   private readonly int _gameId;
   private readonly BlockingCollection<GameLogEntry> _eventLog;
   private readonly EventDatabaseWriter _dbWriter;
+  private readonly MTGOContext _context;
 
   private readonly HashSet<int> _seenCardIds = new();
   private readonly HashSet<int> _seenPlayerIndices = new();
@@ -106,15 +107,18 @@ public class GameTracker : IDisposable
   /// <param name="game">The game to track.</param>
   /// <param name="eventLog">The event log for SSE notifications.</param>
   /// <param name="dbWriter">The database writer.</param>
+  /// <param name="context">The host's initialized game catalog.</param>
   public GameTracker(
     Game game,
     BlockingCollection<GameLogEntry> eventLog,
-    EventDatabaseWriter dbWriter)
+    EventDatabaseWriter dbWriter,
+    MTGOContext context)
   {
     _game = game;
     _gameId = game.Id;
     _eventLog = eventLog;
     _dbWriter = dbWriter;
+    _context = context;
     // Reattachment can finalize an action before its first new publication.
     _lastPublishedNonce = _dbWriter.GetLastRecordedNonce(_gameId);
 
@@ -195,6 +199,7 @@ public class GameTracker : IDisposable
 
     // Clears EventProxy, EventHookWrapper, ProcessorEvent handlers and
     // deactivates the GameProcessor from the static routing table.
+    _context.RemoveGame(_gameId);
     _game.ClearEvents();
 
     GC.SuppressFinalize(this);

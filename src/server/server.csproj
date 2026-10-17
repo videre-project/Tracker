@@ -10,6 +10,7 @@
     <IsPackable>false</IsPackable>
     <OutputType>WinExe</OutputType>
     <UseWindowsForms>true</UseWindowsForms>
+    <UseWPF>true</UseWPF>
     <VidereGeneratedDirectory>$(MSBuildProjectDirectory)\obj\Videre</VidereGeneratedDirectory>
     <VidereOpenApiSpecPath>$(VidereGeneratedDirectory)\openapi.json</VidereOpenApiSpecPath>
     <VidereGeneratedClientPath>$(VidereGeneratedDirectory)\VidereOpenAPIClient.g.cs</VidereGeneratedClientPath>
@@ -58,6 +59,25 @@
       Overwrite="true" />
     <ItemGroup>
       <Compile Include="$(ProductInfoGeneratedPath)" Visible="false" />
+    </ItemGroup>
+  </Target>
+
+  <!-- Generate the sharing policy from framework references rather than broad
+       namespace prefixes (System.Reactive, for example, is a private package). -->
+  <Target Name="GeneratePluginFrameworkAssemblies" BeforeTargets="CoreCompile"
+          DependsOnTargets="ResolveReferences">
+    <ItemGroup>
+      <_PluginFrameworkAssembly Include="@(ReferencePath)"
+          Condition="'%(ReferencePath.FrameworkReferenceName)' != ''" />
+    </ItemGroup>
+    <PropertyGroup>
+      <_PluginFrameworkNames>@(_PluginFrameworkAssembly->'&quot;%(Filename)&quot;', ',')</_PluginFrameworkNames>
+    </PropertyGroup>
+    <WriteLinesToFile File="$(IntermediateOutputPath)PluginFrameworkAssemblies.g.cs"
+        Lines="namespace Tracker.Services%3B public static partial class PluginService { private static readonly System.Collections.Generic.HashSet&lt;string&gt; SharedFrameworkAssemblies = new(System.StringComparer.OrdinalIgnoreCase) { $(_PluginFrameworkNames) }%3B }"
+        Overwrite="true" WriteOnlyWhenDifferent="true" />
+    <ItemGroup>
+      <Compile Include="$(IntermediateOutputPath)PluginFrameworkAssemblies.g.cs" />
     </ItemGroup>
   </Target>
 
@@ -171,7 +191,8 @@
     <PublishSingleFile>true</PublishSingleFile>
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
     <EnableSingleFileAnalyzer>false</EnableSingleFileAnalyzer>
-    <RemoveUnusedDesktopRuntimeFiles>true</RemoveUnusedDesktopRuntimeFiles>
+    <!-- Desktop plugins can use assemblies that Tracker itself does not reference. -->
+    <RemoveUnusedDesktopRuntimeFiles>false</RemoveUnusedDesktopRuntimeFiles>
     <DebugType>embedded</DebugType>
     <StaticWebAssetsEnabled Condition="'$(Configuration)' == 'Debug'">true</StaticWebAssetsEnabled>
     <StaticWebAssetsEnabled Condition="'$(Configuration)' != 'Debug'">false</StaticWebAssetsEnabled>
@@ -200,6 +221,8 @@
     <!-- WebView2 Application -->
     <PackageReference Include="Microsoft.Extensions.FileProviders.Embedded" />
     <PackageReference Include="Microsoft.Web.WebView2" />
+    <!-- Tracker plugin API -->
+    <ProjectReference Include="..\plugins\plugins.csproj" />
     <!-- MTGOSDK -->
     <PackageReference Include="MTGOSDK" />
     <PackageReference Include="MTGOSDK.Win32" />

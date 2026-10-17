@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows7.0</TargetFramework>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TrackerPluginsVersion Condition="'$(TrackerPluginsVersion)' == ''">0.1.0-preview.1</TrackerPluginsVersion>
+    <MTGOSDKVersion Condition="'$(MTGOSDKVersion)' == ''">1.8.0.20261018</MTGOSDKVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Tracker.Plugins" Version="$(TrackerPluginsVersion)" />
+    <PackageReference Include="MTGOSDK" Version="$(MTGOSDKVersion)" />
+    <None Update="plugin.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

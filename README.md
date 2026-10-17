@@ -55,6 +55,9 @@ npm install -g pnpm
    pnpm run restore
    ```
 
+   Tracker references the plugin API project directly. To build the NuGet package
+   for external plugins, run `dotnet pack src/plugins -c Release -o packages`.
+
 ## Building
 
 You can build both the client and server components using:
@@ -80,6 +83,7 @@ Create a gitignored `.env` file in Tracker's root with your MTGO `USERNAME` and
 Install the client dependencies, then build and start the development container:
 
 ```sh
+dotnet pack src/plugins -c Release -o packages
 pnpm -C src/client install
 docker compose build tracker-dev
 docker compose up tracker-dev

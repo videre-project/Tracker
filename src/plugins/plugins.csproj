@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows7.0</TargetFramework>
+    <AssemblyName>Tracker.Plugins</AssemblyName>
+    <RootNamespace>Tracker.Plugins</RootNamespace>
+    <PackageId>Tracker.Plugins</PackageId>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Version>$(TrackerPluginsVersion)</Version>
+    <!-- API generation 1 keeps its CLR identity across compatible package releases. -->
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <IsPackable>true</IsPackable>
+    <Description>Host integration for MTGOSDK plugins running in Videre Tracker.</Description>
+    <Authors>The Videre Project Authors</Authors>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryUrl>https://github.com/videre-project/Tracker</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="MTGOSDK" />
+    <None Update="README.md" Pack="true" PackagePath="/" />
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>MTGOSDKVersion</_Parameter1>
+      <_Parameter2>$(MTGOSDKVersion)</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+</Project>

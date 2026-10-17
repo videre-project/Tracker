@@ -187,6 +187,10 @@ public class Program
       builder.RegisterCollectionService();
       builder.RegisterTradeService();
       builder.RegisterGameService();
+      builder.RegisterPlugins(
+        builder.Configuration["Plugins:Directory"]
+          ?? Path.Combine(options.UserDataFolder, "Plugins"),
+        Path.Combine(options.UserDataFolder, "PluginData"));
 
       // Configure the Web API middleware.
       var api = builder.Build();
