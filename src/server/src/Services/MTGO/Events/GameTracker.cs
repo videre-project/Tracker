@@ -640,12 +640,7 @@ public class GameTracker : IDisposable
       {
         var pending = EnsureGameState(e);
 
-        // Use the message's own client-side arrival timestamp rather than
-        // the correlated snapshot's timestamp. Both are in the same client
-        // time domain (__timestamp), but the message's timestamp reflects
-        // when the chat channel actually received the message — placing it
-        // at its true chronological position instead of inheriting the
-        // (potentially wrong) correlated snapshot's time.
+        // The SDK preserves the original channel timestamp during backfill.
         var timestamp = e.MessageClientTimestamp;
         var messageText = ChatTextNormalizer.Normalize(e.Message.Text);
 

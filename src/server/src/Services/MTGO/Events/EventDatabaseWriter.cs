@@ -298,13 +298,19 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
         var existingGame = context.Games.FirstOrDefault(g => g.Id == game.Id);
         if (existingGame != null)
         {
+          existingGame.StartTime = game.StartTime.ToUniversalTime();
+          context.SaveChanges();
           gameModel = existingGame;
           transaction.Commit();
           return false;
         }
 
         // First create the game
-        gameModel = new GameModel { Id = game.Id };
+        gameModel = new GameModel
+        {
+          Id = game.Id,
+          StartTime = game.StartTime.ToUniversalTime()
+        };
 
         // Find parent match
         var matchModel = context.Matches
@@ -408,6 +414,17 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
     var context = scope.ServiceProvider.GetRequiredService<EventContext>();
     return await context.Games.AsNoTracking()
       .Where(game => game.MatchId == matchId).ToListAsync();
+  }
+
+  /// <summary>
+  /// Reads the saved game opening before SDK processor initialization.
+  /// </summary>
+  internal DateTime? GetRecordedGameStartTime(int gameId)
+  {
+    using var scope = serviceProvider.CreateScope();
+    var context = scope.ServiceProvider.GetRequiredService<EventContext>();
+    return context.Games.Where(game => game.Id == gameId)
+      .Select(game => game.StartTime).FirstOrDefault();
   }
 
   //

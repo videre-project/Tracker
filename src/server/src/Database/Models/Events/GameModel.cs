@@ -4,6 +4,7 @@
 **/
 #pragma warning disable CS8618
 
+using System;
 using System.Collections.Generic;
 
 using MTGOSDK.API.Play.Games;
@@ -17,6 +18,8 @@ public class GameModel
 
   public int MatchId { get; set; }
   public MatchModel Match { get; set; }
+
+  public DateTime? StartTime { get; set; }
 
   public List<GamePlayerResult> GamePlayerResults { get; set; } = new();
 

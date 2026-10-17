@@ -446,6 +446,9 @@ public static class GameAPIService
     {
       matchId ??= game.Match.Id;
 
+      if (_dbWriter.GetRecordedGameStartTime(game.Id) is DateTime startTime)
+        game.StartTime = DateTime.SpecifyKind(startTime, DateTimeKind.Utc);
+      GameProcessor.ForGame(game).Initialize();
       _dbWriter.TryAddGame(game, matchId.Value, out var _);
       GameTracker tracker = new(game, _eventLog, _dbWriter);
       _gameTrackers.TryAdd(game.Id, tracker);
