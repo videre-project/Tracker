@@ -1,0 +1,116 @@
+/** @file
+  Copyright (c) 2026, Cory Bennett. All rights reserved.
+  SPDX-License-Identifier: Apache-2.0
+**/
+
+.matchup-analysis {
+  container-type: inline-size;
+  --matchup-panel-height: max(20rem, var(--matchup-available-height, calc(100dvh - 8rem)));
+}
+
+.matchup-analysis :is(.overflow-y-auto, .overflow-auto) {
+  overscroll-behavior-y: auto;
+}
+
+.matchup-workspace {
+  --matchup-row-height: 3.5rem;
+  /* Balance Deck and Opponent after allowing for the middle table's Play / Draw column. */
+  --matchup-deck-width: max(22rem, calc((100cqw - 25rem - 2rem - 12.25rem) / 2));
+  display: grid;
+  grid-template-columns: var(--matchup-deck-width) minmax(0, 1fr) 25rem;
+  gap: 1rem;
+  height: var(--matchup-panel-height);
+}
+
+.matchup-deck-row,
+.matchup-result-row {
+  height: var(--matchup-row-height);
+}
+
+.matchup-workspace-empty {
+  grid-template-columns: var(--matchup-deck-width) minmax(0, 1fr);
+}
+
+.matchup-workspace[data-empty],
+.matchup-workspace[data-empty] :is(.matchup-decks, .matchup-comparison) {
+  height: auto;
+}
+
+.matchup-comparison {
+  container-type: inline-size;
+  container-name: matchup-comparison;
+}
+
+.matchup-opponent-cell {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background-color: hsl(var(--card));
+  transition: background-color 150ms;
+}
+
+.matchup-result-row:hover > .matchup-opponent-cell {
+  /* An opaque hover surface keeps scrolled values from showing through. */
+  background-color: color-mix(in srgb, hsl(var(--muted)) 50%, hsl(var(--card)));
+}
+
+.matchup-result-row[data-state="selected"] > .matchup-opponent-cell {
+  background-color: hsl(var(--muted));
+}
+
+thead .matchup-opponent-cell {
+  z-index: 2;
+}
+
+@container matchup-comparison (max-width: 38rem) {
+  .matchup-opponent-cell {
+    /* Mark the fixed column's edge as the remaining columns scroll behind it. */
+    box-shadow: 1px 0 hsl(var(--sidebar-border) / 0.6);
+  }
+}
+
+@container matchup-comparison (max-width: 31rem) {
+  .matchup-toolbar {
+    height: auto;
+    flex-wrap: wrap;
+    gap: 0;
+  }
+
+  .matchup-search {
+    width: 100%;
+    margin-bottom: 0.5rem;
+  }
+}
+
+/* Keep the comparison readable when the app's navigation reduces available width. */
+@container (max-width: 1362px) {
+  .matchup-workspace {
+    --matchup-deck-width: max(22rem, calc((100cqw - 2rem) / 3));
+    grid-template-columns: var(--matchup-deck-width) minmax(0, 1fr);
+    height: auto;
+  }
+
+  .matchup-decks,
+  .matchup-comparison {
+    height: var(--matchup-panel-height);
+  }
+
+  .matchup-details {
+    grid-column: 1 / -1;
+  }
+}
+
+/* Stack the browser when two readable columns no longer fit. */
+@container (max-width: 56rem) {
+  .matchup-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .matchup-decks {
+    height: 24rem;
+  }
+
+  .matchup-workspace .matchup-detail-content {
+    display: flex;
+  }
+}

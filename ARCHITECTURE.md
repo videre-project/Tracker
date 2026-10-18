@@ -494,7 +494,49 @@ The dashboard and deck editor's Stats sidebar report:
 
 Sideboarding recommendations and decision-quality analysis are not implemented.
 
-### 5.3 Deck synchronization
+### 5.3 Matchup analysis and guides
+
+The dashboard's matchup section uses the dashboard's format and date filters.
+A selected deck scopes the opponent table and details sidebar. The table consumes
+server-grouped matchup records directly. Shared winrate and play/draw components
+render the same results in the table, sidebar, and recorded-match report.
+The sidebar retains saved plans and notes. Editing guides is planned; the disabled
+actions do not load an editor or compute unused sideboarding recommendations.
+
+The full Matchup Analysis and Card Analysis pages are deferred. Their entry points
+remain disabled, and their routes and analysis-only API code are omitted.
+
+The deck editor's Stats sidebar reads recorded cards, game states,
+actions, and zone transfers. The statistics query derives per-game observations
+without a parallel replay model. An opening hand requires a captured Keep and a
+known hand matching the recorded hand count. Library-to-hand observations do not
+claim to distinguish draws from other effects. Missing captures remain unknown.
+
+Recorded matchup reads belong to `GamesController`; deck-card statistics and
+revision-bound sideboard guides belong to `DecksController`. Both use
+`EventContext.MatchesForPlayer` for account/date/completion filtering and the
+existing match-history serialization for results and legacy play/draw evidence.
+Guides and notes live in `Collection.db` alongside their deck revisions. Startup
+imports existing guides from `Performance.db` once, leaving that file intact as
+a backup and recording completion so deleted guides are not re-imported.
+
+Client reads use generated Tracker API contracts, refined with the shared editor's
+card and history types where that UI needs populated fields. Deck imports use the
+same request function in tournament and metagame previews. Account-bound queries
+use the session lifecycle; immutable deck snapshots and stored tournament history
+remain readable without a live MTGO connection.
+
+The client-state provider owns the session cache; replacing it invalidates both
+cached snapshots and in-flight query results. Dashboard requests use the shared
+query hook and revalidate cached data on navigation. Event streams batch into one
+immutable React snapshot, from which the calendar's status lists are derived.
+
+Public deck previews share successful card-metadata reads. A failed metadata read
+keeps the metagame summary and fetched decklist available and offers a retry in
+the preview. Public-archive retries retain previously loaded local recordings and
+are scoped to the selected event.
+
+### 5.4 Deck synchronization
 
 `Collection.db` holds the desired deck revisions and pending operations.
 `DeckSyncService` schedules commands through `ClientCommandGateway`, which owns

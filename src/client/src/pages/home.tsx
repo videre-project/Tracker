@@ -3,7 +3,9 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-import { useState, useEffect, useMemo } from "react"
+import { useApplicationSettings } from "@/hooks/use-application-settings"
+import { initialDateRange } from "@/lib/application-preferences"
+import { useState, useEffect, useMemo, useCallback } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import type { DateRange } from "react-day-picker"
 import { ACTIVE_FORMATS } from "@videreproject/constants"
@@ -15,54 +17,67 @@ import {
   type DashboardGameType,
 } from "@videreproject/ui"
 import { useGameFormats, useGames } from "@/hooks/use-games"
-import { useAggregatedArchetypes } from "@/hooks/use-decks"
+import { useClientState } from "@/hooks/use-client-state"
+import { useNDJSONStream } from "@/hooks/use-ndjson-stream"
+import { importDeck, useAggregatedArchetypes } from "@/hooks/use-decks"
 import { useCardArtContext } from "@/hooks/use-card-art"
 import {
   useMetagameDecks,
   type MetagameDeckItem,
 } from "@/hooks/use-metagame-decks"
 import { MetagameDeckPreview } from "@/components/metagame-deck-preview"
+import { MatchupAnalysis } from "@/components/matchup-analysis"
+import type { DashboardDeckSelection } from "@/utils/match-results"
 import { getApiUrl } from "@/utils/api-config"
 
 const METAGAME_DECKS_PER_FORMAT = 16
 
 export default function Home() {
+  const { preferences } = useApplicationSettings()
   const navigate = useNavigate()
-  const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
-    const to = new Date()
-    const from = new Date()
-    from.setDate(to.getDate() - 30)
-    return { from, to }
-  })
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(() => initialDateRange(preferences.historyRangeDays))
 
   const effectiveRange = dateRange || "ALL"
 
   const [selectedFormat, setSelectedFormat] = useState<string>("")
+  const [performanceDeck, setPerformanceDeck] = useState<DashboardDeckSelection>(null)
   const [gameType, setGameType] = useState<DashboardGameType>("Constructed")
+  const [historyRevision, setHistoryRevision] = useState(0)
+  const refreshDashboard = useCallback(() => setHistoryRevision(revision => revision + 1), [])
+  const { isReady, queryCache } = useClientState()
 
-  const { formats } = useGameFormats(gameType)
-  const { stats, trend: trendData, loading } = useGames(effectiveRange, selectedFormat, gameType)
+  // One history subscription refreshes all of the dashboard's recorded data.
+  useNDJSONStream<number>({
+    url: getApiUrl("/api/games/history/watch"),
+    enabled: isReady,
+    restartKey: queryCache,
+    onMessage: refreshDashboard,
+    onOpen: refreshDashboard,
+    reconnectDelay: 2000,
+    maxReconnectAttempts: 0,
+    useConstantRetry: true,
+  })
+
+  const { formats, loading: formatsLoading, error: formatsError } = useGameFormats(gameType, historyRevision)
+  const { stats, trend: trendData, loading } = useGames(effectiveRange, selectedFormat, gameType, historyRevision)
 
   const filteredFormats = useMemo(() => {
-    let result = [...new Set([...ACTIVE_FORMATS, ...formats])]
-    if (gameType === "Limited") {
-      result = result.filter(isLimitedFormat)
-    } else if (gameType === "Constructed") {
-      result = result.filter(format => !isLimitedFormat(format))
-    }
+    const result = [...new Set([...(gameType === "Limited" ? [] : ACTIVE_FORMATS), ...formats])]
 
     return [...result].sort(compareFormats)
   }, [formats, gameType])
 
   useEffect(() => {
-    if (selectedFormat && !filteredFormats.includes(selectedFormat)) {
+    if (selectedFormat && !formatsLoading && !formatsError && !filteredFormats.includes(selectedFormat)) {
       setSelectedFormat("")
     }
-  }, [gameType, filteredFormats, selectedFormat])
+  }, [filteredFormats, formatsLoading, formatsError, selectedFormat])
 
   const { archetypes, loading: archetypesLoading } = useAggregatedArchetypes(
     effectiveRange,
     selectedFormat || undefined,
+    gameType,
+    historyRevision,
   )
   const metagameFormats = useMemo(() => {
     if (gameType === "Limited") return []
@@ -96,24 +111,13 @@ export default function Home() {
     setImporting(true)
     setImportError(null)
     try {
-      const response = await fetch(getApiUrl("/api/decks/import"), {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          name: selectedDeck.name,
-          format: selectedDeck.format,
-          archetype: selectedDeck.name,
-          mainboard: selectedDeck.mainboard,
-          sideboard: selectedDeck.sideboard,
-        }),
+      const payload = await importDeck({
+        name: selectedDeck.name,
+        format: selectedDeck.format,
+        archetype: selectedDeck.name,
+        mainboard: selectedDeck.mainboard,
+        sideboard: selectedDeck.sideboard,
       })
-      const payload = await response.json().catch(() => ({})) as {
-        revisionId?: number
-        error?: string
-      }
-      if (!response.ok || payload.revisionId == null) {
-        throw new Error(payload.error || `Deck import failed (${response.status})`)
-      }
 
       const deck = selectedDeck
       setSelectedDeck(null)
@@ -154,21 +158,24 @@ export default function Home() {
   return (
     <>
       <DashboardLayout
+      stickyFilterOffset={56}
       gameType={gameType}
-      onGameTypeChange={setGameType}
+      onGameTypeChange={value => { setGameType(value); setPerformanceDeck(null) }}
       selectedFormat={selectedFormat}
       formats={filteredFormats}
-      onFormatChange={setSelectedFormat}
+      onFormatChange={value => { setSelectedFormat(value); setPerformanceDeck(null) }}
       dateRange={dateRange}
-      onDateRangeChange={setDateRange}
+      onDateRangeChange={value => { setDateRange(value); setPerformanceDeck(null) }}
       stats={stats}
       loading={loading}
       trend={trendData}
       archetypes={archetypes}
-      archetypesLoading={archetypesLoading}
+      archetypesLoading={archetypesLoading && !archetypes.length}
+      selectedArchetype={performanceDeck?.archetype}
+      onDeckClick={archetype => setPerformanceDeck({ archetype })}
       metagameDecks={metagameDecks}
       metagameDecksLoading={metagameDecksLoading}
-      metagameDecksError={metagameDecksError}
+      metagameDecksError={metagameDecks.length ? null : metagameDecksError}
       onMetagameDeckClick={(_, deck) => {
         const selected = metagameDecks.find(item =>
           item.format === deck.format && item.name === deck.name,
@@ -187,6 +194,12 @@ export default function Home() {
         </Link>
       )}
       getArtUrl={getArtUrl}
+      performanceContent={
+        <MatchupAnalysis dateRange={dateRange} format={selectedFormat} gameType={gameType}
+          archetypeDecks={metagameDecks} selection={performanceDeck} onSelectionChange={setPerformanceDeck}
+          refreshKey={historyRevision}
+          />
+      }
       />
 
       <MetagameDeckPreview
@@ -194,6 +207,8 @@ export default function Home() {
         dateRange={dateRange}
         importing={importing}
         importError={importError}
+        detailsError={selectedDeck?.detailsError}
+        onRetry={() => { if (selectedDeck) hydrateDecks([selectedDeck]) }}
         onOpenChange={open => {
           if (!open && !importing) setSelectedDeck(null)
         }}
