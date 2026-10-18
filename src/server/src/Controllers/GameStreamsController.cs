@@ -143,6 +143,7 @@ public sealed class GameStreamsController(
           Duration = FormatDuration(matchDuration),
           DeckRevisionId = match.Event?.DeckRevisionId,
           DeckName = deck?.Name,
+          DeckArchetype = deck?.Archetype,
           DeckColors = deck?.Colors,
           OpponentName = GetOpponentName(match, currentUser),
           IsActive = isActive
@@ -174,6 +175,7 @@ public sealed class GameStreamsController(
           Duration = "",
           DeckRevisionId = evt.DeckRevisionId,
           DeckName = deck?.Name,
+          DeckArchetype = deck?.Archetype,
           DeckColors = deck?.Colors,
           IsActive = true,
           IsEvent = true

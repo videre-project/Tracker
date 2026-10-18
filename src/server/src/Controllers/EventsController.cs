@@ -13,15 +13,20 @@ using System.Threading.Tasks;
 
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 using MTGOSDK.API.Play;
 using MTGOSDK.API.Play.Tournaments;
+using MTGOSDK.API.Play.Games;
 using MTGOSDK.Core.Logging;
 using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 using MTGOTracker.Controllers.Base;
 using MTGOTracker.Controllers.Models.Events;
+using MTGOTracker.Database;
+using static MTGOTracker.Services.MTGO.Events.MatchHistorySerialization;
 using MTGOTracker.Services.MTGO;
+using MTGOTracker.Services.MTGO.Events;
 
 
 using static MTGOTracker.Services.MTGO.Events.TournamentSerialization;
@@ -34,7 +39,9 @@ namespace MTGOTracker.Controllers;
 [Route("api/[controller]/[action]")]
 public class EventsController(
   ClientStateMonitor clientMonitor,
-  IClientCommandGateway commandGateway) : APIController
+  IClientCommandGateway commandGateway,
+  IClientAPIProvider clientProvider,
+  EventContext context) : APIController
 {
   /// <summary>
   /// Get list of available tournaments/events
@@ -412,6 +419,87 @@ public class EventsController(
     }, raise: true);
   }
 
+  /// <summary>
+  /// Combines recorded results with live tournament pairings when available. With no player specified, selects the signed-in
+  /// participant or the first player in the standings.
+  /// </summary>
+  /// <param name="id">Tournament ID.</param>
+  /// <param name="player">Exact player name, or null for the default selection.</param>
+  /// <returns>The selected player and their available tournament match history.</returns>
+  [HttpGet("{id}")]
+  [ProducesResponseType(typeof(TournamentPlayerHistoryDTO), StatusCodes.Status200OK)]
+  [ProducesResponseType(StatusCodes.Status404NotFound)]
+  public async Task<IActionResult> GetPlayerMatches(int id, [FromQuery] string? player = null)
+  {
+    var recordedEvent = await context.Events.AsNoTracking()
+      .FirstOrDefaultAsync(item => item.Id == id, HttpContext.RequestAborted);
+    var recorded = await context.Matches.AsNoTracking().Where(match => match.EventId == id)
+      .Include(match => match.Games).ThenInclude(game => game.Players)
+      .Select(match => new { Match = match, IsRecorded = match.Games.Any(game => game.States.Any()) })
+      .AsSplitQuery().ToListAsync(HttpContext.RequestAborted);
+
+    Tournament? tournament = null;
+    if (clientMonitor.IsClientReady)
+    {
+      try { tournament = EventManager.GetEvent(id) as Tournament; }
+      catch (KeyNotFoundException) { }
+      tournament ??= GameAPIService.DiscoveredTournaments.GetValueOrDefault(id);
+    }
+    var standings = tournament == null ? null
+      : player == null ? tournament.ComputeStandings() : tournament.Standings;
+    var selected = player != null ? standings?.FirstOrDefault(entry => entry.Player.Name == player)
+      : standings?.FirstOrDefault(entry => entry.Player.Name == clientProvider.CurrentUser?.Username)
+        ?? standings?.FirstOrDefault();
+    var players = recorded.SelectMany(item => item.Match.PlayerResults.Select(result => result.Player)
+      .Concat(item.Match.Games.SelectMany(game => game.Players.Select(participant => participant.Name))));
+    player ??= selected?.Player.Name
+      ?? players.FirstOrDefault(name => string.Equals(name, clientProvider.CurrentUser?.Username, StringComparison.OrdinalIgnoreCase))
+      ?? players.FirstOrDefault();
+    if (player == null) return NotFound();
+
+    var matches = tournament != null && selected != null
+      ? TournamentPlayerHistory.Read(tournament, selected).ToList() : new List<TournamentMatchDTO>();
+    foreach (var item in recorded)
+    {
+      var match = item.Match;
+      var result = match.PlayerResults.FirstOrDefault(result =>
+        string.Equals(result.Player, player, StringComparison.OrdinalIgnoreCase));
+      if (result == null && !match.Games.Any(game => game.Players.Any(participant =>
+          string.Equals(participant.Name, player, StringComparison.OrdinalIgnoreCase)))) continue;
+      int index = matches.FindIndex(row => row.Id == match.Id);
+      if (index >= 0)
+      {
+        matches[index] = matches[index] with { IsRecorded = item.IsRecorded };
+        continue;
+      }
+      int wins = result?.Wins ?? 0, losses = result?.Losses ?? 0, draws = result?.Draws ?? 0;
+      if (wins + losses + draws == 0)
+      {
+        var games = match.Games.SelectMany(game => game.GamePlayerResults)
+          .Where(result => string.Equals(result.Player, player, StringComparison.OrdinalIgnoreCase)).ToList();
+        wins = games.Count(game => game.Result == GameResult.Win);
+        losses = games.Count(game => game.Result == GameResult.Loss);
+      }
+      // Older recordings have no round number; preserve that absence rather than numbering a partial history.
+      matches.Add(new TournamentMatchDTO(match.Id, null, GetOpponentName(match, player),
+        wins + losses + draws > 0 ? $"{wins}-{losses}" + (draws > 0 ? $"-{draws}" : "") : null,
+        result?.Result switch
+        {
+          MatchResult.Win => TournamentMatchResult.Win,
+          MatchResult.Loss => TournamentMatchResult.Loss,
+          MatchResult.Draw => TournamentMatchResult.Draw,
+          _ => TournamentMatchResult.Pending
+        }, item.IsRecorded));
+    }
+    if (selected == null && matches.Count == 0) return NotFound();
+    return Ok(new TournamentPlayerHistoryDTO(player,
+      matches.OrderBy(match => match.Round ?? int.MaxValue).ThenBy(match => match.Id).ToArray(),
+      recordedEvent?.Description ?? tournament?.Description,
+      recordedEvent?.Format ?? tournament?.Format.ToString(),
+      recordedEvent?.StartTime ?? tournament?.StartTime,
+      recordedEvent?.EndTime));
+  }
+
   //
   // Event Streaming Endpoints
   private async IAsyncEnumerable<object> StreamEventsList(
@@ -489,7 +577,8 @@ public class EventsController(
   {
     if (id <= 0) return NotFound();
 
-    await commandGateway.OpenEventAsync(id, cancellationToken);
+    try { await commandGateway.OpenEventAsync(id, cancellationToken); }
+    catch (KeyNotFoundException) { return NotFound(); }
     return NoContent();
   }
 }

@@ -7,6 +7,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 
 using Microsoft.EntityFrameworkCore;
@@ -15,6 +16,7 @@ using MTGOSDK.API.Chat;
 using MTGOSDK.API.Play;
 using MTGOSDK.API.Play.Games;
 
+using MTGOTracker.Services.MTGO.Collection;
 using MTGOTracker.Database;
 using MTGOTracker.Database.Models.Events;
 using MTGOTracker.Controllers.Models.Games;
@@ -24,6 +26,114 @@ namespace MTGOTracker.Services.MTGO.Events;
 
 internal static class MatchHistorySerialization
 {
+  private const string SkipDraw = " skips their draw step";
+  private const string PlayFirst = " chooses to play first";
+  private const string DrawFirst = " chooses to draw first";
+  private const string PlaySecond = " chooses to play second";
+
+  /// <summary>
+  /// Loads relevant log states for games without recorded play/draw metadata.
+  /// </summary>
+  internal static async Task ReadPlayDrawAsync(EventContext context, IEnumerable<GameModel> source,
+    string username, CancellationToken cancellationToken = default)
+  {
+    var games = source.Where(game => ResolvePlayDraw(game, username) == "Unknown").ToList();
+    if (games.Count == 0) return;
+    var ids = games.Select(game => game.Id).ToArray();
+    var states = await context.GameStates.AsNoTracking()
+      .Where(state => ids.Contains(state.GameId) && state.Logs.Any(log =>
+        EF.Functions.Like(log.Data, "%" + SkipDraw + "%") ||
+        EF.Functions.Like(log.Data, "%" + PlayFirst + "%") ||
+        EF.Functions.Like(log.Data, "%" + DrawFirst + "%") ||
+        EF.Functions.Like(log.Data, "%" + PlaySecond + "%")))
+      .Include(state => state.Logs).AsSplitQuery().ToListAsync(cancellationToken);
+    var byGame = states.ToLookup(state => state.GameId);
+    foreach (var game in games) game.States = byGame[game.Id].ToList();
+  }
+
+  internal static string ResolvePlayDraw(
+    GameModel game,
+    string? playerUsername,
+    PlayDrawResult? existingResult = null)
+  {
+    if (string.IsNullOrWhiteSpace(playerUsername))
+    {
+      playerUsername = game.GamePlayerResults.FirstOrDefault()?.Player
+        ?? game.Players.FirstOrDefault()?.Name;
+    }
+
+    // Saved SDK results are authoritative; legacy logs fill missing metadata.
+    existingResult ??= game.GamePlayerResults.FirstOrDefault(result =>
+      string.Equals(result.Player, playerUsername, StringComparison.OrdinalIgnoreCase))?.PlayDraw;
+    if (existingResult is PlayDrawResult.Play or PlayDrawResult.Draw) return existingResult.ToString()!;
+    var recorded = game.Players.FirstOrDefault(player =>
+      string.Equals(player.Name, playerUsername, StringComparison.OrdinalIgnoreCase))?.PlayDraw;
+    if (recorded is "Play" or "Draw") return recorded;
+
+    if (game.States != null && !string.IsNullOrWhiteSpace(playerUsername))
+    {
+      var players = game.GamePlayerResults.Select(result => result.Player)
+        .Concat(game.Players.Select(player => player.Name))
+        .Where(name => !string.IsNullOrWhiteSpace(name))
+        .Append(playerUsername)
+        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+      (string Phrase, bool ActorPlays)[] actions = [
+        (SkipDraw, true), (PlayFirst, true), (DrawFirst, false), (PlaySecond, false)
+      ];
+      // Prefer the latest saved decision over earlier log entries.
+      var statesReversed = game.States.OrderByDescending(s => s.Id).ToList();
+
+      foreach (var state in statesReversed)
+      {
+        if (state.Logs == null) continue;
+        foreach (var log in state.Logs.OrderByDescending(l => l.Id))
+        {
+          if (string.IsNullOrEmpty(log.Data)) continue;
+          foreach (var (action, actorPlays) in actions)
+          {
+            int index = log.Data.IndexOf(action, StringComparison.OrdinalIgnoreCase);
+            if (index < 0) continue;
+            string actor = log.Data[..index].Trim();
+            // MTGO prefixes player names in log messages with its @P markup.
+            if (actor.StartsWith("@P", StringComparison.Ordinal)) actor = actor[2..];
+            bool isPlayer = string.Equals(actor, playerUsername, StringComparison.OrdinalIgnoreCase);
+            if (!isPlayer && (players.Count != 2 || !players.Contains(actor))) continue;
+            return actorPlays == isPlayer ? "Play" : "Draw";
+          }
+        }
+      }
+    }
+
+    // Winning the die roll only determines who chooses, not the choice itself.
+    return "Unknown";
+  }
+
+  internal static WinLossRecord GameRecord(IEnumerable<GameModel> games, string username)
+  {
+    var results = games.SelectMany(game => game.GamePlayerResults)
+      .Where(result => string.Equals(result.Player, username, StringComparison.OrdinalIgnoreCase)).ToList();
+    return new(results.Count(result => result.Result == GameResult.Win),
+      results.Count(result => result.Result == GameResult.Loss), 0);
+  }
+
+  internal static MatchHistoryDTO ToMatchHistory(MatchModel match, string username, DeckRevisionView? deck,
+    bool isActive, IReadOnlyDictionary<int, TimeSpan> durations)
+  {
+    var record = GameRecord(match.Games, username);
+    var duration = match.Games.Aggregate(TimeSpan.Zero, (total, game) => total + GetGameDuration(game,
+      game.GamePlayerResults.FirstOrDefault(result => string.Equals(result.Player, username, StringComparison.OrdinalIgnoreCase)), durations));
+    return new()
+    {
+      Id = match.Id, EventId = match.EventId, EventName = match.Event.Description, Format = match.Event.Format,
+      StartTime = match.Event.StartTime, Result = GetMatchResult(match, username, isActive),
+      Record = $"{record.Wins}-{record.Losses}", Duration = FormatDuration(duration),
+      DeckRevisionId = match.Event.DeckRevisionId, DeckName = deck?.Name, DeckArchetype = deck?.Archetype,
+      DeckColors = deck?.Colors,
+      OpponentName = GetOpponentName(match, username), OpponentDeckArchetype = match.OpponentDeckArchetype,
+      OpponentDeckColors = match.OpponentDeckColors, IsActive = isActive
+    };
+  }
+
   internal static async Task<Dictionary<int, TimeSpan>> ReadGameDurationsAsync(
     EventContext context, IEnumerable<int> gameIds)
   {
@@ -59,7 +169,7 @@ internal static class MatchHistorySerialization
 
   internal static string GetMatchResult(MatchModel match, string currentUser, bool isActive)
   {
-    var result = match.PlayerResults.FirstOrDefault(player => player.Player == currentUser);
+    var result = match.PlayerResults.FirstOrDefault(player => string.Equals(player.Player, currentUser, StringComparison.OrdinalIgnoreCase));
     if (result != null && result.Result != MatchResult.NotSet) return result.Result.ToString();
     if (isActive) return "In Progress";
     return match.Games.Count == 0 ? "Cancelled" : "Incomplete";

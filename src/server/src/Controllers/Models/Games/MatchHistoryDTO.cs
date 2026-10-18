@@ -5,6 +5,7 @@
 
 using System;
 using System.Collections.Generic;
+using MTGOTracker.Database.Models;
 
 
 namespace MTGOTracker.Controllers.Models.Games;
@@ -21,11 +22,13 @@ public class MatchHistoryDTO
   public required string Duration { get; set; }
   public long? DeckRevisionId { get; set; }
   public string? DeckName { get; set; }
+  public string? DeckArchetype { get; set; }
   public List<string>? DeckColors { get; set; }
   public string? OpponentName { get; set; }
   public string? OpponentDeckName { get; set; }
   public string? OpponentDeckArchetype { get; set; }
   public List<string>? OpponentDeckColors { get; set; }
+  public IReadOnlyList<CardEntry>? OpponentCards { get; set; }
   public bool IsActive { get; set; }
   public bool IsEvent { get; set; }
   public List<MatchHistoryDTO>? Matches { get; set; }

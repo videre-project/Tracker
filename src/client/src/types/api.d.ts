@@ -9,6 +9,88 @@
  */
 
 export interface paths {
+    "/api/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Your joined events, league courses, and active matches. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": PersonalActivityDTO[];
+                        "application/json": PersonalActivityDTO[];
+                        "text/json": PersonalActivityDTO[];
+                    };
+                };
+                /** @description Service Unavailable */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/activity/watch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Full personal activity snapshots; removals and registration changes
+         *     replace the previous snapshot.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/Client/GetState": {
         parameters: {
             query?: never;
@@ -1770,6 +1852,94 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    [path: `/api/Decks/${number}/sideboard-guides`]: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Saved plans and notes across revisions of the selected deck. */
+        get: {
+            parameters: {
+                query?: {
+                    opponent?: string;
+                };
+                header?: never;
+                path: {
+                    revisionId: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": SideboardGuideData[];
+                        "application/json": SideboardGuideData[];
+                        "text/json": SideboardGuideData[];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    [path: `/api/Decks/${number}/statistics`]: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Recorded card observations for a deck or one immutable revision. */
+        get: {
+            parameters: {
+                query?: {
+                    scope?: string;
+                    minDate?: string;
+                    maxDate?: string;
+                    opponent?: string;
+                    gameScope?: string;
+                };
+                header?: never;
+                path: {
+                    revisionId: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": DeckStatisticsData;
+                        "application/json": DeckStatisticsData;
+                        "text/json": DeckStatisticsData;
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/Diagnostics/Screenshot": {
         parameters: {
             query?: never;
@@ -2324,6 +2494,64 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    [path: `/api/Events/GetPlayerMatches/${number}`]: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Combines recorded results with live tournament pairings when available. With no player specified, selects the signed-in
+         *     participant or the first player in the standings.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Exact player name, or null for the default selection. */
+                    player?: string;
+                };
+                header?: never;
+                path: {
+                    /** @description Tournament ID. */
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": TournamentPlayerHistoryDTO;
+                        "application/json": TournamentPlayerHistoryDTO;
+                        "text/json": TournamentPlayerHistoryDTO;
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": ProblemDetails;
+                        "application/json": ProblemDetails;
+                        "text/json": ProblemDetails;
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     [path: `/api/Events/OpenEvent/${number}`]: {
         parameters: {
             query?: never;
@@ -2577,6 +2805,13 @@ export interface paths {
                     maxDate?: string;
                     format?: string;
                     deckRevisionId?: number;
+                    deckId?: number;
+                    opponent?: string;
+                    completedOnly?: boolean;
+                    groupEvents?: boolean;
+                    archetype?: string;
+                    includeOpponentCards?: boolean;
+                    gameType?: string;
                 };
                 header?: never;
                 path?: never;
@@ -2652,7 +2887,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Manually update opponent archetype for a match */
+        /** Manually update opponent archetype and deck colors for a match. */
         put: {
             parameters: {
                 query?: never;
@@ -2664,9 +2899,9 @@ export interface paths {
             };
             requestBody?: {
                 content: {
-                    "application/json": UpdateArchetypeRequest;
-                    "text/json": UpdateArchetypeRequest;
-                    "application/*+json": UpdateArchetypeRequest;
+                    "application/json": UpdateOpponentArchetypeRequest;
+                    "text/json": UpdateOpponentArchetypeRequest;
+                    "application/*+json": UpdateOpponentArchetypeRequest;
                 };
             };
             responses: {
@@ -2679,6 +2914,17 @@ export interface paths {
                         "text/plain": unknown;
                         "application/json": unknown;
                         "text/json": unknown;
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": ProblemDetails;
+                        "application/json": ProblemDetails;
+                        "text/json": ProblemDetails;
                     };
                 };
                 /** @description Not Found */
@@ -2701,6 +2947,114 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/Games/opponent-archetypes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Previously recorded opponent classifications for the archetype picker. */
+        get: {
+            parameters: {
+                query?: {
+                    format?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": OpponentArchetypeOption[];
+                        "application/json": OpponentArchetypeOption[];
+                        "text/json": OpponentArchetypeOption[];
+                    };
+                };
+            };
+        };
+        /** Replace opponent classifications together and return their previous values for Undo. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": OpponentArchetypeUpdate[];
+                    "text/json": OpponentArchetypeUpdate[];
+                    "application/*+json": OpponentArchetypeUpdate[];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": OpponentArchetypeUpdate[];
+                        "application/json": OpponentArchetypeUpdate[];
+                        "text/json": OpponentArchetypeUpdate[];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/Games/opponent-cards": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Distinct cards revealed by opponents in the selected recorded matches. */
+        get: {
+            parameters: {
+                query?: {
+                    matchIds?: number[];
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": CardEntry[];
+                        "application/json": CardEntry[];
+                        "text/json": CardEntry[];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/games/formats": {
         parameters: {
             query?: never;
@@ -2710,7 +3064,9 @@ export interface paths {
         };
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    gameType?: string;
+                };
                 header?: never;
                 path?: never;
                 cookie?: never;
@@ -2751,6 +3107,7 @@ export interface paths {
                     minDate?: string;
                     maxDate?: string;
                     format?: string;
+                    gameType?: string;
                 };
                 header?: never;
                 path?: never;
@@ -2792,6 +3149,7 @@ export interface paths {
                     minDate?: string;
                     maxDate?: string;
                     format?: string;
+                    gameType?: string;
                 };
                 header?: never;
                 path?: never;
@@ -2808,6 +3166,50 @@ export interface paths {
                         "text/plain": PerformanceTrendDTO[];
                         "application/json": PerformanceTrendDTO[];
                         "text/json": PerformanceTrendDTO[];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/Games/matchups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Matchup records grouped by saved deck or by archetype within a format. */
+        get: {
+            parameters: {
+                query?: {
+                    minDate?: string;
+                    maxDate?: string;
+                    format?: string;
+                    groupBy?: string;
+                    gameType?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": MatchupOverviewData;
+                        "application/json": MatchupOverviewData;
+                        "text/json": MatchupOverviewData;
                     };
                 };
             };
@@ -4219,6 +4621,21 @@ export interface components {
         "MTGOTracker.Controllers.DecksController.UpdateArchetypeRequest": {
             archetype?: string;
         };
+        "MTGOTracker.Controllers.GamesController.OpponentArchetypeOption": {
+            name?: string;
+            colors?: string[] | null;
+        };
+        "MTGOTracker.Controllers.GamesController.OpponentArchetypeUpdate": {
+            /** Format: int32 */
+            matchId?: number;
+            archetype?: string | null;
+            colors?: string[] | null;
+        };
+        /** @description An omitted color selection preserves the recorded colors; an empty list identifies a colorless deck. */
+        "MTGOTracker.Controllers.GamesController.UpdateOpponentArchetypeRequest": {
+            archetype?: string;
+            colors?: string[] | null;
+        };
         "MTGOTracker.Controllers.Models.Client.IClientState": {
             readonly isConnected?: boolean;
             readonly isInitialized?: boolean;
@@ -4500,6 +4917,20 @@ export interface components {
             netDeckId: number;
             deleted: boolean;
         };
+        /** @description A deck identity. Archetype groups omit the saved deck and revision IDs. */
+        "MTGOTracker.Controllers.Models.Decks.DeckReferenceData": {
+            /** Format: int64 */
+            id?: number | null;
+            /** Format: int64 */
+            revisionId?: number | null;
+            name?: string;
+            format?: string;
+            archetype?: string | null;
+            /** Format: date-time */
+            timestamp?: string;
+            colors?: string[];
+            featuredCards?: CardEntry[];
+        };
         "MTGOTracker.Controllers.Models.Decks.ImportDeckCardDTO": {
             /** Format: int32 */
             catalogId: number;
@@ -4526,6 +4957,17 @@ export interface components {
             netDeckId: number;
             created: boolean;
         };
+        "MTGOTracker.Controllers.Models.Decks.SideboardGuideData": {
+            /** Format: int32 */
+            id?: number;
+            deck?: DeckReferenceData;
+            opponentArchetype?: string;
+            notes?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+            bringIn?: CardEntry[];
+            takeOut?: CardEntry[];
+        };
         /** @description Card entry with sortable metadata (CMC, Colors, Types) */
         "MTGOTracker.Controllers.Models.Decks.SortableCardEntry": {
             /** Format: int32 */
@@ -4545,6 +4987,15 @@ export interface components {
             types?: string[];
             rarity: string;
             zone?: string;
+        };
+        "MTGOTracker.Controllers.Models.Events.ActivityClockDTO": {
+            /** Format: date-time */
+            sampledAt?: string;
+            /** Format: double */
+            durationSeconds?: number;
+            /** Format: double */
+            remainingSeconds?: number;
+            running?: boolean;
         };
         "MTGOTracker.Controllers.Models.Events.IEventStructure": {
             readonly name?: string;
@@ -4615,6 +5066,83 @@ export interface components {
             readonly activePlayerNames?: string[];
             readonly playerNamesWithMatchesInProgress?: string[];
         };
+        "MTGOTracker.Controllers.Models.Events.PersonalActivityDTO": {
+            id?: string;
+            /** Format: int32 */
+            eventId?: number;
+            kind?: string;
+            name?: string;
+            format?: string;
+            status?: string;
+            stateLabel?: string;
+            /** Format: date-time */
+            startTime?: string | null;
+            /** Format: date-time */
+            roundEndTime?: string | null;
+            /** Format: int32 */
+            roundNumber?: number | null;
+            /** Format: int32 */
+            totalRounds?: number | null;
+            /** Format: int32 */
+            wins?: number | null;
+            /** Format: int32 */
+            losses?: number | null;
+            deckName?: string | null;
+            match?: PersonalMatchDTO;
+            /** Format: int32 */
+            netDeckId?: number | null;
+            /** Format: int32 */
+            courseId?: number | null;
+            deck?: DeckReferenceData;
+            /** Format: date-time */
+            endTime?: string | null;
+            isDraft?: boolean;
+            hasPlayoffs?: boolean;
+            inPlayoffs?: boolean;
+            /** Format: int32 */
+            completedRounds?: number | null;
+            roundInProgress?: boolean;
+            roundClock?: ActivityClockDTO;
+        };
+        "MTGOTracker.Controllers.Models.Events.PersonalMatchDTO": {
+            /** Format: int32 */
+            id?: number;
+            opponent?: string | null;
+            /** Format: int32 */
+            gameNumber?: number | null;
+            status?: string;
+            clock?: ActivityClockDTO;
+        };
+        /**
+         * @description A pairing viewed from the selected player's perspective. Record is absent
+         *     until game results are available; round is absent in older recordings; byes do not imply a played game score.
+         */
+        "MTGOTracker.Controllers.Models.Events.TournamentMatchDTO": {
+            /** Format: int32 */
+            id?: number | null;
+            /** Format: int32 */
+            round?: number | null;
+            opponent?: string | null;
+            record?: string | null;
+            result?: TournamentMatchResult;
+            isRecorded?: boolean;
+        };
+        /**
+         * @description The selected player's result, including pairings awaiting a final result.
+         * @enum {string}
+         */
+        "MTGOTracker.Controllers.Models.Events.TournamentMatchResult": "win" | "loss" | "draw" | "bye" | "in-progress" | "pending";
+        /** @description A selected tournament participant and the match results available from recordings and MTGO. */
+        "MTGOTracker.Controllers.Models.Events.TournamentPlayerHistoryDTO": {
+            player?: string;
+            matches?: TournamentMatchDTO[];
+            eventName?: string | null;
+            format?: string | null;
+            /** Format: date-time */
+            startTime?: string | null;
+            /** Format: date-time */
+            endTime?: string | null;
+        };
         "MTGOTracker.Controllers.Models.Games.DashboardStatsDTO": {
             /** Format: double */
             overallWinrate?: number;
@@ -4637,6 +5165,29 @@ export interface components {
             averageDuration?: string;
             durationTwoGames?: string;
             durationThreeGames?: string;
+        };
+        /**
+         * @description Results from recorded games whose submitted starting list contained the card.
+         *     Copy counts describe the requested revision, even when observations span older lists.
+         */
+        "MTGOTracker.Controllers.Models.Games.DeckCardStatisticsData": {
+            card?: CardEntry;
+            /** Format: int32 */
+            mainboardCopies?: number;
+            /** Format: int32 */
+            sideboardCopies?: number;
+            inHand?: WinLossRecord;
+            openingHand?: WinLossRecord;
+            libraryToHand?: WinLossRecord;
+            cast?: WinLossRecord;
+            inHandOnPlay?: WinLossRecord;
+            inHandOnDraw?: WinLossRecord;
+        };
+        "MTGOTracker.Controllers.Models.Games.DeckStatisticsData": {
+            games?: WinLossRecord;
+            /** Format: int32 */
+            recordedGames?: number;
+            cards?: DeckCardStatisticsData[];
         };
         "MTGOTracker.Controllers.Models.Games.GameDetailsDTO": {
             /** Format: int32 */
@@ -4667,6 +5218,11 @@ export interface components {
             /** Format: int32 */
             eventId?: number;
             eventName: string;
+            /**
+             * Format: int32
+             * @description The one-based match position in the event or league course, when known.
+             */
+            matchNumber?: number | null;
             format: string;
             /** Format: date-time */
             startTime?: string;
@@ -4700,18 +5256,42 @@ export interface components {
             /** Format: int64 */
             deckRevisionId?: number | null;
             deckName?: string | null;
+            deckArchetype?: string | null;
             deckColors?: string[] | null;
             opponentName?: string | null;
             opponentDeckName?: string | null;
             opponentDeckArchetype?: string | null;
             opponentDeckColors?: string[] | null;
+            opponentCards?: CardEntry[] | null;
             isActive?: boolean;
             isEvent?: boolean;
             matches?: MatchHistoryDTO[] | null;
         };
+        "MTGOTracker.Controllers.Models.Games.MatchupData": {
+            deck?: DeckReferenceData;
+            opponentArchetype?: string;
+            matches?: WinLossRecord;
+            games?: WinLossRecord;
+            gameOne?: WinLossRecord;
+            postboard?: WinLossRecord;
+            onPlay?: WinLossRecord;
+            onDraw?: WinLossRecord;
+            gameOneOnPlay?: WinLossRecord;
+            gameOneOnDraw?: WinLossRecord;
+            postboardOnPlay?: WinLossRecord;
+            postboardOnDraw?: WinLossRecord;
+            opponentColors?: string[] | null;
+        };
+        "MTGOTracker.Controllers.Models.Games.MatchupOverviewData": {
+            decks?: DeckReferenceData[];
+            matchups?: MatchupData[];
+        };
         "MTGOTracker.Controllers.Models.Games.PaginatedMatchesDTO": {
             items?: MatchHistoryDTO[];
-            /** Format: int32 */
+            /**
+             * Format: int32
+             * @description Total events when grouping is enabled; otherwise, total matches.
+             */
             totalCount?: number;
             /** Format: int32 */
             page?: number;
@@ -4740,6 +5320,18 @@ export interface components {
             name: string;
             /** Format: int32 */
             quantity?: number;
+        };
+        "MTGOTracker.Controllers.Models.Games.WinLossRecord": {
+            /** Format: int32 */
+            wins?: number;
+            /** Format: int32 */
+            losses?: number;
+            /** Format: int32 */
+            draws?: number;
+            /** Format: int32 */
+            readonly total?: number;
+            /** Format: double */
+            readonly winrate?: number | null;
         };
         "MTGOTracker.Controllers.Models.Replays.ReplayActionDTO": {
             actionType: string;
@@ -5221,6 +5813,9 @@ export type MtgosdkApiUsersAvatar = Avatar;
 export type MtgosdkApiUsersUser = User;
 export type MtgoTrackerApplicationSettings = ApplicationSettings;
 export type MtgoTrackerControllersDecksControllerUpdateArchetypeRequest = UpdateArchetypeRequest;
+export type MtgoTrackerControllersGamesControllerOpponentArchetypeOption = OpponentArchetypeOption;
+export type MtgoTrackerControllersGamesControllerOpponentArchetypeUpdate = OpponentArchetypeUpdate;
+export type MtgoTrackerControllersGamesControllerUpdateOpponentArchetypeRequest = UpdateOpponentArchetypeRequest;
 export type MtgoTrackerControllersModelsClientIClientState = IClientState;
 export type MtgoTrackerControllersModelsCollectionCollectionBinderDto = CollectionBinderDTO;
 export type MtgoTrackerControllersModelsCollectionCollectionCardDto = CollectionCardDTO;
@@ -5245,23 +5840,36 @@ export type MtgoTrackerControllersModelsDecksDeckHistoryRevisionView = DeckHisto
 export type MtgoTrackerControllersModelsDecksDeckHistoryView = DeckHistoryView;
 export type MtgoTrackerControllersModelsDecksDeckIdentifierDto = DeckIdentifierDTO;
 export type MtgoTrackerControllersModelsDecksDeckMutationResponse = DeckMutationResponse;
+export type MtgoTrackerControllersModelsDecksDeckReferenceData = DeckReferenceData;
 export type MtgoTrackerControllersModelsDecksImportDeckCardDto = ImportDeckCardDTO;
 export type MtgoTrackerControllersModelsDecksImportDeckRequest = ImportDeckRequest;
 export type MtgoTrackerControllersModelsDecksImportDeckResponse = ImportDeckResponse;
+export type MtgoTrackerControllersModelsDecksSideboardGuideData = SideboardGuideData;
 export type MtgoTrackerControllersModelsDecksSortableCardEntry = SortableCardEntry;
+export type MtgoTrackerControllersModelsEventsActivityClockDto = ActivityClockDTO;
 export type MtgoTrackerControllersModelsEventsIEventStructure = IEventStructure;
 export type MtgoTrackerControllersModelsEventsIStandingResult = IStandingResult;
 export type MtgoTrackerControllersModelsEventsITournament = ITournament;
 export type MtgoTrackerControllersModelsEventsITournamentPlayerUpdate = ITournamentPlayerUpdate;
 export type MtgoTrackerControllersModelsEventsITournamentStateUpdate = ITournamentStateUpdate;
+export type MtgoTrackerControllersModelsEventsPersonalActivityDto = PersonalActivityDTO;
+export type MtgoTrackerControllersModelsEventsPersonalMatchDto = PersonalMatchDTO;
+export type MtgoTrackerControllersModelsEventsTournamentMatchDto = TournamentMatchDTO;
+export type MtgoTrackerControllersModelsEventsTournamentMatchResult = TournamentMatchResult;
+export type MtgoTrackerControllersModelsEventsTournamentPlayerHistoryDto = TournamentPlayerHistoryDTO;
 export type MtgoTrackerControllersModelsGamesDashboardStatsDto = DashboardStatsDTO;
+export type MtgoTrackerControllersModelsGamesDeckCardStatisticsData = DeckCardStatisticsData;
+export type MtgoTrackerControllersModelsGamesDeckStatisticsData = DeckStatisticsData;
 export type MtgoTrackerControllersModelsGamesGameDetailsDto = GameDetailsDTO;
 export type MtgoTrackerControllersModelsGamesGameLogDto = GameLogDTO;
 export type MtgoTrackerControllersModelsGamesMatchDetailsDto = MatchDetailsDTO;
 export type MtgoTrackerControllersModelsGamesMatchHistoryDto = MatchHistoryDTO;
+export type MtgoTrackerControllersModelsGamesMatchupData = MatchupData;
+export type MtgoTrackerControllersModelsGamesMatchupOverviewData = MatchupOverviewData;
 export type MtgoTrackerControllersModelsGamesPaginatedMatchesDto = PaginatedMatchesDTO;
 export type MtgoTrackerControllersModelsGamesPerformanceTrendDto = PerformanceTrendDTO;
 export type MtgoTrackerControllersModelsGamesSideboardChangeDto = SideboardChangeDTO;
+export type MtgoTrackerControllersModelsGamesWinLossRecord = WinLossRecord;
 export type MtgoTrackerControllersModelsReplaysReplayActionDto = ReplayActionDTO;
 export type MtgoTrackerControllersModelsReplaysReplayCardDto = ReplayCardDTO;
 export type MtgoTrackerControllersModelsReplaysReplayDataDto = ReplayDataDTO;
@@ -5342,6 +5950,9 @@ export type Avatar = components['schemas']['MTGOSDK.API.Users.Avatar'];
 export type User = components['schemas']['MTGOSDK.API.Users.User'];
 export type ApplicationSettings = components['schemas']['MTGOTracker.ApplicationSettings'];
 export type UpdateArchetypeRequest = components['schemas']['MTGOTracker.Controllers.DecksController.UpdateArchetypeRequest'];
+export type OpponentArchetypeOption = components['schemas']['MTGOTracker.Controllers.GamesController.OpponentArchetypeOption'];
+export type OpponentArchetypeUpdate = components['schemas']['MTGOTracker.Controllers.GamesController.OpponentArchetypeUpdate'];
+export type UpdateOpponentArchetypeRequest = components['schemas']['MTGOTracker.Controllers.GamesController.UpdateOpponentArchetypeRequest'];
 export type IClientState = components['schemas']['MTGOTracker.Controllers.Models.Client.IClientState'];
 export type CollectionBinderDTO = components['schemas']['MTGOTracker.Controllers.Models.Collection.CollectionBinderDTO'];
 export type CollectionCardDTO = components['schemas']['MTGOTracker.Controllers.Models.Collection.CollectionCardDTO'];
@@ -5366,23 +5977,36 @@ export type DeckHistoryRevisionView = components['schemas']['MTGOTracker.Control
 export type DeckHistoryView = components['schemas']['MTGOTracker.Controllers.Models.Decks.DeckHistoryView'];
 export type DeckIdentifierDTO = components['schemas']['MTGOTracker.Controllers.Models.Decks.DeckIdentifierDTO'];
 export type DeckMutationResponse = components['schemas']['MTGOTracker.Controllers.Models.Decks.DeckMutationResponse'];
+export type DeckReferenceData = components['schemas']['MTGOTracker.Controllers.Models.Decks.DeckReferenceData'];
 export type ImportDeckCardDTO = components['schemas']['MTGOTracker.Controllers.Models.Decks.ImportDeckCardDTO'];
 export type ImportDeckRequest = components['schemas']['MTGOTracker.Controllers.Models.Decks.ImportDeckRequest'];
 export type ImportDeckResponse = components['schemas']['MTGOTracker.Controllers.Models.Decks.ImportDeckResponse'];
+export type SideboardGuideData = components['schemas']['MTGOTracker.Controllers.Models.Decks.SideboardGuideData'];
 export type SortableCardEntry = components['schemas']['MTGOTracker.Controllers.Models.Decks.SortableCardEntry'];
+export type ActivityClockDTO = components['schemas']['MTGOTracker.Controllers.Models.Events.ActivityClockDTO'];
 export type IEventStructure = components['schemas']['MTGOTracker.Controllers.Models.Events.IEventStructure'];
 export type IStandingResult = components['schemas']['MTGOTracker.Controllers.Models.Events.IStandingResult'];
 export type ITournament = components['schemas']['MTGOTracker.Controllers.Models.Events.ITournament'];
 export type ITournamentPlayerUpdate = components['schemas']['MTGOTracker.Controllers.Models.Events.ITournamentPlayerUpdate'];
 export type ITournamentStateUpdate = components['schemas']['MTGOTracker.Controllers.Models.Events.ITournamentStateUpdate'];
+export type PersonalActivityDTO = components['schemas']['MTGOTracker.Controllers.Models.Events.PersonalActivityDTO'];
+export type PersonalMatchDTO = components['schemas']['MTGOTracker.Controllers.Models.Events.PersonalMatchDTO'];
+export type TournamentMatchDTO = components['schemas']['MTGOTracker.Controllers.Models.Events.TournamentMatchDTO'];
+export type TournamentMatchResult = components['schemas']['MTGOTracker.Controllers.Models.Events.TournamentMatchResult'];
+export type TournamentPlayerHistoryDTO = components['schemas']['MTGOTracker.Controllers.Models.Events.TournamentPlayerHistoryDTO'];
 export type DashboardStatsDTO = components['schemas']['MTGOTracker.Controllers.Models.Games.DashboardStatsDTO'];
+export type DeckCardStatisticsData = components['schemas']['MTGOTracker.Controllers.Models.Games.DeckCardStatisticsData'];
+export type DeckStatisticsData = components['schemas']['MTGOTracker.Controllers.Models.Games.DeckStatisticsData'];
 export type GameDetailsDTO = components['schemas']['MTGOTracker.Controllers.Models.Games.GameDetailsDTO'];
 export type GameLogDTO = components['schemas']['MTGOTracker.Controllers.Models.Games.GameLogDTO'];
 export type MatchDetailsDTO = components['schemas']['MTGOTracker.Controllers.Models.Games.MatchDetailsDTO'];
 export type MatchHistoryDTO = components['schemas']['MTGOTracker.Controllers.Models.Games.MatchHistoryDTO'];
+export type MatchupData = components['schemas']['MTGOTracker.Controllers.Models.Games.MatchupData'];
+export type MatchupOverviewData = components['schemas']['MTGOTracker.Controllers.Models.Games.MatchupOverviewData'];
 export type PaginatedMatchesDTO = components['schemas']['MTGOTracker.Controllers.Models.Games.PaginatedMatchesDTO'];
 export type PerformanceTrendDTO = components['schemas']['MTGOTracker.Controllers.Models.Games.PerformanceTrendDTO'];
 export type SideboardChangeDTO = components['schemas']['MTGOTracker.Controllers.Models.Games.SideboardChangeDTO'];
+export type WinLossRecord = components['schemas']['MTGOTracker.Controllers.Models.Games.WinLossRecord'];
 export type ReplayActionDTO = components['schemas']['MTGOTracker.Controllers.Models.Replays.ReplayActionDTO'];
 export type ReplayCardDTO = components['schemas']['MTGOTracker.Controllers.Models.Replays.ReplayCardDTO'];
 export type ReplayDataDTO = components['schemas']['MTGOTracker.Controllers.Models.Replays.ReplayDataDTO'];
