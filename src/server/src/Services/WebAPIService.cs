@@ -194,15 +194,16 @@ public static class WebAPIService
     api.UseHttpsRedirection();
 
     // Use the embedded static files provided by the client.
-    if (!options.DisableUI)
+    if (!options.DisableUI && !options.IsDevelopment)
     {
+      var fileProvider = new ManifestEmbeddedFileProvider(Assembly.GetEntryAssembly()!);
       api.UseFileServer(new FileServerOptions
       {
-        FileProvider = new ManifestEmbeddedFileProvider(Assembly.GetEntryAssembly()!),
+        FileProvider = fileProvider,
         EnableDefaultFiles = true,
         EnableDirectoryBrowsing = false,
       });
-      api.UseDefaultFiles();
+      api.MapFallbackToFile("index.html", new StaticFileOptions { FileProvider = fileProvider });
     }
 
     // Use Swagger to generate OpenAPI documentation.
@@ -288,11 +289,6 @@ public static class WebAPIService
     api.UseMiddleware<RequestMetricsMiddleware>();
 
     api.MapControllers();
-
-    if (!options.DisableUI)
-    {
-      api.MapFallbackToFile("/index.html");
-    }
 
     return api;
   }

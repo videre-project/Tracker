@@ -43,7 +43,8 @@ public static class TradeAPIService
     IServiceScopeFactory scopeFactory,
     DatabaseReadiness<TradeContext> databaseReadiness,
     TradeHistoryWriter historyWriter,
-    ICollectionStateFeed collectionStateFeed)
+    ICollectionStateFeed collectionStateFeed,
+    SettingsService settings)
       : BackgroundService
   {
     private static readonly TimeSpan s_collectionMaximumDelay =
@@ -58,6 +59,7 @@ public static class TradeAPIService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+      if (!settings.Startup.RecordTrades) return;
       await databaseReadiness.WaitAsync(stoppingToken);
       Log.Information("Trade API background service started.");
 

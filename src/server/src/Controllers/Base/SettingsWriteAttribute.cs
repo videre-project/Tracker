@@ -18,11 +18,9 @@ public sealed class SettingsWriteAttribute : ActionFilterAttribute
   {
     var request = context.HttpContext.Request;
     if (!HttpMethods.IsGet(request.Method) && request.Headers["X-Tracker-Settings"] != "1")
-    {
       context.Result = new ObjectResult("Settings changes require the X-Tracker-Settings header.")
       {
         StatusCode = StatusCodes.Status403Forbidden
       };
-    }
   }
 }

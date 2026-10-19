@@ -12,6 +12,9 @@ using System.Runtime.InteropServices;
 
 namespace MTGOTracker;
 
+/// <summary>
+/// Process startup configuration from arguments, environment, and installation paths.
+/// </summary>
 public class ApplicationOptions(string[] args = null!)
 {
   /// <summary>
@@ -22,7 +25,9 @@ public class ApplicationOptions(string[] args = null!)
   /// <summary>
   /// The port number to use for the Web API.
   /// </summary>
-  public int Port { get; internal set; } = 7101;
+  public int Port { get; internal set; } =
+    int.TryParse(Environment.GetEnvironmentVariable("TRACKER_API_PORT"), out int port)
+      && port is > 0 and <= 65535 ? port : 7101;
 
   /// <summary>
   /// The URL for the Web API.
@@ -65,9 +70,6 @@ public class ApplicationOptions(string[] args = null!)
     }
   }
 
-  public bool IsDarkMode { get; internal set; } =
-    Environment.GetEnvironmentVariable("APP_THEME") == "Dark";
-
   /// <summary>
   /// Indicates whether the application is running in development mode.
   /// </summary>
@@ -81,11 +83,6 @@ public class ApplicationOptions(string[] args = null!)
   /// </summary>
   public bool WineCompatibility { get; internal set; } =
     GetBoolEnv("TRACKER_WINE_COMPAT", false) || IsRunningUnderWine();
-
-  /// <summary>
-  /// Controls whether to render a custom title bar and window controls.
-  /// </summary>
-  public bool UseCustomTitleBar { get; internal set; } = true;
 
   /// <summary>
   /// Additional Chromium browser arguments passed to the WebView2 runtime.

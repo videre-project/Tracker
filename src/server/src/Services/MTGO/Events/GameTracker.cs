@@ -29,8 +29,8 @@ using MTGOTracker.Database.Models.Events;
 namespace MTGOTracker.Services.MTGO.Events;
 
 /// <summary>
-/// Tracks game events via GameProcessor and writes structured data to the
-/// database. Completed SDK publications pair gameplay changes with captured
+/// Publishes live game logs and optionally persists structured replay states.
+/// Completed SDK publications pair gameplay changes with captured
 /// actions and client selection state.
 /// </summary>
 public class GameTracker : IDisposable
@@ -40,6 +40,7 @@ public class GameTracker : IDisposable
   private readonly BlockingCollection<GameLogEntry> _eventLog;
   private readonly EventDatabaseWriter _dbWriter;
   private readonly MTGOContext _context;
+  private readonly bool _recordReplay;
 
   private readonly HashSet<int> _seenCardIds = new();
   private readonly HashSet<int> _seenPlayerIndices = new();
@@ -108,17 +109,20 @@ public class GameTracker : IDisposable
   /// <param name="eventLog">The event log for SSE notifications.</param>
   /// <param name="dbWriter">The database writer.</param>
   /// <param name="context">The host's initialized game catalog.</param>
+  /// <param name="recordReplay">Persist replay states while continuing to publish live logs.</param>
   public GameTracker(
     Game game,
     BlockingCollection<GameLogEntry> eventLog,
     EventDatabaseWriter dbWriter,
-    MTGOContext context)
+    MTGOContext context,
+    bool recordReplay = true)
   {
     _game = game;
     _gameId = game.Id;
     _eventLog = eventLog;
     _dbWriter = dbWriter;
     _context = context;
+    _recordReplay = recordReplay;
     // Reattachment can finalize an action before its first new publication.
     _lastPublishedNonce = _dbWriter.GetLastRecordedNonce(_gameId);
 
@@ -216,7 +220,7 @@ public class GameTracker : IDisposable
   }
 
   /// <summary>
-  /// Serializes detached SDK values and persists completed updates in order.
+  /// Serializes completed SDK updates for live logs and optional persistence, in order.
   /// </summary>
   private void ProcessFlushQueue()
   {
@@ -291,7 +295,8 @@ public class GameTracker : IDisposable
         string? interactionJson = interaction is null ? null
           : JsonSerializer.Serialize(interaction, JsonSerializerOptions.Web);
 
-        int stateId = _dbWriter.FlushStateData(
+        // Live notifications use the same SDK publication even when replay storage is disabled.
+        if (_recordReplay && _dbWriter.FlushStateData(
           _gameId,
           state.Snapshot,
           state.Cards,
@@ -304,47 +309,43 @@ public class GameTracker : IDisposable
           promptOptions: promptOptions,
           nonce: update?.Nonce,
           interaction: interaction,
-          capturedAt: batch.CapturedAt);
-
-        if (stateId >= 0)
+          capturedAt: batch.CapturedAt) < 0) continue;
+        int nonce = update?.Nonce ?? state.Snapshot.Nonce;
+        _lastRecordedSnapshot = state.Snapshot;
+        _lastRecordedPromptOptions = promptOptions;
+        _lastRecordedInteraction = interaction;
+        _lastRecordedNonce = nonce;
+        _lastSkippedNonce = null;
+        foreach (var notification in state.Events)
         {
-          int nonce = update?.Nonce ?? state.Snapshot.Nonce;
-          _lastRecordedSnapshot = state.Snapshot;
-          _lastRecordedPromptOptions = promptOptions;
-          _lastRecordedInteraction = interaction;
-          _lastRecordedNonce = nonce;
-          _lastSkippedNonce = null;
-          foreach (var notification in state.Events)
-          {
-            var entry = notification;
-            entry.Nonce = nonce;
-            _eventLog.Add(entry);
-          }
-          // Reattachment can replace initial observations with reconciled deltas.
-          // Serialize the final change lists only after their transaction commits.
-          if (state.CardChanges.Count > 0)
-            _eventLog.Add(new GameLogEntry(_gameId,
-              state.Snapshot.ClientTimestamp, GameLogType.CardChange,
-              JsonSerializer.Serialize(state.CardChanges.Select(change => new CardChangeData
-              {
-                CardId = change.CardId, CardName = change.CardName,
-                Property = change.Property, OldValue = change.OldValue,
-                NewValue = change.NewValue
-              }), JsonSerializerOptions.Web), nonce));
-          if (state.PlayerChanges.Count > 0)
-            _eventLog.Add(new GameLogEntry(_gameId,
-              state.Snapshot.ClientTimestamp, GameLogType.PlayerChange,
-              JsonSerializer.Serialize(state.PlayerChanges.Select(change => new PlayerChangeData
-              {
-                PlayerIndex = change.PlayerIndex, PlayerName = change.PlayerName,
-                Property = change.Property, OldValue = change.OldValue,
-                NewValue = change.NewValue
-              }), JsonSerializerOptions.Web), nonce));
-          // Local-only captures also need to refresh replay after commit.
-          if (update is not null)
-            _eventLog.Add(new GameLogEntry(_gameId, batch.CapturedAt,
-              GameLogType.Interaction, interactionJson!, update.Nonce));
+          var entry = notification;
+          entry.Nonce = nonce;
+          _eventLog.Add(entry);
         }
+        // Reattachment can replace initial observations with reconciled deltas.
+        // When recording, publish the final change lists after their transaction commits.
+        if (state.CardChanges.Count > 0)
+          _eventLog.Add(new GameLogEntry(_gameId,
+            state.Snapshot.ClientTimestamp, GameLogType.CardChange,
+            JsonSerializer.Serialize(state.CardChanges.Select(change => new CardChangeData
+            {
+              CardId = change.CardId, CardName = change.CardName,
+              Property = change.Property, OldValue = change.OldValue,
+              NewValue = change.NewValue
+            }), JsonSerializerOptions.Web), nonce));
+        if (state.PlayerChanges.Count > 0)
+          _eventLog.Add(new GameLogEntry(_gameId,
+            state.Snapshot.ClientTimestamp, GameLogType.PlayerChange,
+            JsonSerializer.Serialize(state.PlayerChanges.Select(change => new PlayerChangeData
+            {
+              PlayerIndex = change.PlayerIndex, PlayerName = change.PlayerName,
+              Property = change.Property, OldValue = change.OldValue,
+              NewValue = change.NewValue
+            }), JsonSerializerOptions.Web), nonce));
+        // Local interaction captures also notify viewers when no server log changed.
+        if (update is not null)
+          _eventLog.Add(new GameLogEntry(_gameId, batch.CapturedAt,
+            GameLogType.Interaction, interactionJson!, update.Nonce));
 
       }
       catch (Exception ex)

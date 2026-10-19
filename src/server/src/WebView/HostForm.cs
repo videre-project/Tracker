@@ -91,7 +91,6 @@ public partial class HostForm : Form
 
   private readonly DwmTitleBar? _dwmTitleBar;
   private readonly InvisibleResizePanel[] _resizePanels;
-  private bool _hasUpdatedTitleBarColor;
   private SplashForm? _splashForm;
   private Uri? _initialSource;
   private int _navigationRetryAttempts;
@@ -193,6 +192,11 @@ public partial class HostForm : Form
       WebView.CoreWebView2.Settings.IsSwipeNavigationEnabled = false;
       WebView.CoreWebView2.Settings.IsZoomControlEnabled = false;
       WebView.CoreWebView2.Settings.UserAgent = "Windows/VidereTracker";
+      WebView.CoreWebView2.WebMessageReceived += (_, message) =>
+      {
+        if (message.WebMessageAsJson == "\"tracker-theme-changed\"")
+          _ = UpdateTitleBarColorFromPage();
+      };
 
       // Allow insecure content and localhost without certificates
       WebView.CoreWebView2.Settings.IsGeneralAutofillEnabled = false;
@@ -310,7 +314,7 @@ public partial class HostForm : Form
     WebView.NavigationCompleted -= OnNavigationCompleted;
 
     // Update titlebar color when page is ready
-    _ = UpdateTitleBarColorFromPage(0.5f); // 50% darker than the sidebar
+    _ = UpdateTitleBarColorFromPage();
   }
 
   private void InitializeSplashScreen()
@@ -447,17 +451,13 @@ public partial class HostForm : Form
   /// <summary>
   /// Updates the titlebar color based on the CSS variables from the loaded page.
   /// </summary>
-  /// <param name="darkenPercentage">Percentage to darken the background color (0.0 = no change, 1.0 = completely black)</param>
-  private async Task UpdateTitleBarColorFromPage(float darkenPercentage = 0.0f)
+  private async Task UpdateTitleBarColorFromPage()
   {
-    if (!Theme.UseCustomTitleBar || _dwmTitleBar == null || _hasUpdatedTitleBarColor)
+    if (!Theme.UseCustomTitleBar || _dwmTitleBar == null)
       return;
 
     try
     {
-      // Wait a bit for the page to fully render and CSS to be applied
-      await Task.Delay(500);
-
       // Extract the sidebar background color from CSS
       var script = @"
         (function() {
@@ -519,7 +519,6 @@ public partial class HostForm : Form
           var fgColor = Color.FromArgb(colorData.foreground[0], colorData.foreground[1], colorData.foreground[2]);
 
           _dwmTitleBar.UpdateColors(originalBgColor, fgColor);
-          _hasUpdatedTitleBarColor = true;
 
           // Force repaint
           this.Invalidate();

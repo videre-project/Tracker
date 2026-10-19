@@ -82,8 +82,8 @@ public class SplashForm : Form
       var resourceName = "logo.png";
       
       using var stream = assembly.GetManifestResourceStream(resourceName) 
-        ?? assembly.GetManifestResourceStream("Tracker.server.src.client.dist.logo.png")
-        ?? assembly.GetManifestResourceStream("Tracker.logo.png");
+        ?? assembly.GetManifestResourceStream("MTGOTracker.server.src.client.dist.logo.png")
+        ?? assembly.GetManifestResourceStream("MTGOTracker.logo.png");
 
       if (stream != null)
       {

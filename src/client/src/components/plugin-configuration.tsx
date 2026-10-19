@@ -8,14 +8,14 @@ import {
   Button, Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle,
   Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Skeleton
 } from "@videreproject/ui"
-import type { ConfigurationField, PluginConfiguration, PluginInfo } from "@/types/api"
+import type { ConfigurationField, PluginConfiguration, PluginInstallation } from "@/types/api"
 import { settingsRequest } from "@/hooks/use-settings"
 
 type Values = Record<string, unknown>
 const supportedTypes = new Set(["string", "boolean", "number", "integer"])
 
 export function PluginConfigurationSheet({ plugin, onClose, onSaved }: {
-  plugin: PluginInfo
+  plugin: PluginInstallation
   onClose: () => void
   onSaved: () => void
 }) {

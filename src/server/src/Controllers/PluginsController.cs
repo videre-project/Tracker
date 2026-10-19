@@ -3,6 +3,8 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System.Collections.Generic;
+
 using Microsoft.AspNetCore.Mvc;
 
 using MTGOTracker.Services;
@@ -12,14 +14,16 @@ namespace MTGOTracker.Controllers;
 
 [ApiController]
 [Route("api/plugins")]
-public sealed class PluginsController(PluginService.PluginCatalog catalog) : ControllerBase
+public sealed class PluginsController(PluginManager plugins) : ControllerBase
 {
   [HttpGet]
-  public IActionResult List() => Ok(catalog.Plugins);
+  public IReadOnlyList<PluginManager.LoadedPlugin> List() => plugins.LoadedPlugins;
 
   [HttpGet("status")]
-  public ActionResult<PluginHostStatus> Status() => new PluginHostStatus(catalog.Enabled, catalog.Failures);
+  public ActionResult<PluginHostStatus> Status() => new PluginHostStatus(plugins.HostEnabled, plugins.Failures);
 }
 
-/// <summary>Whether this process allows installed plugins to run.</summary>
-public sealed record PluginHostStatus(bool Enabled, System.Collections.Generic.IReadOnlyList<PluginService.PluginFailure> Failures);
+/// <summary>
+/// Whether this process allows installed plugins to run.
+/// </summary>
+public sealed record PluginHostStatus(bool Enabled, IReadOnlyList<PluginManager.PluginFailure> Failures);

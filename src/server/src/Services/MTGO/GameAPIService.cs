@@ -452,7 +452,8 @@ public static class GameAPIService
         game.StartTime = DateTime.SpecifyKind(startTime, DateTimeKind.Utc);
       GameProcessor.ForGame(game).Initialize();
       _dbWriter.TryAddGame(game, matchId.Value, out var _);
-      GameTracker tracker = new(game, _eventLog, _dbWriter, _context);
+      GameTracker tracker = new(game, _eventLog, _dbWriter, _context,
+        recordReplay: serviceProvider.GetRequiredService<SettingsService>().Startup.RecordReplays);
       _gameTrackers.TryAdd(game.Id, tracker);
       _context.AddGame(game);
       if (game.Status == GameStatus.Finished)

@@ -102,15 +102,9 @@ public class Program
       try
       {
         using var previous = Process.GetProcessById(previousProcess);
-        if (!previous.WaitForExit(30000))
-        {
-          return;
-        }
+        if (!previous.WaitForExit(30000)) return;
       }
-      catch (ArgumentException)
-      {
-        // The previous process already exited.
-      }
+      catch (ArgumentException) { /* The previous process already exited. */ }
       args = args.Where(argument => argument != restart).ToArray();
     }
 #if DEBUG
@@ -129,7 +123,8 @@ public class Program
     {
       DisableUI = ShouldDisableUI(args),
     };
-    Theme.Initialize(options);
+    var settings = new SettingsService(Path.Combine(options.UserDataFolder, "settings.json"));
+    Theme.Initialize(settings.Startup);
 
     if (InstallationBootstrapper.EnsureInstalledAndRelaunchIfNeeded(args))
     {
@@ -161,7 +156,9 @@ public class Program
     HostForm? hostForm = null;
     if (!options.DisableUI)
     {
-      hostForm = new HostForm(options) { Source = options.UiUrl };
+      hostForm = new HostForm(options);
+      if (settings.Startup.StartMaximized)
+        hostForm.WindowState = FormWindowState.Maximized;
       hostForm.ControllerThread.Name ??= "UI Thread";
     }
     else
@@ -170,6 +167,24 @@ public class Program
 #if DEBUG
       AppDomain.CurrentDomain.UnhandledException += HostForm.Error_MessageBox;
 #endif
+    }
+
+    var hostLifetime = new System.Threading.Tasks.TaskCompletionSource<IHostApplicationLifetime>(
+      System.Threading.Tasks.TaskCreationOptions.RunContinuationsAsynchronously);
+    if (hostForm != null)
+    {
+      hostForm.FormClosed += async (_, _) => (await hostLifetime.Task).StopApplication();
+      // Vite can load the page before Kestrel is ready to accept API requests.
+      hostForm.WebView.CoreWebView2InitializationCompleted += async (_, initialization) =>
+      {
+        if (!initialization.IsSuccess) return;
+        var lifetime = await hostLifetime.Task;
+        lifetime.ApplicationStarted.Register(() =>
+        {
+          if (!hostForm.IsDisposed)
+            hostForm.WebView.BeginInvoke(() => hostForm.Source = new Uri(options.UiUrl, settings.Startup.StartupPage));
+        });
+      };
     }
 
     // Create a new thread to run the ASP.NET Core Web API.
@@ -195,6 +210,7 @@ public class Program
       }
 
       builder.Services.AddSingleton(new WebViewHostAccessor(hostForm));
+      builder.Services.AddSingleton(settings);
 
       // Configure API services and database context.
       builder.UseDatabase<EventContext>(options);
@@ -207,10 +223,11 @@ public class Program
       builder.RegisterPlugins(
         builder.Configuration["Plugins:Directory"]
           ?? Path.Combine(options.UserDataFolder, "Plugins"),
-        Path.Combine(options.UserDataFolder, "PluginData"));
+        Path.Combine(options.UserDataFolder, "PluginData"), settings);
 
       // Configure the Web API middleware.
       var api = builder.Build();
+      hostLifetime.SetResult(api.Lifetime);
       api.UseClientMiddleware();
       api.CreateAPIService(options);
 
@@ -228,6 +245,7 @@ public class Program
     {
       Log.Trace("Starting the application with UI.");
       Application.Run(hostForm);
+      apiThread.Join();
     }
     else
     {

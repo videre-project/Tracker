@@ -15,27 +15,33 @@ using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Configuration;
 
+using PluginSettings = MTGOTracker.Services.SettingsService.PluginSettings;
+
 namespace MTGOTracker.Services;
 
-/// <summary>Stages plugin installations and preferences without modifying the running host.</summary>
+/// <summary>
+/// Manages plugin installations and configuration, and records their status for
+/// the host lifetime.
+/// </summary>
 public sealed class PluginManager
 {
   private readonly string _directory;
-  private readonly PluginSettingsStore _settings;
-  private readonly PluginService.PluginCatalog _catalog;
+  private readonly SettingsService _settings;
+  private readonly string _errorLog;
   private readonly object _lock = new();
-  private readonly Dictionary<string, JsonObject> _startupConfiguration = new();
-  private readonly Dictionary<string, bool> _startupEnabled = new();
+  private readonly Dictionary<string, PluginSettings> _startup = new();
+  private readonly List<LoadedPlugin> _loaded = new();
+  private readonly List<PluginFailure> _failures = new();
 
-  public PluginManager(string directory, string dataDirectory, PluginService.PluginCatalog catalog)
+  public PluginManager(string directory, string dataDirectory, SettingsService settings, bool hostEnabled)
   {
     _directory = Path.GetFullPath(directory);
-    string dataPath = Path.GetFullPath(dataDirectory);
-    _catalog = catalog;
-    _settings = new PluginSettingsStore(Path.Combine(Path.GetDirectoryName(dataPath)!, "settings.json"));
+    _errorLog = Path.Combine(Path.GetFullPath(dataDirectory), "plugin-errors.log");
+    HostEnabled = hostEnabled;
+    _settings = settings;
   }
 
-  public sealed record PluginInfo(
+  public sealed record PluginInstallation(
     string Id, string Name, string? Description, string Version,
     bool Enabled, bool Loaded, bool PendingUpdate, bool PendingRemoval,
     bool RestartRequired, string? Error);
@@ -45,10 +51,8 @@ public sealed class PluginManager
     bool Secret, JsonNode? Default, JsonArray? Choices);
 
   public sealed record PluginConfiguration(JsonObject Values, IReadOnlyList<ConfigurationField> Fields);
-  public sealed record PluginSettings(bool? Enabled = null, bool Remove = false)
-  {
-    public JsonObject Configuration { get; init; } = new();
-  }
+  public sealed record LoadedPlugin(string Id, string Version);
+  public sealed record PluginFailure(string Path, string Message);
 
   internal sealed record PluginManifest
   {
@@ -62,42 +66,111 @@ public sealed class PluginManager
     public string? Version { get; init; }
   }
 
-  public bool HostEnabled => _catalog.Enabled;
-  public string? SettingsError => _settings.Error;
-  public bool RestartRequired => List().Any(plugin => plugin.RestartRequired);
+  internal string DirectoryPath => _directory;
 
-  internal bool Prepare()
+  public bool HostEnabled { get; }
+  public IReadOnlyList<LoadedPlugin> LoadedPlugins { get { lock (_lock) return _loaded.ToArray(); } }
+  public IReadOnlyList<PluginFailure> Failures { get { lock (_lock) return _failures.ToArray(); } }
+  public string? SettingsError => _settings.PluginError;
+  public bool RestartRequired
   {
+    get
+    {
+      try { return List().Any(plugin => plugin.RestartRequired); }
+      catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+      {
+        // A plugin directory error must not prevent application preferences from loading.
+        ReportFailure(_directory, exception);
+        return false;
+      }
+    }
+  }
+
+  /// <summary>
+  /// Apply staged changes and prepare enabled installations before the host is
+  /// built.
+  /// </summary>
+  internal IReadOnlyList<(string Directory, PluginManifest Manifest, IConfiguration Configuration)> PreparePlugins(
+    IConfiguration host)
+  {
+    if (!HostEnabled) return [];
+    string[] directories;
     try
     {
-      _settings.EnsureAvailable();
+      _settings.EnsurePluginsAvailable();
       Directory.CreateDirectory(_directory);
       ApplyPendingChanges();
-      return true;
+      directories = InstallationDirectories()
+        .Where(directory => File.Exists(Path.Combine(directory, "plugin.json")))
+        .Order(StringComparer.Ordinal).ToArray();
     }
     catch (Exception exception) when (exception is IOException or InvalidDataException or UnauthorizedAccessException)
     {
-      _catalog.ReportFailure(_directory, exception);
-      return false;
+      ReportFailure(_directory, exception);
+      return [];
+    }
+
+    var prepared = new List<(string, PluginManifest, IConfiguration)>();
+    foreach (string directory in directories)
+    {
+      try
+      {
+        string id = Path.GetFileName(directory);
+        var settings = _settings.GetPlugin(id);
+        if (settings.Remove || settings.Enabled == false)
+        {
+          _startup[id] = settings with { Enabled = false };
+          continue;
+        }
+        var manifest = ReadManifest(directory);
+        if (manifest.Id != id)
+          throw new InvalidDataException($"The installation folder must be named '{manifest.Id}'.");
+        bool enabled = settings.Enabled ?? manifest.Enabled;
+        // Compare saved values with this snapshot; schema defaults and host overrides are not user edits.
+        _startup[id] = settings with { Enabled = enabled };
+        if (!enabled) continue;
+        ValidateManifest(manifest, directory);
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(ReadConfiguration(id, directory).Values.ToJsonString()));
+        var configuration = new ConfigurationBuilder().AddJsonStream(stream)
+          .AddConfiguration(host.GetSection($"Plugins:{id}")).Build();
+        prepared.Add((directory, manifest, configuration));
+      }
+      catch (Exception exception)
+      {
+        ReportFailure(Path.Combine(directory, "plugin.json"), exception);
+      }
+    }
+    return prepared;
+  }
+
+  internal void RecordLoaded(string id, string version)
+  {
+    lock (_lock) _loaded.Add(new(id, version));
+  }
+
+  internal void ReportFailure(string path, Exception exception)
+  {
+    lock (_lock)
+    {
+      if (_failures.Any(failure => failure.Path == path)) return;
+      var messages = new List<string>();
+      for (Exception? current = exception; current is not null; current = current.InnerException)
+        messages.Add(current.Message);
+      _failures.Add(new(path, string.Join(" ", messages.Distinct())));
+      Console.Error.WriteLine($"Plugin '{path}' failed: {exception}");
+      try
+      {
+        Directory.CreateDirectory(Path.GetDirectoryName(_errorLog)!);
+        File.AppendAllText(_errorLog, $"{DateTimeOffset.UtcNow:O} Plugin '{path}'\n{exception}\n\n");
+      }
+      catch (Exception writeError) when (writeError is IOException or UnauthorizedAccessException)
+      {
+        Console.Error.WriteLine($"Could not save plugin error details: {writeError.Message}");
+      }
     }
   }
 
-  internal PluginSettings ReadSettings(string id) => _settings.GetPlugin(id);
-
-  internal void RecordStartupSettings(string id, PluginSettings settings, bool enabled)
-  {
-    _startupConfiguration[id] = (JsonObject)settings.Configuration.DeepClone();
-    _startupEnabled[id] = enabled;
-  }
-
-  internal IConfiguration BuildConfiguration(string id, string directory, IConfiguration host)
-  {
-    using var stream = new MemoryStream(Encoding.UTF8.GetBytes(ReadConfiguration(id, directory).Values.ToJsonString()));
-    return new ConfigurationBuilder().AddJsonStream(stream)
-      .AddConfiguration(host.GetSection($"Plugins:{id}")).Build();
-  }
-
-  public IReadOnlyList<PluginInfo> List()
+  public IReadOnlyList<PluginInstallation> List()
   {
     lock (_lock)
     {
@@ -110,16 +183,16 @@ public sealed class PluginManager
           directories[Path.GetFileName(pending)] = pending;
         }
       }
-      var result = new List<PluginInfo>();
+      var result = new List<PluginInstallation>();
       foreach (var entry in directories.OrderBy(entry => entry.Key, StringComparer.Ordinal))
       {
         string id = entry.Key;
         var settings = SettingsError is null ? _settings.GetPlugin(id) : new PluginSettings();
         bool pending = Path.GetDirectoryName(entry.Value) == pendingRoot;
-        var loadedPlugin = _catalog.Plugins.FirstOrDefault(plugin => plugin.Id == id);
+        var loadedPlugin = _loaded.FirstOrDefault(plugin => plugin.Id == id);
         bool loaded = loadedPlugin is not null;
         string manifestPath = Path.Combine(_directory, id, "plugin.json");
-        string? failure = _catalog.Failures.FirstOrDefault(error => error.Path == manifestPath)?.Message;
+        string? failure = _failures.FirstOrDefault(error => error.Path == manifestPath)?.Message;
         try
         {
           var manifest = ReadValidatedManifest(entry.Value);
@@ -128,9 +201,10 @@ public sealed class PluginManager
             throw new InvalidDataException($"The installation folder must be named '{manifest.Id}'.");
           }
           bool enabled = settings.Enabled ?? manifest.Enabled;
+          _startup.TryGetValue(id, out var startup);
           bool changed = pending || settings.Remove ||
-            (_catalog.Enabled && enabled != _startupEnabled.GetValueOrDefault(id)) ||
-            (_startupConfiguration.TryGetValue(id, out var startup) && !JsonNode.DeepEquals(startup, settings.Configuration));
+            (HostEnabled && enabled != (startup?.Enabled ?? false)) ||
+            (startup is not null && !JsonNode.DeepEquals(startup.Configuration, settings.Configuration));
           result.Add(new(id, manifest.Name ?? id, manifest.Description,
             manifest.Version ?? loadedPlugin?.Version ?? AssemblyName.GetAssemblyName(Path.Combine(entry.Value, manifest.Assembly)).Version?.ToString() ?? "unknown",
             enabled, loaded, pending, settings.Remove, changed, failure));
@@ -153,7 +227,7 @@ public sealed class PluginManager
   {
     lock (_lock)
     {
-      _settings.EnsureAvailable();
+      _settings.EnsurePluginsAvailable();
       string staging = Path.Combine(_directory, ".staging", Guid.NewGuid().ToString("N"));
       Directory.CreateDirectory(staging);
       try
@@ -361,7 +435,7 @@ public sealed class PluginManager
       }
       catch (Exception exception) when (exception is IOException or InvalidDataException or UnauthorizedAccessException or JsonException or ArgumentException)
       {
-        _catalog.ReportFailure(Path.Combine(installed, "plugin.json"), exception);
+        ReportFailure(Path.Combine(installed, "plugin.json"), exception);
       }
     }
   }
@@ -400,7 +474,7 @@ public sealed class PluginManager
     }
   }
 
-  internal static PluginManifest ReadManifest(string directory) =>
+  private static PluginManifest ReadManifest(string directory) =>
     JsonSerializer.Deserialize<PluginManifest>(
       File.ReadAllText(Path.Combine(directory, "plugin.json")), JsonSerializerOptions.Web)
       ?? throw new InvalidDataException("The plugin manifest is empty.");
@@ -412,7 +486,7 @@ public sealed class PluginManager
     return manifest;
   }
 
-  internal static void ValidateManifest(PluginManifest manifest, string directory)
+  private static void ValidateManifest(PluginManifest manifest, string directory)
   {
     ValidateId(manifest.Id);
     if (string.IsNullOrWhiteSpace(manifest.EntryPoint))

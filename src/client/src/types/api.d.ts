@@ -2795,7 +2795,11 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "text/plain": LoadedPlugin[];
+                        "application/json": LoadedPlugin[];
+                        "text/json": LoadedPlugin[];
+                    };
                 };
             };
         };
@@ -2866,9 +2870,9 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "text/plain": PluginInfo[];
-                        "application/json": PluginInfo[];
-                        "text/json": PluginInfo[];
+                        "text/plain": PluginInstallation[];
+                        "application/json": PluginInstallation[];
+                        "text/json": PluginInstallation[];
                     };
                 };
             };
@@ -3154,6 +3158,142 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": SettingsResponse;
+                        "application/json": SettingsResponse;
+                        "text/json": SettingsResponse;
+                    };
+                };
+            };
+        };
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": ApplicationSettings;
+                    "text/json": ApplicationSettings;
+                    "application/*+json": ApplicationSettings;
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": SettingsResponse;
+                        "application/json": SettingsResponse;
+                        "text/json": SettingsResponse;
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/storage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": StorageLocation[];
+                        "application/json": StorageLocation[];
+                        "text/json": StorageLocation[];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    [path: `/api/settings/storage/${string}/open`]: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -3726,6 +3866,29 @@ export interface components {
             readonly isBlocked?: boolean;
             readonly isLoggedIn?: boolean;
             readonly lastLogin?: string;
+        };
+        /** @description Persisted user preferences exposed by the settings API. */
+        "MTGOTracker.ApplicationSettings": {
+            checkForUpdates?: boolean;
+            theme?: string;
+            useCustomTitleBar?: boolean;
+            startMaximized?: boolean;
+            startupPage?: string;
+            showActiveEvents?: boolean;
+            showUpcomingEvents?: boolean;
+            /** Format: int32 */
+            historyRangeDays?: number;
+            /** Format: int32 */
+            historyPageSize?: number;
+            deckSortMode?: string;
+            showSideboard?: boolean;
+            showDeckTools?: boolean;
+            replayFollowLive?: boolean;
+            replayKeyboardShortcuts?: boolean;
+            replayExpandOpponentZones?: boolean;
+            recordReplays?: boolean;
+            recordTrades?: boolean;
+            synchronizeDecks?: boolean;
         };
         /** @description Request body for updating a deck or opponent archetype */
         "MTGOTracker.Controllers.DecksController.UpdateArchetypeRequest": {
@@ -4358,6 +4521,17 @@ export interface components {
             /** Format: int32 */
             processId?: number;
         };
+        "MTGOTracker.Controllers.SettingsController.SettingsResponse": {
+            application?: ApplicationSettings;
+            restartRequired?: boolean;
+            error?: string | null;
+        };
+        "MTGOTracker.Controllers.SettingsController.StorageLocation": {
+            id?: string;
+            name?: string;
+            description?: string;
+            path?: string;
+        };
         "MTGOTracker.Controllers.TradeHistoryDetailDTO": {
             summary?: TradeHistorySummaryDTO;
             /** Format: uuid */
@@ -4616,13 +4790,21 @@ export interface components {
             default?: unknown;
             choices?: unknown[] | null;
         };
+        "MTGOTracker.Services.PluginManager.LoadedPlugin": {
+            id?: string;
+            version?: string;
+        };
         "MTGOTracker.Services.PluginManager.PluginConfiguration": {
             values?: {
                 [key: string]: unknown;
             };
             fields?: ConfigurationField[];
         };
-        "MTGOTracker.Services.PluginManager.PluginInfo": {
+        "MTGOTracker.Services.PluginManager.PluginFailure": {
+            path?: string;
+            message?: string;
+        };
+        "MTGOTracker.Services.PluginManager.PluginInstallation": {
             id?: string;
             name?: string;
             description?: string | null;
@@ -4633,11 +4815,6 @@ export interface components {
             pendingRemoval?: boolean;
             restartRequired?: boolean;
             error?: string | null;
-        };
-        /** @description Identifies a failed installation and its actionable error. */
-        "MTGOTracker.Services.PluginService.PluginFailure": {
-            path?: string;
-            message?: string;
         };
         "Microsoft.AspNetCore.Mvc.ProblemDetails": {
             type?: string | null;
@@ -4685,6 +4862,7 @@ export type MtgosdkApiTradeTradeEscrow = TradeEscrow;
 export type MtgosdkApiTradeTradePartner = TradePartner;
 export type MtgosdkApiUsersAvatar = Avatar;
 export type MtgosdkApiUsersUser = User;
+export type MtgoTrackerApplicationSettings = ApplicationSettings;
 export type MtgoTrackerControllersDecksControllerUpdateArchetypeRequest = UpdateArchetypeRequest;
 export type MtgoTrackerControllersModelsClientIClientState = IClientState;
 export type MtgoTrackerControllersModelsCollectionCollectionCardDto = CollectionCardDTO;
@@ -4736,6 +4914,8 @@ export type MtgoTrackerControllersPluginHostStatus = PluginHostStatus;
 export type MtgoTrackerControllersPluginSettingsControllerEnablePluginRequest = EnablePluginRequest;
 export type MtgoTrackerControllersPluginSettingsControllerPluginSettingsStatus = PluginSettingsStatus;
 export type MtgoTrackerControllersSettingsControllerHostInstance = HostInstance;
+export type MtgoTrackerControllersSettingsControllerSettingsResponse = SettingsResponse;
+export type MtgoTrackerControllersSettingsControllerStorageLocation = StorageLocation;
 export type MtgoTrackerControllersTradeHistoryDetailDto = TradeHistoryDetailDTO;
 export type MtgoTrackerControllersTradeHistoryEffectDto = TradeHistoryEffectDTO;
 export type MtgoTrackerControllersTradeHistoryErrorDto = TradeHistoryErrorDTO;
@@ -4763,9 +4943,10 @@ export type MtgoTrackerServicesMtgoEventsPlayerInteractionData = PlayerInteracti
 export type MtgoTrackerServicesMtgoEventsPromptOptionData = PromptOptionData;
 export type MtgoTrackerServicesMtgoEventsZoneTransferData = ZoneTransferData;
 export type MtgoTrackerServicesPluginManagerConfigurationField = ConfigurationField;
+export type MtgoTrackerServicesPluginManagerLoadedPlugin = LoadedPlugin;
 export type MtgoTrackerServicesPluginManagerPluginConfiguration = PluginConfiguration;
-export type MtgoTrackerServicesPluginManagerPluginInfo = PluginInfo;
-export type MtgoTrackerServicesPluginServicePluginFailure = PluginFailure;
+export type MtgoTrackerServicesPluginManagerPluginFailure = PluginFailure;
+export type MtgoTrackerServicesPluginManagerPluginInstallation = PluginInstallation;
 export type MicrosoftAspNetCoreMvcProblemDetails = ProblemDetails;
 export type $defs = Record<string, never>;
 export type operations = Record<string, never>;
@@ -4800,6 +4981,7 @@ export type TradeEscrow = components['schemas']['MTGOSDK.API.Trade.TradeEscrow']
 export type TradePartner = components['schemas']['MTGOSDK.API.Trade.TradePartner'];
 export type Avatar = components['schemas']['MTGOSDK.API.Users.Avatar'];
 export type User = components['schemas']['MTGOSDK.API.Users.User'];
+export type ApplicationSettings = components['schemas']['MTGOTracker.ApplicationSettings'];
 export type UpdateArchetypeRequest = components['schemas']['MTGOTracker.Controllers.DecksController.UpdateArchetypeRequest'];
 export type IClientState = components['schemas']['MTGOTracker.Controllers.Models.Client.IClientState'];
 export type CollectionCardDTO = components['schemas']['MTGOTracker.Controllers.Models.Collection.CollectionCardDTO'];
@@ -4851,6 +5033,8 @@ export type PluginHostStatus = components['schemas']['MTGOTracker.Controllers.Pl
 export type EnablePluginRequest = components['schemas']['MTGOTracker.Controllers.PluginSettingsController.EnablePluginRequest'];
 export type PluginSettingsStatus = components['schemas']['MTGOTracker.Controllers.PluginSettingsController.PluginSettingsStatus'];
 export type HostInstance = components['schemas']['MTGOTracker.Controllers.SettingsController.HostInstance'];
+export type SettingsResponse = components['schemas']['MTGOTracker.Controllers.SettingsController.SettingsResponse'];
+export type StorageLocation = components['schemas']['MTGOTracker.Controllers.SettingsController.StorageLocation'];
 export type TradeHistoryDetailDTO = components['schemas']['MTGOTracker.Controllers.TradeHistoryDetailDTO'];
 export type TradeHistoryEffectDTO = components['schemas']['MTGOTracker.Controllers.TradeHistoryEffectDTO'];
 export type TradeHistoryErrorDTO = components['schemas']['MTGOTracker.Controllers.TradeHistoryErrorDTO'];
@@ -4878,7 +5062,8 @@ export type PlayerInteractionData = components['schemas']['MTGOTracker.Services.
 export type PromptOptionData = components['schemas']['MTGOTracker.Services.MTGO.Events.PromptOptionData'];
 export type ZoneTransferData = components['schemas']['MTGOTracker.Services.MTGO.Events.ZoneTransferData'];
 export type ConfigurationField = components['schemas']['MTGOTracker.Services.PluginManager.ConfigurationField'];
+export type LoadedPlugin = components['schemas']['MTGOTracker.Services.PluginManager.LoadedPlugin'];
 export type PluginConfiguration = components['schemas']['MTGOTracker.Services.PluginManager.PluginConfiguration'];
-export type PluginInfo = components['schemas']['MTGOTracker.Services.PluginManager.PluginInfo'];
-export type PluginFailure = components['schemas']['MTGOTracker.Services.PluginService.PluginFailure'];
+export type PluginFailure = components['schemas']['MTGOTracker.Services.PluginManager.PluginFailure'];
+export type PluginInstallation = components['schemas']['MTGOTracker.Services.PluginManager.PluginInstallation'];
 export type ProblemDetails = components['schemas']['Microsoft.AspNetCore.Mvc.ProblemDetails'];

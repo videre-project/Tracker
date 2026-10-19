@@ -588,8 +588,14 @@ public sealed class ExamplePlugin : ITrackerPlugin
   `GET /api/plugins/status`; full exceptions are saved to `PluginData/plugin-errors.log`.
 - `GET /api/plugins` lists the loaded plugin IDs and assembly versions.
 - Settings → Plugins stages ZIP installs and updates, enabled state, configuration,
-  and removals. `PluginManager` handles these operations independently of the loader;
-  `PluginSettingsStore` atomically persists preferences in the data root's `settings.json`
+  and removals. `PluginManager` owns installation discovery and prepares enabled
+  packages with their effective configuration before host construction. It also
+  keeps the startup preference snapshot, loaded-plugin identities, and failures
+  used by both plugin API controllers. `PluginService` consumes those prepared
+  packages and handles assembly loading, service registration, and lifecycle;
+  installation and settings code has no dependency on the loader.
+  `SettingsService` owns the persisted plugin-preference type and atomically writes
+  application and plugin preferences in the data root's `settings.json`
   while preserving other sections. Unreadable preferences skip plugins, preserve the
   file, and surface an error in Settings. Schema defaults and saved values are overlaid
   by host configuration. Removal retains `PluginData/{id}`.

@@ -8,9 +8,9 @@ import { Plug, RefreshCw, Upload } from "lucide-react"
 import { Badge, Button, Skeleton } from "@videreproject/ui"
 import { PluginConfigurationSheet } from "@/components/plugin-configuration"
 import { settingsRequest } from "@/hooks/use-settings"
-import type { HostInstance, PluginInfo, PluginSettingsStatus } from "@/types/api"
+import type { HostInstance, PluginInstallation, PluginSettingsStatus } from "@/types/api"
 
-function status(plugin: PluginInfo, hostEnabled: boolean) {
+function status(plugin: PluginInstallation, hostEnabled: boolean) {
   if (plugin.pendingRemoval) return "Removal pending"
   if (plugin.pendingUpdate) return plugin.loaded ? "Update pending" : "Install pending"
   if (plugin.error) return "Failed"
@@ -20,18 +20,18 @@ function status(plugin: PluginInfo, hostEnabled: boolean) {
 }
 
 export default function PluginSettings() {
-  const [plugins, setPlugins] = useState<PluginInfo[] | null>(null)
+  const [plugins, setPlugins] = useState<PluginInstallation[] | null>(null)
   const [host, setHost] = useState<PluginSettingsStatus | null>(null)
   const [error, setError] = useState("")
   const [busy, setBusy] = useState(false)
   const [restarting, setRestarting] = useState(false)
-  const [selected, setSelected] = useState<PluginInfo | null>(null)
+  const [selected, setSelected] = useState<PluginInstallation | null>(null)
   const upload = useRef<HTMLInputElement>(null)
   const lifetime = useRef<AbortController | null>(null)
 
   const refresh = useCallback(async (signal?: AbortSignal) => {
     const [installed, state] = await Promise.all([
-      settingsRequest<PluginInfo[]>("/plugins", { signal }),
+      settingsRequest<PluginInstallation[]>("/plugins", { signal }),
       settingsRequest<PluginSettingsStatus>("/plugins/status", { signal }),
     ])
     if (signal?.aborted) return
@@ -62,7 +62,7 @@ export default function PluginSettings() {
     } finally { setBusy(false) }
   }
 
-  async function changeEnabled(plugin: PluginInfo, enabled: boolean) {
+  async function changeEnabled(plugin: PluginInstallation, enabled: boolean) {
     const previous = plugins
     setPlugins(current => current?.map(item => item.id === plugin.id ? { ...item, enabled } : item) ?? null)
     const id = encodeURIComponent(plugin.id ?? "")

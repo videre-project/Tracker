@@ -23,17 +23,17 @@ public sealed class PluginSettingsController(PluginManager plugins) : Controller
   public sealed record EnablePluginRequest(bool Enabled);
 
   [HttpGet]
-  [ProducesResponseType(typeof(IReadOnlyList<PluginManager.PluginInfo>), StatusCodes.Status200OK)]
+  [ProducesResponseType(typeof(IReadOnlyList<PluginManager.PluginInstallation>), StatusCodes.Status200OK)]
   public IActionResult List() => Run(() => Ok(plugins.List()));
 
   public sealed record PluginSettingsStatus(
     bool HostEnabled, bool RestartRequired, string? SettingsError,
-    IReadOnlyList<PluginService.PluginFailure> Failures);
+    IReadOnlyList<PluginManager.PluginFailure> Failures);
 
   [HttpGet("status")]
   [ProducesResponseType(typeof(PluginSettingsStatus), StatusCodes.Status200OK)]
-  public IActionResult Status([FromServices] PluginService.PluginCatalog catalog) => Run(() =>
-    Ok(new PluginSettingsStatus(plugins.HostEnabled, plugins.RestartRequired, plugins.SettingsError, catalog.Failures)));
+  public IActionResult Status() => Run(() =>
+    Ok(new PluginSettingsStatus(plugins.HostEnabled, plugins.RestartRequired, plugins.SettingsError, plugins.Failures)));
 
   [HttpPost]
   [RequestSizeLimit(256 * 1024 * 1024)]

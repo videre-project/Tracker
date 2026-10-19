@@ -150,7 +150,7 @@ public sealed class InstallerWizardForm : Form
     _headerAnimationTimer.Start();
 
     // Set the form's icon to the application icon
-    string processPath = Environment.ProcessPath;
+    string? processPath = Environment.ProcessPath;
     if (!string.IsNullOrEmpty(processPath) && File.Exists(processPath))
     {
         this.Icon = System.Drawing.Icon.ExtractAssociatedIcon(processPath);

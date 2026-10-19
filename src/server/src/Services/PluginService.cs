@@ -39,6 +39,7 @@ public static partial class PluginService
   /// <param name="builder">The host builder to configure.</param>
   /// <param name="installationDirectory">The directory containing plugin installations.</param>
   /// <param name="dataDirectory">The parent directory for persistent plugin data.</param>
+  /// <param name="preferences">The shared application and plugin preferences.</param>
   /// <returns>The host builder for chaining.</returns>
   /// <remarks>
   /// Each immediate subdirectory may contain a plugin.json manifest. Failed
@@ -49,69 +50,17 @@ public static partial class PluginService
   public static IHostApplicationBuilder RegisterPlugins(
     this IHostApplicationBuilder builder,
     string installationDirectory,
-    string dataDirectory)
+    string dataDirectory,
+    SettingsService preferences)
   {
-    var plugins = new List<PluginInfo>();
-    var catalog = new PluginCatalog(plugins.AsReadOnly(), dataDirectory,
+    var plugins = new PluginManager(installationDirectory, dataDirectory, preferences,
       builder.Configuration.GetValue("Plugins:Enabled", true));
-    builder.Services.AddSingleton(catalog);
-    var pluginManager = new PluginManager(installationDirectory, dataDirectory, catalog);
-    builder.Services.AddSingleton(pluginManager);
-    var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-    if (!catalog.Enabled)
+    builder.Services.AddSingleton(plugins);
+    foreach (var (directory, manifest, configuration) in plugins.PreparePlugins(builder.Configuration))
     {
-      return builder;
-    }
-    if (!pluginManager.Prepare())
-    {
-      return builder;
-    }
-    string[] manifests;
-    try
-    {
-      manifests = Directory.Exists(installationDirectory)
-        ? Directory.EnumerateDirectories(installationDirectory)
-          .Where(directory => !Path.GetFileName(directory).StartsWith('.'))
-          .Select(directory => Path.Combine(directory, "plugin.json"))
-          .Where(File.Exists).Order(StringComparer.Ordinal).ToArray()
-        : Array.Empty<string>();
-    }
-    catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-    {
-      catalog.ReportFailure(installationDirectory, exception);
-      return builder;
-    }
-
-    foreach (string manifestPath in manifests)
-    {
+      string manifestPath = Path.Combine(directory, "plugin.json");
       try
       {
-        string directory = Path.GetDirectoryName(Path.GetFullPath(manifestPath))!;
-        string id = Path.GetFileName(directory);
-        var settings = pluginManager.ReadSettings(id);
-        if (settings.Remove || settings.Enabled == false)
-        {
-          pluginManager.RecordStartupSettings(id, settings, enabled: false);
-          continue;
-        }
-        var manifest = PluginManager.ReadManifest(directory);
-        if (id != manifest.Id)
-        {
-          throw new InvalidDataException($"The installation folder must be named '{manifest.Id}'.");
-        }
-        bool enabled = settings.Enabled ?? manifest.Enabled;
-        pluginManager.RecordStartupSettings(id, settings, enabled);
-        if (!enabled)
-        {
-          continue;
-        }
-
-        if (!ids.Add(manifest.Id))
-        {
-          throw new InvalidDataException($"Duplicate plugin ID '{manifest.Id}'.");
-        }
-
-        PluginManager.ValidateManifest(manifest, directory);
         string assemblyPath = Path.Combine(directory, manifest.Assembly);
         var loadContext = new PluginLoadContext(assemblyPath);
         var assembly = loadContext.LoadFromAssemblyPath(assemblyPath);
@@ -153,7 +102,7 @@ public static partial class PluginService
         var baseline = staged.ToArray();
         plugin.ConfigureServices(staged, new PluginContext(
           manifest.Id, directory, pluginData,
-          pluginManager.BuildConfiguration(manifest.Id, directory, builder.Configuration)));
+          configuration));
 
         // Plugins extend the host. Replacing/removing host registrations could
         // corrupt recording or prevent startup even after a plugin is skipped.
@@ -170,16 +119,16 @@ public static partial class PluginService
         if (hosted.Length > 0)
         {
           builder.Services.AddSingleton<IHostedService>(provider =>
-            new PluginHostedServices(provider, hosted, manifestPath, catalog));
+            new PluginHostedServices(provider, hosted, manifestPath, plugins));
         }
         builder.Services.AddControllers().AddApplicationPart(assembly)
           .AddMvcOptions(options => options.Conventions.Add(
             new PluginRouteConvention(assembly, manifest.Id)));
-        plugins.Add(new(manifest.Id, assembly.GetName().Version?.ToString() ?? "unknown"));
+        plugins.RecordLoaded(manifest.Id, assembly.GetName().Version?.ToString() ?? "unknown");
       }
       catch (Exception exception)
       {
-        catalog.ReportFailure(manifestPath, exception);
+        plugins.ReportFailure(manifestPath, exception);
       }
     }
 
@@ -240,60 +189,8 @@ public static partial class PluginService
     _ = provider.GetRequiredService<IActionDescriptorCollectionProvider>().ActionDescriptors;
   }
 
-  /// <summary>
-  /// Identifies one loaded plugin and its assembly version.
-  /// </summary>
-  public sealed record PluginInfo(string Id, string Version);
-
-  /// <summary>
-  /// The plugins configured for this host's lifetime.
-  /// </summary>
-  public sealed class PluginCatalog(IReadOnlyList<PluginInfo> plugins, string dataDirectory, bool enabled)
-  {
-    private readonly object _lock = new();
-    private readonly List<PluginFailure> _failures = new();
-    public IReadOnlyList<PluginInfo> Plugins { get; } = plugins;
-    public bool Enabled { get; } = enabled;
-    public IReadOnlyList<PluginFailure> Failures
-    {
-      get { lock (_lock) return _failures.ToArray(); }
-    }
-
-    internal void ReportFailure(string path, Exception exception)
-    {
-      lock (_lock)
-      {
-        if (_failures.Any(failure => failure.Path == path))
-        {
-          return;
-        }
-        var messages = new List<string>();
-        for (Exception? current = exception; current is not null; current = current.InnerException)
-        {
-          messages.Add(current.Message);
-        }
-        _failures.Add(new(path, string.Join(" ", messages.Distinct())));
-        Console.Error.WriteLine($"Plugin '{path}' failed: {exception}");
-        try
-        {
-          Directory.CreateDirectory(dataDirectory);
-          File.AppendAllText(Path.Combine(dataDirectory, "plugin-errors.log"),
-            $"{DateTimeOffset.UtcNow:O} Plugin '{path}'\n{exception}\n\n");
-        }
-        catch (Exception writeError) when (writeError is IOException or UnauthorizedAccessException)
-        {
-          Console.Error.WriteLine($"Could not save plugin error details: {writeError.Message}");
-        }
-      }
-    }
-
-  }
-
-  /// <summary>Identifies a failed installation and its actionable error.</summary>
-  public sealed record PluginFailure(string Path, string Message);
-
   private sealed class PluginHostedServices(IServiceProvider provider,
-    IReadOnlyList<ServiceDescriptor> descriptors, string manifestPath, PluginCatalog catalog)
+    IReadOnlyList<ServiceDescriptor> descriptors, string manifestPath, PluginManager plugins)
     : IHostedService, IAsyncDisposable
   {
     private readonly List<(IHostedService Service, bool Owned)> _services = new();
@@ -329,7 +226,7 @@ public static partial class PluginService
       }
       catch (Exception exception)
       {
-        catalog.ReportFailure(manifestPath, exception);
+        plugins.ReportFailure(manifestPath, exception);
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         await StopAsync(timeout.Token);
       }
@@ -341,7 +238,7 @@ public static partial class PluginService
       catch (OperationCanceledException) { }
       catch (Exception exception)
       {
-        catalog.ReportFailure(manifestPath, exception);
+        plugins.ReportFailure(manifestPath, exception);
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         await StopAsync(timeout.Token);
       }
@@ -367,7 +264,7 @@ public static partial class PluginService
           catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
           catch (Exception exception)
           {
-            catalog.ReportFailure(manifestPath, exception);
+            plugins.ReportFailure(manifestPath, exception);
           }
         }
       }
@@ -398,7 +295,7 @@ public static partial class PluginService
         }
         catch (Exception exception)
         {
-          catalog.ReportFailure(manifestPath, exception);
+          plugins.ReportFailure(manifestPath, exception);
         }
       }
     }
