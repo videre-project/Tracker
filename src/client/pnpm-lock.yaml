@@ -52,11 +52,11 @@ importers:
         specifier: ^8.21.3
         version: 8.21.3(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@videreproject/constants':
-        specifier: 0.6.0
-        version: 0.6.0
+        specifier: 0.6.1
+        version: 0.6.1
       '@videreproject/ui':
-        specifier: 0.6.0
-        version: 0.6.0(@types/react-dom@18.3.7(@types/react@18.3.28))(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react-is@19.2.0)(react@18.3.1)(redux@5.0.1)(tailwindcss@3.4.19)
+        specifier: 0.6.1
+        version: 0.6.1(@types/react-dom@18.3.7(@types/react@18.3.28))(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react-is@19.2.0)(react@18.3.1)(redux@5.0.1)(tailwindcss@3.4.19)
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -1767,11 +1767,11 @@ packages:
     resolution: {integrity: sha512-fkv8dHRDqfGtTHuJeebdrQ7cX6Ad4WAS00rgHh9UGvMycF1mjBfsxry1XsLIFhWZ6Judlh6UdzK+TYlbpCXgnA==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
 
-  '@videreproject/constants@0.6.0':
-    resolution: {integrity: sha512-COxH+oLg9f43YuVhvMk7v7CoLxEPUSDy8W6A/pfkrGWAT8rTQtC2vRsBBeTMPmj26hOlutyP/ngpmy5CvpUh1Q==}
+  '@videreproject/constants@0.6.1':
+    resolution: {integrity: sha512-dyVar3M73bk2TJqZBCW3XRBD7mBU4E033IRQrCdEyI5jdJxdEODnbKKBrmOEUTs0zmjXGw/c6f1NsIUIKzsWCw==}
 
-  '@videreproject/ui@0.6.0':
-    resolution: {integrity: sha512-cy5gDdj+bmOX9uZmVk3dlWTKpjF7wGtOE/cUgu3Urr73vSUxHT7ckRP1MkSqZgNvifsuxUfAj/mhNCYyC1UnyA==}
+  '@videreproject/ui@0.6.1':
+    resolution: {integrity: sha512-dEG9e5CcgEzbuU7yir4+mPFcqX9Ij1zjn4PWR6AZBopzFDRZ4NnQmHKeS79Ebh2V1E9zwXK7j8VTDqxOIouFpw==}
     peerDependencies:
       react: ^18.0.0
       react-dom: ^18.0.0
@@ -4806,9 +4806,9 @@ snapshots:
       '@typescript-eslint/types': 8.67.0
       eslint-visitor-keys: 5.0.0
 
-  '@videreproject/constants@0.6.0': {}
+  '@videreproject/constants@0.6.1': {}
 
-  '@videreproject/ui@0.6.0(@types/react-dom@18.3.7(@types/react@18.3.28))(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react-is@19.2.0)(react@18.3.1)(redux@5.0.1)(tailwindcss@3.4.19)':
+  '@videreproject/ui@0.6.1(@types/react-dom@18.3.7(@types/react@18.3.28))(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react-is@19.2.0)(react@18.3.1)(redux@5.0.1)(tailwindcss@3.4.19)':
     dependencies:
       '@radix-ui/react-collapsible': 1.1.20(@types/react-dom@18.3.7(@types/react@18.3.28))(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@radix-ui/react-dialog': 1.1.23(@types/react-dom@18.3.7(@types/react@18.3.28))(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -4820,7 +4820,7 @@ snapshots:
       '@radix-ui/react-slot': 1.3.3(@types/react@18.3.28)(react@18.3.1)
       '@radix-ui/react-tooltip': 1.2.16(@types/react-dom@18.3.7(@types/react@18.3.28))(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@tanstack/react-table': 8.21.3(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@videreproject/constants': 0.6.0
+      '@videreproject/constants': 0.6.1
       class-variance-authority: 0.7.1
       clsx: 2.1.1
       date-fns: 3.6.0
