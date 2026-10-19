@@ -192,7 +192,7 @@ public static class InstallationBootstrapper
       : null;
   }
 
-  private static bool InstallToDirectory(
+  internal static bool InstallToDirectory(
     string processPath,
     string targetInstallDirectory,
     IProgress<InstallerProgressUpdate> progress)
@@ -437,6 +437,15 @@ public static class InstallationBootstrapper
     {
       // Best effort focus handling.
     }
+  }
+
+  internal static void RefreshExistingShortcuts(string executable, string installRoot)
+  {
+    CreateLocalShortcut(executable, installRoot);
+    string desktop = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), $"{ProductInfo.Name}.lnk");
+    if (File.Exists(desktop)) CreateShortcut(desktop, executable);
+    string menu = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), $"{ProductInfo.Name}.lnk");
+    if (File.Exists(menu)) CreateShortcut(menu, executable);
   }
 
   private static void CreateLocalShortcut(string targetExePath, string installRoot)

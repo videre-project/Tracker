@@ -96,6 +96,8 @@ public class Program
   [STAThread]
   public static void Main(string[] args)
   {
+    if (UpdateInstaller.TryRun(args)) return;
+
     string? restart = args.FirstOrDefault(argument => argument.StartsWith("--restart-after=", StringComparison.Ordinal));
     if (restart is not null && int.TryParse(restart.Split('=')[1], out int previousProcess))
     {
@@ -211,6 +213,8 @@ public class Program
 
       builder.Services.AddSingleton(new WebViewHostAccessor(hostForm));
       builder.Services.AddSingleton(settings);
+      builder.Services.AddSingleton<UpdateService>();
+      builder.Services.AddHostedService(services => services.GetRequiredService<UpdateService>());
 
       // Configure API services and database context.
       builder.UseDatabase<EventContext>(options);

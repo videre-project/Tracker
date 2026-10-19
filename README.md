@@ -197,3 +197,19 @@ This project is not affiliated with Wizards of the Coast, Daybreak Games, or Mag
 Videre Tracker is intended as a companion tool for MTGO players and is developed in accordance with the principles of fair use and interoperability under **Section 103(f)** of the Digital Millennium Copyright Act.
 
 **This is not legal advice.** Use this software at your own risk and ensure compliance with all applicable terms of service.
+
+## Application updates
+
+Settings → Updates checks the latest stable GitHub release of
+`videre-project/Tracker`. Automatic checks run at startup and every six hours;
+downloading and installing remain explicit actions. The updater verifies the
+release asset's size and its SHA-256 digest when GitHub supplies one, then retains
+the staged executable across restarts.
+
+Updates are activated only while MTGO is closed. If MTGO is running, choose
+**Install after MTGO closes**; this can be cancelled before installation starts.
+The new executable installs into a version directory, waits for the old Tracker
+host to finish stopping, and launches with the same user-data directory. Existing
+recordings, settings, and plugin folders remain outside the version directory.
+Existing shortcuts are updated; the old version is retained. This does not provide
+automatic rollback of database migrations.

@@ -609,6 +609,28 @@ Tracker's supported ASP.NET Core and Windows desktop frameworks. Tracker retains
 those desktop assemblies when publishing because plugins can use types that are
 absent from Tracker's own static references.
 
+### Application updates
+
+`UpdateService` reads the GitHub latest-release endpoint by default. The optional
+`Updates:FeedUrl` configuration key accepts a local feed with the same JSON shape.
+Both sources use the same staging and activation code. GitHub sanitizes spaces in
+asset filenames; downloads are stored locally as `Videre Tracker.exe`. One client
+provider owns status polling and detects the handoff to the installed version.
+
+Downloaded executables and their staged receipt live under `Updates` in the
+user-data directory. `UpdateInstaller` runs through the new executable's early
+`--install-update` entry point, before UI or SDK attachment. It verifies its
+compiled version against the release, installs the extracted payload beside the
+old version, and signals readiness before the old host shuts down. The helper
+waits for that host to exit before launching the installed executable. The UI
+thread waits for host shutdown, allowing hosted-service cleanup to finish.
+
+Activation requires the MTGO process to be absent; connection readiness is not
+used as a substitute. The helper checks again before launching. Scheduling an
+installation after MTGO exits is persisted in the staged receipt. No Diver
+compatibility is inferred from package versions. Prior binaries are retained,
+but incompatible database migrations do not have automatic rollback.
+
 ### 6.2 MTGO capability
 
 Plugins that need the session Tracker owns request `IMTGOContext` from the same

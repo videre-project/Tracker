@@ -3572,6 +3572,197 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/updates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": UpdateStatus;
+                        "application/json": UpdateStatus;
+                        "text/json": UpdateStatus;
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/updates/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": UpdateStatus;
+                        "application/json": UpdateStatus;
+                        "text/json": UpdateStatus;
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/updates/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": UpdateStatus;
+                        "application/json": UpdateStatus;
+                        "text/json": UpdateStatus;
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/updates/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": UpdateStatus;
+                        "application/json": UpdateStatus;
+                        "text/json": UpdateStatus;
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/updates/schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": boolean;
+                    "text/json": boolean;
+                    "application/*+json": boolean;
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": UpdateStatus;
+                        "application/json": UpdateStatus;
+                        "text/json": UpdateStatus;
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/decks/search-cards": {
         parameters: {
             query?: never;
@@ -4816,6 +5007,27 @@ export interface components {
             restartRequired?: boolean;
             error?: string | null;
         };
+        "MTGOTracker.Services.UpdateService.UpdateStatus": {
+            currentVersion?: string;
+            availableVersion?: string | null;
+            stagedVersion?: string | null;
+            releaseUrl?: string | null;
+            releaseNotes?: string | null;
+            /** Format: date-time */
+            publishedAt?: string | null;
+            /** Format: date-time */
+            lastChecked?: string | null;
+            /** Format: int64 */
+            downloadedBytes?: number;
+            /** Format: int64 */
+            totalBytes?: number | null;
+            busy?: boolean;
+            applying?: boolean;
+            scheduled?: boolean;
+            mtgoRunning?: boolean;
+            customSource?: boolean;
+            error?: string | null;
+        };
         "Microsoft.AspNetCore.Mvc.ProblemDetails": {
             type?: string | null;
             title?: string | null;
@@ -4947,6 +5159,7 @@ export type MtgoTrackerServicesPluginManagerLoadedPlugin = LoadedPlugin;
 export type MtgoTrackerServicesPluginManagerPluginConfiguration = PluginConfiguration;
 export type MtgoTrackerServicesPluginManagerPluginFailure = PluginFailure;
 export type MtgoTrackerServicesPluginManagerPluginInstallation = PluginInstallation;
+export type MtgoTrackerServicesUpdateServiceUpdateStatus = UpdateStatus;
 export type MicrosoftAspNetCoreMvcProblemDetails = ProblemDetails;
 export type $defs = Record<string, never>;
 export type operations = Record<string, never>;
@@ -5066,4 +5279,5 @@ export type LoadedPlugin = components['schemas']['MTGOTracker.Services.PluginMan
 export type PluginConfiguration = components['schemas']['MTGOTracker.Services.PluginManager.PluginConfiguration'];
 export type PluginFailure = components['schemas']['MTGOTracker.Services.PluginManager.PluginFailure'];
 export type PluginInstallation = components['schemas']['MTGOTracker.Services.PluginManager.PluginInstallation'];
+export type UpdateStatus = components['schemas']['MTGOTracker.Services.UpdateService.UpdateStatus'];
 export type ProblemDetails = components['schemas']['Microsoft.AspNetCore.Mvc.ProblemDetails'];
