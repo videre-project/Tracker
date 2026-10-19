@@ -4,7 +4,6 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS launcher-build
 WORKDIR /src
 COPY Directory.Packages.props ./
 COPY NuGet.config ./
-COPY --from=mtgosdk-packages / /MTGOSDK/packages/
 COPY docker/launcher/ ./docker/launcher/
 
 RUN dotnet publish docker/launcher/launcher.csproj \

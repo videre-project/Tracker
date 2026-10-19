@@ -4,6 +4,7 @@
   "version": "0.3.0",
   "scripts": {
     "dev": "dotnet restore --no-cache --force-evaluate && dotnet watch run --project src/server --launch-profile https --no-restore --configuration Debug",
+    "dev:update-feed": "node docker/update-feed.mjs",
     "dev:client": "DEV_SERVER_HTTP=1 pnpm run -C src/client dev",
     "build": "pnpm run build:client && pnpm run build:server",
     "build:client": "pnpm run -C src/client build",

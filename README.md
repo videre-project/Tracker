@@ -75,7 +75,7 @@ pnpm run build
 
 ### Run Tracker with MTGO under Wine
 
-On a Wayland desktop, keep the `MTGOSDK` and `platform` checkouts beside Tracker.
+On a Wayland desktop, keep the `platform` checkout beside Tracker.
 
 Create a gitignored `.env` file in Tracker's root with your MTGO `USERNAME` and
 `PASSWORD` for the launcher's automatic login.
@@ -92,9 +92,9 @@ docker compose up tracker-dev
 The `tracker-dev` service builds on `videreproject/mtgosdk:wayland` and installs
 the Visual C++ runtime and WebView2. Its SDK launcher installs and starts MTGO;
 Tracker attaches to that process in the same container and Wine prefix. The
-launcher reads login credentials from the repository's `.env` file. The image
-build uses SDK packages from `../MTGOSDK/packages`, matching Tracker's local
-NuGet source. Client development uses the shared UI source from
+launcher reads login credentials from the repository's `.env` file. SDK packages
+are restored from NuGet.org; an MTGOSDK checkout is not required. Client
+development uses the shared UI source from
 `../platform/packages/ui`. Vite and TypeScript share the source mappings in
 `src/client/tsconfig.paths.json`; Docker mounts the same checkout at `/platform`.
 UI edits are picked up directly, without rebuilding the UI package or copying
@@ -212,3 +212,37 @@ host to finish stopping, and launches with the same user-data directory. Existin
 recordings, settings, and plugin folders remain outside the version directory.
 Existing shortcuts are updated; the old version is retained. This does not provide
 automatic rollback of database migrations.
+
+### Testing upgrades locally
+
+A local HTTP feed uses the same release metadata and executable installation path
+as GitHub. No GitHub release or tag is needed. Publish two actual versions, with
+the candidate newer than the baseline, after building the client:
+
+```sh
+pnpm build:client
+dotnet publish src/server -c Release --self-contained true -p:SkipNodeBuildSteps=true -p:PackageVersion=0.0.1 -o publish/local-0.0.1
+dotnet publish src/server -c Release --self-contained true -p:SkipNodeBuildSteps=true -p:PackageVersion=0.0.2 -o publish/local-0.0.2
+pnpm dev:update-feed 0.0.2 "publish/local-0.0.2/Videre Tracker.exe"
+```
+
+Start the baseline with `Updates__FeedUrl` pointing at the printed feed URL. For
+an isolated native Windows rehearsal, use a separate data folder and API port:
+
+```powershell
+$env:Updates__FeedUrl = "http://127.0.0.1:8750/release.json"
+$env:TRACKER_USER_DATA_FOLDER = "$env:TEMP\TrackerUpgradeVerification"
+$env:TRACKER_API_PORT = "7102"
+$env:TRACKER_DISABLE_INSTALLER = "1"
+& ".\publish\local-0.0.1\Videre Tracker.exe"
+```
+
+Open Settings → Updates and check, download, and install the candidate. The
+installed version should become `0.0.2`, with the baseline's preferences and data
+intact. Close MTGO before applying, as with a public release. Restart the local
+feed after rebuilding an executable so its size and digest describe the new file.
+
+For the Docker development workflow, run the feed inside the container using
+`docker exec`, and set `TRACKER_UPDATE_FEED_URL` before starting the container.
+Its value is passed to `Updates__FeedUrl`. A separate Wine prefix and data folder
+can be used to rehearse upgrades without changing the normal Tracker installation.

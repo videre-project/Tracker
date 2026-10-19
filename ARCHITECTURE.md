@@ -718,7 +718,8 @@ process waits for the previous process to exit before initializing the host.
 ### Application updates
 
 `UpdateService` reads the GitHub latest-release endpoint by default. The optional
-`Updates:FeedUrl` configuration key accepts a local feed with the same JSON shape.
+`Updates:FeedUrl` configuration key accepts a local feed with the same JSON shape;
+`docker/update-feed.mjs` serves a locally published executable and its digest.
 Both sources use the same staging and activation code. GitHub sanitizes spaces in
 asset filenames; downloads are stored locally as `Videre Tracker.exe`. One client
 provider owns status polling and detects the handoff to the installed version.
