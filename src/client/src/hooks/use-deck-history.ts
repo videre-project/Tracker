@@ -3,95 +3,42 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-import { useEffect, useMemo, useState } from "react"
-import { getApiUrl } from "@/utils/api-config"
-import { useCardMedia, type DeckDiffEntry, type DeckDiffMap, type DeckZone } from '@videreproject/ui'
+import { useCallback, useEffect, useMemo, useState } from "react"
+import { toEditorCards } from "@/utils/deck-list"
+import { useSessionQuery } from "./use-session-query"
+import {
+  useCardMedia, type DeckDiffEntry, type DeckDiffMap, type DeckZone, type DeckCardEntry,
+  type DeckHistoryChange as EditorHistoryChange,
+} from "@videreproject/ui"
+import type { DeckHistoryChangeView, DeckHistoryRevisionView, DeckHistoryView } from "@/types/api"
 
-export interface DeckHistoryChange {
-  catalogId: number
-  name: string
-  quantityDelta: number
-  zone: "Mainboard" | "Sideboard"
-  cmc?: number
-  colors?: string[]
-  types?: string[]
-  rarity?: string
-}
+// Refine generated responses with the snapshot fields required by the editor.
+export type DeckHistoryChange = DeckHistoryChangeView & EditorHistoryChange & { zone: DeckZone }
 
-export interface CardEntry {
-  catalogId: number
-  name: string
-  quantity: number
-  cmc?: number
-  colors?: string[]
-  types?: string[]
-  rarity?: string
-}
-
-export interface DeckHistoryRevision {
+export type DeckHistoryRevision = Omit<DeckHistoryRevisionView,
+  "mainboard" | "sideboard" | "changesFromPrevious" | "changesFromLatest"> & {
   revisionId: number
-  cardGroupingId: number
-  observedAt: string
-  timestamp: string
-  name: string
-  format: string
-  mainboardCount: number
-  sideboardCount: number
-  colors: string[]
-  archetype?: string | null
-  featuredCard?: string | null
-  mainboard: CardEntry[]
-  sideboard: CardEntry[]
+  mainboard: DeckCardEntry[]
+  sideboard: DeckCardEntry[]
   changesFromPrevious: DeckHistoryChange[]
   changesFromLatest: DeckHistoryChange[]
 }
 
-export interface DeckHistoryData {
-  currentRevisionId: number
-  cardGroupingId: number
-  name: string
-  format: string
-  revisions: DeckHistoryRevision[]
-}
+export type DeckHistoryData = Omit<DeckHistoryView, "revisions"> & { revisions: DeckHistoryRevision[] }
 
 export function useDeckHistory(revisionId: string | number | null) {
   const { preloadCardImages } = useCardMedia()
-  const [history, setHistory] = useState<DeckHistoryData | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [selectedRevisionId, setSelectedRevisionId] = useState<number | null>(null)
-
-  useEffect(() => {
-    if (!revisionId) {
-      setHistory(null)
-      setSelectedRevisionId(null)
-      return
-    }
-
-    let cancelled = false
-    setLoading(true)
-    setError(null)
-
-    fetch(getApiUrl(`/api/decks/${revisionId}/history`))
-      .then(res => {
-        if (!res.ok) throw new Error(`Failed to load deck history (${res.status})`)
-        return res.json()
-      })
-      .then((data: DeckHistoryData) => {
-        if (cancelled) return
-        setHistory(data)
-        setLoading(false)
-      })
-      .catch(err => {
-        if (cancelled) return
-        setError(err instanceof Error ? err.message : "Failed to load deck history")
-        setLoading(false)
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [revisionId])
+  const path = revisionId == null ? null : `/api/decks/${revisionId}/history`
+  const { data: history, loading, error } = useSessionQuery<DeckHistoryData>(path)
+  const [selection, setSelection] = useState<{
+    history: DeckHistoryData
+    revisionId: number
+  } | null>(null)
+  // Reconnecting can replace this deck's history without changing the route.
+  const selectedRevisionId = selection?.history === history ? selection.revisionId : null
+  const setSelectedRevisionId = useCallback((id: number | null) => {
+    setSelection(history && id != null ? { history, revisionId: id } : null)
+  }, [history])
 
   useEffect(() => {
     if (!history?.revisions) return
@@ -128,64 +75,17 @@ export function useDeckHistory(revisionId: string | number | null) {
       }
       cards.set(change.catalogId, {
         delta: change.quantityDelta,
-        name: change.name,
+        name: change.name ?? "Unknown card",
         cmc: change.cmc,
-        colors: change.colors,
-        types: change.types,
-        rarity: change.rarity,
+        colors: change.colors ?? undefined,
+        types: change.types ?? undefined,
+        rarity: change.rarity ?? undefined,
       })
     }
     return zones
   }, [selectedRevision])
 
-  const selectedRevisionCards = useMemo(() => {
-    if (!selectedRevision) return []
-    const cards: Array<{
-      index: number
-      originalIndex: number
-      catalogId: number
-      name: string
-      quantity: number
-      cmc: number
-      colors: string[]
-      types: string[]
-      rarity: string
-      zone: 'Mainboard' | 'Sideboard'
-    }> = []
-    let index = 0
-
-    selectedRevision.mainboard.forEach(c => {
-      cards.push({
-        index: index++,
-        originalIndex: index,
-        catalogId: c.catalogId,
-        name: c.name,
-        quantity: c.quantity,
-        cmc: c.cmc ?? 0,
-        colors: c.colors ?? [],
-        types: c.types ?? [],
-        rarity: c.rarity ?? "common",
-        zone: "Mainboard",
-      })
-    })
-
-    selectedRevision.sideboard.forEach(c => {
-      cards.push({
-        index: index++,
-        originalIndex: index,
-        catalogId: c.catalogId,
-        name: c.name,
-        quantity: c.quantity,
-        cmc: c.cmc ?? 0,
-        colors: c.colors ?? [],
-        types: c.types ?? [],
-        rarity: c.rarity ?? "common",
-        zone: "Sideboard",
-      })
-    })
-
-    return cards
-  }, [selectedRevision])
+  const selectedRevisionCards = useMemo(() => toEditorCards(selectedRevision), [selectedRevision])
 
   return {
     history,

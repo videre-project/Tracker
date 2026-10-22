@@ -6,27 +6,10 @@
 import { useEffect, useState } from "react"
 
 import { getApiUrl } from "@/utils/api-config"
-
-export type CardSearchResult = {
-  id: string
-  mtgoId: number
-  setCode: string
-  name: string
-  type: string
-  types: string[]
-  cmc: number
-  rarity: string
-  text: string
-  colors: string[]
-  imageUrl: string
-  power?: string | null
-  toughness?: string | null
-  loyalty?: string | null
-  defense?: string | null
-}
+import type { CardSearchResultDTO } from "@/types/api"
 
 export function useDeckCardSearch(query: string, limit = 24) {
-  const [results, setResults] = useState<CardSearchResult[]>([])
+  const [results, setResults] = useState<CardSearchResultDTO[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -50,9 +33,10 @@ export function useDeckCardSearch(query: string, limit = 24) {
           { signal: abortController.signal }
         )
         if (!response.ok) throw new Error(`HTTP ${response.status}`)
-        setResults(await response.json() as CardSearchResult[])
+        const results = await response.json() as CardSearchResultDTO[]
+        if (!abortController.signal.aborted) setResults(results)
       } catch (requestError) {
-        if (requestError instanceof Error && requestError.name === "AbortError") return
+        if (abortController.signal.aborted) return
         setResults([])
         setError(requestError instanceof Error ? requestError.message : "Card search failed")
       } finally {

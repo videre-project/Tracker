@@ -3,34 +3,34 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+import { useApplicationSettings } from "@/hooks/use-application-settings"
 import { type ComponentType, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
-import { useLocation, useNavigate, useParams } from "react-router-dom"
+import { useLocation, useNavigate, useOutletContext, useParams } from "react-router-dom"
 import { Loader2, Minus, Pencil, Plus, Trash2 } from "lucide-react"
 import {
   DeckEditorLayout,
   getDisplayCardColors,
-  getManaSymbolSvgPath,
   type DeckCardSearchResult,
   type DeckContextMenuPosition,
   type DeckCardDragEndPayload,
   type DeckEditorCard,
   type DeckSidePanelView,
   type DeckSortMode,
+  type DeckZone,
 } from "@videreproject/ui"
 
 import { useDeckHistory } from "@/hooks/use-deck-history"
 import { useDeckCardSearch } from "@/hooks/use-deck-card-search"
-import { useSortableCards } from "@/hooks/use-sortable-cards"
-import { buildDeckListText, getDeckFileName } from "@/utils/deck-list"
-import type { DeckDetail, DeckSummary } from "@/hooks/use-decks"
+import { DeckStatisticsSidebar } from "@/components/deck-statistics"
+import { buildDeckListText, getDeckFileName, toEditorCards } from "@/utils/deck-list"
+import type { DeckDetail } from "@/hooks/use-decks"
 import {
   addDeckCard,
   deleteDeck,
   removeDeckCard,
   moveDeckCards,
   useDeckDetail,
-  useDecks,
   updateDeckArchetype,
   type DeckCardMutation,
 } from "@/hooks/use-decks"
@@ -50,17 +50,9 @@ type CardContextMenu =
   | { kind: "deck"; card: DeckEditorCard; position: DeckContextMenuPosition }
 
 function getDeckCounts(
-  summary?: DeckSummary,
   detail?: DeckDetail | null,
   routeState?: DeckRouteState | null,
 ) {
-  if (summary) {
-    return {
-      main: summary.mainboardCount,
-      side: summary.sideboardCount,
-    }
-  }
-
   if (detail) {
     return {
       main: detail.mainboard.reduce((total, card) => total + card.quantity, 0),
@@ -79,23 +71,6 @@ function getDeckCounts(
     main: 0,
     side: 0,
   }
-}
-
-function BreadcrumbManaSymbols({ colors }: { colors: readonly string[] }) {
-  const visibleColors = getDisplayCardColors(colors)
-
-  return (
-    <span className="inline-flex h-4 translate-y-[2px] items-center gap-0.5 leading-none">
-      {visibleColors.map((color, index) => (
-        <img
-          key={`${color}-${index}`}
-          src={getManaSymbolSvgPath(color) ?? undefined}
-          alt={color}
-          className="block h-3.5 w-3.5 rounded-full bg-background shadow-sm ring-1 ring-background"
-        />
-      ))}
-    </span>
-  )
 }
 
 function isBasicCard(card: DeckEditorCard | DeckCardSearchResult) {
@@ -161,19 +136,28 @@ function CardMenuQuantityRow({
 }
 
 export default function DeckEditor() {
+  const { preferences } = useApplicationSettings()
   const { deckRevisionId = "" } = useParams()
+  const activeRevisionRef = useRef(deckRevisionId)
+  activeRevisionRef.current = deckRevisionId
   const navigate = useNavigate()
   const location = useLocation()
   const routeState = location.state as DeckRouteState | null
   const [copiedDeckList, setCopiedDeckList] = useState(false)
-  const [sidePanelView, setSidePanelView] = useState<DeckSidePanelView>("cards")
-  const [sortMode, setSortMode] = useState<DeckSortMode>("cmc")
-  const [isSideboardCollapsed, setIsSideboardCollapsed] = useState(true)
-  const [isDeckToolsCollapsed, setIsDeckToolsCollapsed] = useState(false)
+  const [sidePanelView, setSidePanelView] = useState<DeckSidePanelView>(() => new URLSearchParams(location.search).get("panel") === "stats" ? "stats" : "cards")
+  const [sortMode, setSortMode] = useState<DeckSortMode>(preferences.deckSortMode)
+  const [isSideboardCollapsed, setIsSideboardCollapsed] = useState(!preferences.showSideboard)
   const [customArchetype, setCustomArchetype] = useState<string | null>(null)
   const [archetypeError, setArchetypeError] = useState<string | null>(null)
   const [isSavingArchetype, setIsSavingArchetype] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
+  const [emphasizedCardName, setEmphasizedCardName] = useState<string | null>(null)
+  const [hoveredDeckCardName, setHoveredDeckCardName] = useState<string | null>(null)
+  const [cardOrder, setCardOrder] = useState<Partial<Record<DeckZone, readonly string[]>>>({})
+  const handleCardOrderChange = useCallback((zone: DeckZone, names: readonly string[]) => {
+    setCardOrder(current => current[zone]?.length === names.length && current[zone]?.every((name, index) => name === names[index])
+      ? current : { ...current, [zone]: names })
+  }, [])
   const [cardMenu, setCardMenu] = useState<CardContextMenu | null>(null)
   const cardMenuRef = useRef<HTMLDivElement | null>(null)
   const backdropRef = useRef<HTMLDivElement | null>(null)
@@ -182,11 +166,20 @@ export default function DeckEditor() {
   const [pendingMove, setPendingMove] = useState<{
     cards: DeckEditorCard[]
     revisionId: number | null
+    sourceRevisionId: string
   } | null>(null)
 
-  const { decks, loading: summariesLoading } = useDecks()
-  const { detail, loading: detailLoading } = useDeckDetail(deckRevisionId)
+  const visiblePendingMove = pendingMove &&
+    (pendingMove.sourceRevisionId === deckRevisionId || pendingMove.revisionId?.toString() === deckRevisionId)
+      ? pendingMove
+      : null
 
+  const { detail, loading: detailLoading, error: detailError } = useOutletContext<ReturnType<typeof useDeckDetail>>()
+
+  const [historyDeck, setHistoryDeck] = useState<string | null>(null)
+  useEffect(() => {
+    if (sidePanelView === "history") setHistoryDeck(deckRevisionId)
+  }, [sidePanelView, deckRevisionId])
   const {
     history: historyData,
     loading: historyLoading,
@@ -195,22 +188,21 @@ export default function DeckEditor() {
     setSelectedRevisionId,
     selectedRevisionCards,
     diffMap,
-  } = useDeckHistory(deckRevisionId)
-  const mutationRevisionId = historyData?.currentRevisionId ?? deckRevisionId
+  } = useDeckHistory(sidePanelView === "history" || historyDeck === deckRevisionId ? deckRevisionId : null)
+  const mutationRevisionId = detail?.currentRevisionId
+  const canEdit = mutationRevisionId === detail?.revisionId && detail != null && !detailLoading && selectedRevisionId == null && !isMutating
 
   useEffect(() => {
+    if (pendingMove && !visiblePendingMove) {
+      setPendingMove(null)
+      setIsMutating(false)
+      return
+    }
     if (pendingMove?.revisionId == null) return
-    if ((historyData?.currentRevisionId ?? 0) < pendingMove.revisionId && !historyError) return
+    if ((detail?.revisionId ?? 0) < pendingMove.revisionId && !detailError) return
     setPendingMove(null)
     setIsMutating(false)
-  }, [pendingMove, historyData?.currentRevisionId, historyError])
-
-  const {
-    cards: sortableCards,
-    loading: sortableLoading,
-    fetchSortableCards,
-    reset: resetSortable,
-  } = useSortableCards()
+  }, [pendingMove, visiblePendingMove, detail?.revisionId, detailError])
 
   const {
     results: searchResults,
@@ -218,33 +210,17 @@ export default function DeckEditor() {
     error: searchError,
   } = useDeckCardSearch(searchQuery)
 
-  // Fetch sortable cards for the active (or selected history) revision
-  const activeRevisionId = selectedRevisionId
-    ? String(selectedRevisionId)
-    : deckRevisionId
-
   useEffect(() => {
-    if (!activeRevisionId) {
-      resetSortable()
-      return
-    }
-    // When viewing a history revision, board uses override cards from history
-    if (selectedRevisionId != null) return
-    void fetchSortableCards("", activeRevisionId)
-  }, [activeRevisionId, fetchSortableCards, resetSortable, selectedRevisionId])
+    setCardMenu(null)
+    setCustomArchetype(null)
+    setArchetypeError(null)
+    setIsSavingArchetype(false)
+    setMutationError(null)
+    setIsMutating(false)
+  }, [deckRevisionId])
 
-  const allDecks = useMemo(() => Object.values(decks).flat(), [decks])
-  const summary = useMemo(
-    () => allDecks.find(deck => deck.revisionId.toString() === deckRevisionId),
-    [allDecks, deckRevisionId],
-  )
-
-  const deckName = summary?.name ?? detail?.name ?? routeState?.deckName ?? "Deck"
-  const rawArchetype =
-    customArchetype ??
-    summary?.archetype ??
-    detail?.archetype ??
-    routeState?.deckArchetype
+  const deckName = detail?.name ?? routeState?.deckName ?? "Deck"
+  const rawArchetype = customArchetype ?? detail?.archetype ?? routeState?.deckArchetype
 
   const handleArchetypeChange = useCallback(
     async (nextArchetype: string) => {
@@ -253,45 +229,33 @@ export default function DeckEditor() {
       setArchetypeError(null)
       try {
         await updateDeckArchetype(deckRevisionId, nextArchetype)
+        if (activeRevisionRef.current !== deckRevisionId) return
         setCustomArchetype(nextArchetype || null)
       } catch (err) {
+        if (activeRevisionRef.current !== deckRevisionId) return
         const message = err instanceof Error ? err.message : "Failed to update archetype"
         setArchetypeError(message)
         throw err
       } finally {
-        setIsSavingArchetype(false)
+        if (activeRevisionRef.current === deckRevisionId) setIsSavingArchetype(false)
       }
     },
     [deckRevisionId],
   )
 
-  const colors = getDisplayCardColors(
-    summary?.colors?.length
-      ? summary.colors
-      : detail?.colors?.length
-        ? detail.colors
-        : routeState?.deckColors,
-  )
-  const timestamp = summary?.timestamp ?? detail?.timestamp ?? routeState?.deckTimestamp
-  const counts = getDeckCounts(summary, detail, routeState)
+  const colors = getDisplayCardColors(detail?.colors?.length ? detail.colors : routeState?.deckColors)
+  const timestamp = detail?.timestamp ?? routeState?.deckTimestamp
+  const counts = getDeckCounts(detail, routeState)
   const deckListText = useMemo(() => buildDeckListText(detail), [detail])
   const canExportDeckList = Boolean(detail)
-  const hasHeaderData = Boolean(summary || detail || routeState?.deckName)
-  const isArchetypeLoading =
-    rawArchetype === undefined && (summariesLoading || detailLoading)
-  const isDateLoading = timestamp === undefined && (summariesLoading || detailLoading)
-  const isCountsLoading =
-    !summary &&
-    !detail &&
-    routeState?.deckMainCount === undefined &&
-    (summariesLoading || detailLoading)
-  const loadingHeader =
-    ((summariesLoading || detailLoading) && !hasHeaderData) ||
-    isArchetypeLoading ||
-    isDateLoading ||
-    isCountsLoading
+  const loadingHeader = detailLoading && !detail && !routeState?.deckName
   const archetype = rawArchetype ?? (loadingHeader ? "" : "Unclassified deck")
-  const canNavigateBack = location.key !== "default"
+  const deckFormat = detail?.format ?? routeState?.deckFormat
+
+  useEffect(() => {
+    if (historyData && detail && detail.currentRevisionId !== detail.revisionId && selectedRevisionId == null)
+      setSelectedRevisionId(detail.revisionId)
+  }, [historyData, detail, selectedRevisionId, setSelectedRevisionId])
 
   useEffect(() => {
     if (!cardMenu) return
@@ -312,7 +276,11 @@ export default function DeckEditor() {
     // events (pointerdown / pointerup) so the menu (and its highlight)
     // dismisses as soon as the pointer moves, not ~200ms later on `click`.
     const backdrop = backdropRef.current
-    const closeOnPress = () => setCardMenu(null)
+    const closeOnPress = (event: Event) => {
+      // Chromium opens the menu on right-button down; its opening release is not a dismissal.
+      if (event.type === "pointerup" && (event as PointerEvent).button === 2) return
+      setCardMenu(null)
+    }
     backdrop?.addEventListener("pointerdown", closeOnPress, { capture: true })
     backdrop?.addEventListener("pointerup", closeOnPress, { capture: true })
     backdrop?.addEventListener("mousedown", closeOnPress, { capture: true })
@@ -328,38 +296,43 @@ export default function DeckEditor() {
   }, [cardMenu])
 
   const completeMutation = useCallback((revisionId: number) => {
+    if (activeRevisionRef.current !== deckRevisionId) return
     setSelectedRevisionId(null)
     setCardMenu(null)
     navigate(`/decks/${revisionId}`, { replace: true })
-  }, [navigate, setSelectedRevisionId])
+  }, [deckRevisionId, navigate, setSelectedRevisionId])
 
   const addCard = useCallback(async (mutation: DeckCardMutation) => {
-    if (!deckRevisionId || selectedRevisionId != null || isMutating) return
+    if (!canEdit || mutationRevisionId == null) return
     setIsMutating(true)
     setMutationError(null)
     try {
       const result = await addDeckCard(mutationRevisionId, mutation)
       completeMutation(result.revisionId)
     } catch (error) {
-      setMutationError(error instanceof Error ? error.message : "Failed to add card")
+      if (activeRevisionRef.current === deckRevisionId) {
+        setMutationError(error instanceof Error ? error.message : "Failed to add card")
+      }
     } finally {
-      setIsMutating(false)
+      if (activeRevisionRef.current === deckRevisionId) setIsMutating(false)
     }
-  }, [completeMutation, deckRevisionId, mutationRevisionId, isMutating, selectedRevisionId])
+  }, [completeMutation, deckRevisionId, mutationRevisionId, canEdit])
 
   const removeCard = useCallback(async (mutation: DeckCardMutation) => {
-    if (!deckRevisionId || selectedRevisionId != null || isMutating) return
+    if (!canEdit || mutationRevisionId == null) return
     setIsMutating(true)
     setMutationError(null)
     try {
       const result = await removeDeckCard(mutationRevisionId, mutation)
       completeMutation(result.revisionId)
     } catch (error) {
-      setMutationError(error instanceof Error ? error.message : "Failed to remove card")
+      if (activeRevisionRef.current === deckRevisionId) {
+        setMutationError(error instanceof Error ? error.message : "Failed to remove card")
+      }
     } finally {
-      setIsMutating(false)
+      if (activeRevisionRef.current === deckRevisionId) setIsMutating(false)
     }
-  }, [completeMutation, deckRevisionId, mutationRevisionId, isMutating, selectedRevisionId])
+  }, [completeMutation, deckRevisionId, mutationRevisionId, canEdit])
 
   const searchCardMutation = useCallback(
     (card: DeckCardSearchResult, zone: DeckCardMutation["zone"], quantity: number) => {
@@ -393,7 +366,7 @@ export default function DeckEditor() {
   )
 
   const handleDeleteDeck = useCallback(async () => {
-    if (!deckRevisionId || isMutating) return
+    if (!canEdit || mutationRevisionId == null) return
     if (!window.confirm(`Delete “${deckName}” from Tracker and MTGO? This cannot be undone.`)) {
       return
     }
@@ -401,21 +374,22 @@ export default function DeckEditor() {
     setMutationError(null)
     try {
       await deleteDeck(mutationRevisionId)
+      if (activeRevisionRef.current !== deckRevisionId) return
       navigate("/decks", { replace: true })
     } catch (error) {
-      setMutationError(error instanceof Error ? error.message : "Failed to delete deck")
+      if (activeRevisionRef.current === deckRevisionId) {
+        setMutationError(error instanceof Error ? error.message : "Failed to delete deck")
+      }
     } finally {
-      setIsMutating(false)
+      if (activeRevisionRef.current === deckRevisionId) setIsMutating(false)
     }
-  }, [deckName, deckRevisionId, mutationRevisionId, isMutating, navigate])
+  }, [deckName, deckRevisionId, mutationRevisionId, canEdit, navigate])
 
   const navigateBack = useCallback(() => {
-    if (canNavigateBack) {
-      navigate(-1)
-      return
-    }
-    navigate("/decks")
-  }, [canNavigateBack, navigate])
+    navigate(deckFormat?.trim()
+      ? `/decks?format=${encodeURIComponent(deckFormat.trim())}`
+      : "/decks")
+  }, [deckFormat, navigate])
 
   const copyDeckList = useCallback(async () => {
     if (!canExportDeckList) return
@@ -452,45 +426,8 @@ export default function DeckEditor() {
     URL.revokeObjectURL(url)
   }, [canExportDeckList, deckListText, deckName])
 
-  // Prefer history revision cards so board order stays stable when flipping
-  // revisions. Sortable metadata fills CMC/types/colors when history replay
-  // only has catalog ids and quantities.
-  const boardCards: DeckEditorCard[] = useMemo(() => {
-    if (selectedRevisionCards.length === 0) {
-      return sortableCards as DeckEditorCard[]
-    }
-    if (sortableCards.length === 0) {
-      return selectedRevisionCards as DeckEditorCard[]
-    }
-
-    const metadataByCatalogId = new Map(
-      sortableCards.map(card => [card.catalogId, card]),
-    )
-    return selectedRevisionCards.map(card => {
-      const metadata = metadataByCatalogId.get(card.catalogId)
-      if (!metadata) return card as DeckEditorCard
-
-      const missingCmc = (card.cmc ?? 0) === 0 && metadata.cmc > 0
-      const missingTypes =
-        (card.types?.length ?? 0) === 0 && metadata.types.length > 0
-      const missingColors =
-        (card.colors?.length ?? 0) === 0 && metadata.colors.length > 0
-      if (!missingCmc && !missingTypes && !missingColors) {
-        return card as DeckEditorCard
-      }
-
-      return {
-        ...card,
-        cmc: missingCmc ? metadata.cmc : card.cmc,
-        types: missingTypes ? metadata.types : card.types,
-        colors: missingColors ? metadata.colors : card.colors,
-        rarity:
-          !card.rarity || card.rarity === "common"
-            ? metadata.rarity
-            : card.rarity,
-      } as DeckEditorCard
-    })
-  }, [selectedRevisionCards, sortableCards])
+  const boardCards = useMemo(() => selectedRevisionId != null
+    ? selectedRevisionCards : toEditorCards(detail), [selectedRevisionId, selectedRevisionCards, detail])
 
   const handleDragEnd = useCallback(
     async (payload: DeckCardDragEndPayload) => {
@@ -498,9 +435,8 @@ export default function DeckEditor() {
       if (
         !destinationZone ||
         destinationZone === payload.zone ||
-        !deckRevisionId ||
-        selectedRevisionId != null ||
-        isMutating
+        !canEdit ||
+        mutationRevisionId == null
       ) {
         return
       }
@@ -529,16 +465,18 @@ export default function DeckEditor() {
         }
         const movedCards = nextCards.filter(card => card.quantity > 0)
           .map((card, index) => ({ ...card, index, originalIndex: index }))
-        setPendingMove({ cards: movedCards, revisionId: null })
+        setPendingMove({ cards: movedCards, revisionId: null, sourceRevisionId: deckRevisionId })
         const result = await moveDeckCards(
           mutationRevisionId,
           payload.zone,
           destinationZone,
           [...quantities].map(([catalogId, quantity]) => ({ catalogId, quantity })),
         )
-        setPendingMove({ cards: movedCards, revisionId: result.revisionId })
+        if (activeRevisionRef.current !== deckRevisionId) return
+        setPendingMove({ cards: movedCards, revisionId: result.revisionId, sourceRevisionId: deckRevisionId })
         completeMutation(result.revisionId)
       } catch (error) {
+        if (activeRevisionRef.current !== deckRevisionId) return
         setPendingMove(null)
         setIsMutating(false)
         setMutationError(error instanceof Error ? error.message : "Failed to move card")
@@ -550,17 +488,11 @@ export default function DeckEditor() {
       completeMutation,
       deckRevisionId,
       mutationRevisionId,
-      isMutating,
-      selectedRevisionId,
+      canEdit,
     ],
   )
 
-  const cardsLoading =
-    selectedRevisionCards.length > 0
-      ? false
-      : selectedRevisionId != null
-        ? historyLoading
-        : sortableLoading || (detailLoading && boardCards.length === 0)
+  const cardsLoading = selectedRevisionId != null ? historyLoading : detailLoading && !detail
 
   // Total copies of the right-clicked card in its zone (each row carries a
   // quantity field, so sum it rather than counting rows). Caps the remove
@@ -610,26 +542,6 @@ export default function DeckEditor() {
       ? [1, 2, 3, 4]
       : [1, 2, 3, 4].filter(quantity => quantity <= removeMaxQuantity)
 
-  const mappedSearchResults: DeckCardSearchResult[] = useMemo(
-    () =>
-      searchResults.map(card => ({
-        id: card.id,
-        mtgoId: card.mtgoId,
-        setCode: card.setCode,
-        name: card.name,
-        type: card.type,
-        types: card.types,
-        text: card.text,
-        colors: card.colors,
-        imageUrl: card.imageUrl,
-        power: card.power,
-        toughness: card.toughness,
-        loyalty: card.loyalty,
-        defense: card.defense,
-      })),
-    [searchResults],
-  )
-
   const breadcrumbContextHost =
     typeof document === "undefined" ? null : document.getElementById("page-header-context")
 
@@ -638,7 +550,6 @@ export default function DeckEditor() {
       <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" aria-label="Loading deck" />
     ) : (
       <div className="group inline-flex items-center gap-2.5">
-        <BreadcrumbManaSymbols colors={colors} />
         <button
           type="button"
           className="h-4 w-4 p-0 text-muted-foreground/40 transition-colors group-hover:text-muted-foreground"
@@ -650,7 +561,7 @@ export default function DeckEditor() {
         <button
           type="button"
           onClick={handleDeleteDeck}
-          disabled={isMutating || selectedRevisionId != null}
+          disabled={!canEdit}
           className="h-4 w-4 p-0 text-muted-foreground/40 transition-colors hover:text-destructive disabled:cursor-not-allowed disabled:opacity-30"
           title="Delete deck"
           aria-label="Delete deck"
@@ -669,41 +580,53 @@ export default function DeckEditor() {
         archetype={archetype}
         colors={colors}
         timestamp={timestamp}
-        mainCount={pendingMove
-          ? pendingMove.cards.filter(card => card.zone === "Mainboard").reduce((sum, card) => sum + card.quantity, 0)
+        mainCount={visiblePendingMove
+          ? visiblePendingMove.cards.filter(card => card.zone === "Mainboard").reduce((sum, card) => sum + card.quantity, 0)
           : counts.main}
-        sideCount={pendingMove
-          ? pendingMove.cards.filter(card => card.zone === "Sideboard").reduce((sum, card) => sum + card.quantity, 0)
+        sideCount={visiblePendingMove
+          ? visiblePendingMove.cards.filter(card => card.zone === "Sideboard").reduce((sum, card) => sum + card.quantity, 0)
           : counts.side}
         loadingHeader={loadingHeader}
-        cards={pendingMove?.cards ?? boardCards}
+        cards={visiblePendingMove?.cards ?? boardCards}
         cardsLoading={cardsLoading}
-        onDragEnd={selectedRevisionId == null && !isMutating ? handleDragEnd : undefined}
+        onDragEnd={canEdit ? handleDragEnd : undefined}
         diffMap={diffMap}
         sortMode={sortMode}
         onSortModeChange={setSortMode}
         sideboardCollapsed={isSideboardCollapsed}
         onSideboardCollapsedChange={setIsSideboardCollapsed}
-        toolsCollapsed={isDeckToolsCollapsed}
-        onToolsCollapsedChange={setIsDeckToolsCollapsed}
+        defaultToolsCollapsed={!preferences.showDeckTools}
         sidePanelView={sidePanelView}
+        emphasizedCardName={emphasizedCardName}
+        onCardOrderChange={handleCardOrderChange}
+        onDeckCardHoverChange={setHoveredDeckCardName}
+        statsContent={<DeckStatisticsSidebar key={`${selectedRevisionId ?? deckRevisionId}`}
+          onCardEmphasisChange={setEmphasizedCardName}
+          cardOrder={cardOrder}
+          hoveredDeckCardName={hoveredDeckCardName}
+          revisionId={selectedRevisionId ?? Number(deckRevisionId)}
+          initialScope={selectedRevisionId != null || new URLSearchParams(location.search).get("scope") === "revision" ? "revision" : "deck"} />}
         onSidePanelViewChange={setSidePanelView}
         historyData={historyData}
         historyLoading={historyLoading}
-        historyError={historyError}
+        historyError={historyError ?? detailError}
         selectedRevisionId={selectedRevisionId}
-        onSelectRevision={setSelectedRevisionId}
-        searchResults={mappedSearchResults}
+        onSelectRevision={id => {
+          if (id == null && detail && detail.currentRevisionId !== detail.revisionId)
+            navigate(`/decks/${detail.currentRevisionId}`, { replace: true })
+          else setSelectedRevisionId(id)
+        }}
+        searchResults={searchResults}
         searchLoading={searchLoading}
         searchError={searchError}
         onSearchQueryChange={setSearchQuery}
         onSearchCardContextMenu={(card, position) => {
-          if (selectedRevisionId == null && !isMutating) {
+          if (canEdit) {
             setCardMenu({ kind: "search", card, position })
           }
         }}
         onDeckCardContextMenu={(card, position) => {
-          if (selectedRevisionId == null && !isMutating) {
+          if (canEdit) {
             setCardMenu({ kind: "deck", card, position })
           }
         }}
@@ -719,7 +642,7 @@ export default function DeckEditor() {
         canExport={canExportDeckList}
         copiedList={copiedDeckList}
         importDisabled
-        onArchetypeChange={handleArchetypeChange}
+        onArchetypeChange={canEdit ? handleArchetypeChange : undefined}
         archetypeSaving={isSavingArchetype}
         archetypeError={archetypeError}
       />

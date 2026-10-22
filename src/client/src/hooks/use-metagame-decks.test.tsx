@@ -27,11 +27,11 @@ describe("useMetagameDecks", () => {
         return jsonResponse({ data: [{
           id: 123,
           mainboard: [
-            "(21737,\"Goryo's Vengeance\",4)",
-            "(106607,\"Atraxa, Grand Unifier\",4)",
-            "(263,Island,1)",
+            { id: 21737, name: "Goryo's Vengeance", quantity: 4 },
+            { id: 106607, name: "Atraxa, Grand Unifier", quantity: 4 },
+            { id: 263, name: "Island", quantity: 1 },
           ],
-          sideboard: ["(456,Thoughtseize,2)"],
+          sideboard: [{ id: 456, name: "Thoughtseize", quantity: 2 }],
         }] })
       }
       if (url.includes("/cards/search") && init?.method === "QUERY") {

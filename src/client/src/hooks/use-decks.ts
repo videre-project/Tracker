@@ -3,86 +3,30 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-import { useState, useEffect, useCallback, useRef } from "react"
-import { useClientState } from "./use-client-state"
-import { getApiUrl } from "../utils/api-config"
+import { useState, useEffect } from "react"
+import type { DateRange } from "react-day-picker"
+import { useSessionQuery } from "./use-session-query"
+import { dateRangeParams, getApiUrl } from "../utils/api-config"
 
-export interface CardEntry {
-  catalogId: number
-  name: string
-  quantity: number
+import type { DeckCardEntry, GameType } from "@videreproject/ui"
+import type {
+  DeckDTO, DeckDetailDTO, AggregatedArchetypeDTO, DeckCardMutationRequest,
+  DeckCardZone, DeckMutationResponse, ImportDeckRequest, ImportDeckResponse,
+} from "@/types/api"
+
+export type CardEntry = DeckCardEntry
+
+export type DeckSummary = Omit<DeckDTO, "featuredCards"> & {
+  featuredCards?: CardEntry[] | null
 }
 
-export interface DeckSummary {
-  revisionId: number
-  netDeckId: number
-  name: string
-  format: string
-  timestamp: string
-  mainboardCount: number
-  sideboardCount: number
-  wins: number
-  losses: number
-  ties: number
-  archetype?: string
-  colors: string[]
-  featuredCards?: CardEntry[]
-}
-
-export interface DeckDetail {
-  revisionId: number
-  netDeckId: number
-  name: string
-  format: string
-  timestamp: string
-  archetype?: string
-  colors?: string[]
+export type DeckDetail = Omit<DeckDetailDTO, "mainboard" | "sideboard"> & {
   mainboard: CardEntry[]
   sideboard: CardEntry[]
 }
 
-export type DeckCardZone = "Mainboard" | "Sideboard"
-
-export interface DeckCardMutation {
-  catalogId: number
-  name?: string
-  quantity?: number
+export type DeckCardMutation = DeckCardMutationRequest & {
   zone: DeckCardZone
-  annotation?: number
-  cmc?: number
-  colors?: string[]
-  types?: string[]
-  rarity?: string
-}
-
-export interface DeckMutationResponse {
-  revisionId: number
-  netDeckId: number
-  deleted: boolean
-}
-
-export interface ImportDeckCard {
-  catalogId: number
-  name: string
-  quantity: number
-  cmc?: number
-  colors?: string[]
-  types?: string[]
-  rarity?: string
-}
-
-export interface ImportDeckRequest {
-  name: string
-  format: string
-  archetype?: string
-  mainboard: ImportDeckCard[]
-  sideboard: ImportDeckCard[]
-}
-
-export interface ImportDeckResponse {
-  revisionId: number
-  netDeckId: number
-  created: boolean
 }
 
 async function readApiError(response: Response, fallback: string) {
@@ -159,282 +103,49 @@ export async function importDeck(request: ImportDeckRequest) {
   return await response.json() as ImportDeckResponse
 }
 
-export interface ManafoldResponse {
-  meta?: {
-    database: string | null
-    backend: string
-    exec_ms: number
-    model: string
-    model_version: string
-    token_count: number
-    unknown_card_count: number
-    unknown_cards: string[]
-  }
-  data?: Record<string, number>
-  predictions?: Array<{
-    label_id: string
-    label: string
-    probability: number
-    ranking: Array<{ card: string; oracle_id: string; quantity: number; score: number }>
-  }>
-  error?: string
-  message?: string
-}
-
 export function useDecks() {
-  const { isReady: clientReady, loading: clientLoading } = useClientState()
-  const [decks, setDecks] = useState<Record<string, DeckSummary[]>>({})
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (clientLoading) return
-    if (!clientReady) {
-      setDecks({})
-      setLoading(false)
-      setError(null)
-      return
-    }
-
-    const controller = new AbortController()
-    setLoading(true)
-    setError(null)
-
-    fetch(getApiUrl("/api/decks"), { signal: controller.signal })
-      .then(res => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        return res.json()
-      })
-      .then(data => setDecks(data))
-      .catch(reason => {
-        if (reason instanceof Error && reason.name === "AbortError") return
-        setError(reason instanceof Error ? reason.message : "Unknown error")
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false)
-      })
-
-    return () => controller.abort()
-  }, [clientLoading, clientReady])
-
-  return { decks, loading: loading || clientLoading, error }
+  const { data, loading, error } = useSessionQuery<Record<string, DeckSummary[]>>("/api/decks")
+  return { decks: data ?? {}, loading, error }
 }
 
 export function useDeckDetail(revisionId: string | null) {
-  const [detail, setDetail] = useState<DeckDetail | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
+  const [result, setResult] = useState<{
+    id: string; detail: DeckDetail | null; loading: boolean; error: string | null
+  } | null>(null)
   useEffect(() => {
-    if (!revisionId) {
-      setDetail(null)
-      setLoading(false)
-      setError(null)
-      return
-    }
-
-    const abortController = new AbortController()
-
-    setDetail(null)
-    setLoading(true)
-    setError(null)
-
-    fetch(getApiUrl(`/api/decks/${revisionId}`), { signal: abortController.signal })
-      .then(res => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        return res.json()
-      })
-      .then(data => setDetail(data))
-      .catch(err => {
-        if (err instanceof Error && err.name === "AbortError") return
-        setError(err instanceof Error ? err.message : "Unknown error")
-      })
-      .finally(() => {
-        if (!abortController.signal.aborted) {
-          setLoading(false)
-        }
-      })
-
-    return () => abortController.abort()
-  }, [revisionId])
-
-  return { detail, loading, error }
-}
-
-export function useDeckArchetype(revisionId: string | null) {
-  const [archetype, setArchetype] = useState<ManafoldResponse | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const loadingRef = useRef(false)
-  const requestedRevisionRef = useRef<string | null>(null)
-
-  useEffect(() => {
-    setArchetype(null)
-    setError(null)
-    requestedRevisionRef.current = null
-  }, [revisionId])
-
-  const fetchArchetype = useCallback(async (force = false) => {
     if (!revisionId) return
-    if (loadingRef.current) return
-    if (!force && requestedRevisionRef.current === revisionId) return
-
-    loadingRef.current = true
-    requestedRevisionRef.current = revisionId
-    setLoading(true)
-    setError(null)
-
-    try {
-      const res = await fetch(getApiUrl(`/api/decks/${revisionId}/archetype`))
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = await res.json()
-      setArchetype(data)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error")
-    } finally {
-      loadingRef.current = false
-      setLoading(false)
-    }
+    const controller = new AbortController()
+    setResult({ id: revisionId, detail: null, loading: true, error: null })
+    void fetch(getApiUrl(`/api/decks/${revisionId}`), { signal: controller.signal })
+      .then(response => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        return response.json() as Promise<DeckDetail>
+      })
+      .then(detail => {
+        if (!controller.signal.aborted) setResult({ id: revisionId, detail, loading: false, error: null })
+      })
+      .catch(error => {
+        if (!controller.signal.aborted) setResult({ id: revisionId, detail: null, loading: false,
+          error: error instanceof Error ? error.message : "Could not load this deck." })
+      })
+    return () => controller.abort()
   }, [revisionId])
-
-  return { archetype, loading, error, fetchArchetype }
+  const current = result?.id === revisionId ? result : null
+  return { detail: current?.detail ?? null, loading: Boolean(revisionId) && (current?.loading ?? true), error: current?.error ?? null }
 }
 
-export interface AggregatedArchetype {
-  archetype: string
-  colors: string[]
-  matches: number
-  wins: number
-  losses: number
-  winrate: number
-  topCard: string
-}
-
-const ARCHETYPES_CACHE: Record<string, { data: AggregatedArchetype[]; timestamp: number }> = {}
-
-import { DateRange } from "react-day-picker"
-
-export function useAggregatedArchetypes(timeRange: string | DateRange | undefined, format?: string) {
-  const [archetypes, setArchetypes] = useState<AggregatedArchetype[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  // Serialize cache key
-  const rangeKey = typeof timeRange === 'string' 
-    ? timeRange 
-    : timeRange 
-      ? `${timeRange.from?.toISOString()}-${timeRange.to?.toISOString()}`
-      : 'all'
-
-  const cacheKey = `${rangeKey}-${format || "all"}`
-
-  // Wait for MTGO client to be ready before fetching
-  const { isReady: clientReady, loading: clientLoading } = useClientState()
-
-  // Initialize from cache
-  useEffect(() => {
-    if (ARCHETYPES_CACHE[cacheKey]) {
-      setArchetypes(ARCHETYPES_CACHE[cacheKey].data)
-      setLoading(false)
-    }
-  }, [cacheKey])
-
-  useEffect(() => {
-    // Wait for client state to be determined
-    if (clientLoading) return
-    // Only fetch if client is ready
-    if (!clientReady) {
-      setLoading(false)
-      return
-    }
-
-    if (!ARCHETYPES_CACHE[cacheKey]) {
-      setLoading(true)
-    }
-    setError(null)
-
-    const params = new URLSearchParams()
-    if (format) params.append("format", format)
-
-    // Calculate date range
-    const now = new Date()
-    // Set maxDate to end of today to include all matches for today
-    now.setHours(23, 59, 59, 999)
-    let minDate: Date | null = null
-    let maxDate: Date = now
-
-    if (typeof timeRange === 'string' && timeRange !== "ALL") {
-      const days = parseInt(timeRange.replace("D", ""))
-      if (!isNaN(days)) {
-        minDate = new Date()
-        minDate.setDate(now.getDate() - days)
-        minDate.setHours(0, 0, 0, 0)
-      }
-    } else if (typeof timeRange === 'object' && timeRange?.from) {
-      minDate = timeRange.from
-      minDate.setHours(0, 0, 0, 0)
-      
-      if (timeRange.to) {
-        maxDate = timeRange.to
-        maxDate.setHours(23, 59, 59, 999)
-      } else {
-        maxDate = timeRange.from
-        maxDate.setHours(23, 59, 59, 999)
-      }
-    }
-
-    if (minDate) params.append("minDate", minDate.toISOString())
-    params.append("maxDate", maxDate.toISOString())
-
-    const queryString = params.toString()
-
-    fetch(getApiUrl(`/api/decks/archetypes/aggregated?${queryString}`))
-      .then(res => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        return res.json()
-      })
-      .then(data => {
-        setArchetypes(data)
-        ARCHETYPES_CACHE[cacheKey] = {
-          data,
-          timestamp: Date.now()
-        }
-      })
-      .catch(err => setError(err.message))
-      .finally(() => setLoading(false))
-  }, [rangeKey, timeRange, format, clientReady, clientLoading, cacheKey])
-
-  return { archetypes, loading, error }
-}
-
-
-export interface DeckIdentifier {
-  revisionId: number
-  netDeckId: number
-  name: string
-  format: string
-}
-
-export function useDeckIdentifiers() {
-  const [identifiers, setIdentifiers] = useState<DeckIdentifier[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    setLoading(true)
-    setError(null)
-
-    fetch(getApiUrl("/api/decks/identifiers"))
-      .then(res => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        return res.json()
-      })
-      .then(data => setIdentifiers(data))
-      .catch(err => setError(err.message))
-      .finally(() => setLoading(false))
-  }, [])
-
-  return { identifiers, loading, error }
+export function useAggregatedArchetypes(
+  timeRange: string | DateRange | undefined, format?: string, gameType: GameType = "All", refreshKey?: number,
+) {
+  const range = typeof timeRange === "object"
+    ? { from: timeRange.from, to: timeRange.to ?? timeRange.from } : timeRange ?? "ALL"
+  const params = dateRangeParams(range)
+  if (format) params.set("format", format)
+  params.set("gameType", gameType)
+  const { data, loading, error } = useSessionQuery<AggregatedArchetypeDTO[]>(
+    `/api/decks/archetypes/aggregated?${params}`, { refreshKey },
+  )
+  return { archetypes: data ?? [], loading, error }
 }
 
 export async function updateDeckArchetype(

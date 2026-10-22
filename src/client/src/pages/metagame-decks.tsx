@@ -21,7 +21,7 @@ import {
   type MetagameDeckItem,
 } from "@/hooks/use-metagame-decks"
 import { MetagameDeckPreview } from "@/components/metagame-deck-preview"
-import { getApiUrl } from "@/utils/api-config"
+import { importDeck } from "@/hooks/use-decks"
 
 const SEARCH_LIMIT = 100
 
@@ -45,12 +45,6 @@ function readDateRange(params: URLSearchParams): DateRange | undefined {
   return defaultDateRange()
 }
 
-interface ImportDeckResult {
-  revisionId: number
-  netDeckId: number
-  created: boolean
-}
-
 function LazyMetagameDeckTile({
   deck,
   onVisible,
@@ -64,7 +58,7 @@ function LazyMetagameDeckTile({
 
   useEffect(() => {
     const tile = tileRef.current
-    if (!tile || deck.detailsLoaded) return
+    if (!tile || deck.detailsLoaded || deck.detailsError) return
 
     const observer = new IntersectionObserver(entries => {
       if (!entries.some(entry => entry.isIntersecting)) return
@@ -168,23 +162,13 @@ export default function Metagame() {
     setImporting(true)
     setImportError(null)
     try {
-      const response = await fetch(getApiUrl("/api/decks/import"), {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          name: selectedDeck.name,
-          format: selectedDeck.format,
-          archetype: selectedDeck.name,
-          mainboard: selectedDeck.mainboard,
-          sideboard: selectedDeck.sideboard,
-        }),
+      const payload = await importDeck({
+        name: selectedDeck.name,
+        format: selectedDeck.format,
+        archetype: selectedDeck.name,
+        mainboard: selectedDeck.mainboard,
+        sideboard: selectedDeck.sideboard,
       })
-      const payload = await response.json().catch(() => ({})) as Partial<ImportDeckResult> & {
-        error?: string
-      }
-      if (!response.ok || payload.revisionId == null) {
-        throw new Error(payload.error || `Deck import failed (${response.status})`)
-      }
 
       const revisionId = payload.revisionId
       const deck = selectedDeck
@@ -238,7 +222,7 @@ export default function Metagame() {
         )}
       />
 
-      {error ? (
+      {error && !decks.length ? (
         <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-6 text-sm text-destructive">
           {error}
         </div>
@@ -274,6 +258,8 @@ export default function Metagame() {
         dateRange={dateRange}
         importing={importing}
         importError={importError}
+        detailsError={selectedDeck?.detailsError}
+        onRetry={() => { if (selectedDeck) hydrateDecks([selectedDeck]) }}
         onOpenChange={open => {
           if (!open && !importing) setSelectedDeck(null)
         }}

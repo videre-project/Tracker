@@ -13,18 +13,15 @@ import {
   DecksLayout,
   compareFormats,
   isLimitedFormat,
-  type DeckFeaturedCard,
   type DeckGalleryItem,
   type GameType,
 } from "@videreproject/ui"
 import {
-  type CardEntry,
-  type DeckDetail,
   type DeckSummary,
   importDeck,
   useDecks,
 } from "@/hooks/use-decks"
-import type { CardSearchResult } from "@/hooks/use-deck-card-search"
+import type { CardSearchResultDTO } from "@/types/api"
 import { getApiUrl } from "@/utils/api-config"
 
 const ALL_FORMATS = "All"
@@ -75,7 +72,7 @@ function parseDeckList(value: string): ParsedDeckCard[] {
 
 async function resolveImportCards(cards: ParsedDeckCard[]) {
   const names = [...new Set(cards.map(card => card.name.toLocaleLowerCase()))]
-  const matches = new Map<string, CardSearchResult>()
+  const matches = new Map<string, CardSearchResultDTO>()
 
   await Promise.all(names.map(async normalizedName => {
     const originalName = cards.find(
@@ -84,7 +81,7 @@ async function resolveImportCards(cards: ParsedDeckCard[]) {
     const params = new URLSearchParams({ q: originalName, limit: "24" })
     const response = await fetch(getApiUrl(`/api/decks/search-cards?${params}`))
     if (!response.ok) throw new Error(`Could not resolve “${originalName}”.`)
-    const results = await response.json() as CardSearchResult[]
+    const results = await response.json() as CardSearchResultDTO[]
     const exact = results.find(
       result => result.name.localeCompare(originalName, undefined, { sensitivity: "accent" }) === 0,
     )
@@ -128,59 +125,12 @@ function resolveFilteredFormat(queryValue: string | null, summaries: FormatSumma
   return compact?.format ?? ALL_FORMATS
 }
 
-function getFeaturedCards(detail: DeckDetail | null): DeckFeaturedCard[] {
-  if (!detail) return []
-  return [...detail.mainboard]
-    .sort((a, b) => b.quantity - a.quantity)
-    .slice(0, 5)
-    .map(card => ({
-      catalogId: card.catalogId,
-      name: card.name,
-      quantity: card.quantity,
-    }))
-}
-
-function toGalleryItem(
-  deck: DeckSummary,
-  featuredOverride?: CardEntry[] | DeckFeaturedCard[],
-): DeckGalleryItem {
-  const featured =
-    deck.featuredCards?.length
-      ? deck.featuredCards
-      : featuredOverride?.length
-        ? featuredOverride
-        : undefined
-
-  return {
-    revisionId: deck.revisionId,
-    name: deck.name,
-    format: deck.format,
-    archetype: deck.archetype,
-    colors: deck.colors ?? [],
-    wins: deck.wins,
-    losses: deck.losses,
-    ties: deck.ties,
-    mainboardCount: deck.mainboardCount,
-    sideboardCount: deck.sideboardCount,
-    timestamp: deck.timestamp,
-    netDeckId: deck.netDeckId,
-    featuredCards: featured?.map(card => ({
-      catalogId: card.catalogId,
-      name: card.name,
-      quantity: card.quantity,
-    })),
-  }
-}
-
 export default function Decks() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const { decks, loading, error } = useDecks()
   const [query, setQuery] = useState("")
   const [gameType, setGameType] = useState<GameType>("All")
-  const [previewCardsByRevision, setPreviewCardsByRevision] = useState<
-    Record<number, DeckFeaturedCard[]>
-  >({})
   const [importOpen, setImportOpen] = useState(false)
   const [importName, setImportName] = useState("")
   const [importFormat, setImportFormat] = useState("")
@@ -232,60 +182,9 @@ export default function Decks() {
     return source
   }, [allDecks, decks, selectedFormat])
 
-  // Hydrate featured cards for visible tiles
-  useEffect(() => {
-    const missingDecks = formatFilteredDecks
-      .filter(deck => {
-        if (deck.featuredCards?.length) return false
-        if (Object.prototype.hasOwnProperty.call(previewCardsByRevision, deck.revisionId)) {
-          return false
-        }
-        return true
-      })
-      .slice(0, 24)
-
-    if (missingDecks.length === 0) return
-
-    const abortController = new AbortController()
-
-    Promise.all(
-      missingDecks.map(async deck => {
-        try {
-          const response = await fetch(getApiUrl(`/api/decks/${deck.revisionId}`), {
-            signal: abortController.signal,
-          })
-          if (!response.ok) return null
-          const detail = (await response.json()) as DeckDetail
-          return [deck.revisionId, getFeaturedCards(detail)] as const
-        } catch (err) {
-          if (err instanceof Error && err.name === "AbortError") return null
-          return null
-        }
-      }),
-    ).then(entries => {
-      if (abortController.signal.aborted) return
-
-      setPreviewCardsByRevision(current => {
-        const next = { ...current }
-        for (const entry of entries) {
-          if (!entry) continue
-          const [revisionId, cards] = entry
-          next[revisionId] = cards
-        }
-        return next
-      })
-    })
-
-    return () => abortController.abort()
-  }, [formatFilteredDecks, previewCardsByRevision])
-
-  const galleryDecks = useMemo(
-    () =>
-      formatFilteredDecks.map(deck =>
-        toGalleryItem(deck, previewCardsByRevision[deck.revisionId]),
-      ),
-    [formatFilteredDecks, previewCardsByRevision],
-  )
+  const galleryDecks = useMemo<DeckGalleryItem[]>(() => formatFilteredDecks.map(deck => ({
+    ...deck, colors: deck.colors ?? [], featuredCards: deck.featuredCards ?? undefined,
+  })), [formatFilteredDecks])
 
   // Clear selected format if it's no longer in the filtered list
   useEffect(() => {

@@ -5,45 +5,17 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { DateRange } from "react-day-picker"
-import { BASIC_LAND_NAMES } from "@videreproject/constants"
+import { BASIC_LAND_NAMES, CARD_COLORS } from "@videreproject/constants"
 import type { DeckCardEntry, DeckGalleryItem } from "@videreproject/ui"
+import type { components } from "@/types/videre.g"
 
-const VIDERE_API_URL = "https://api.videreproject.com"
+import { fetchVidere, getCardMetadata, type VidereCard as CardRow } from "@/lib/videre-api"
+import { toDeckCards } from "@/utils/deck-list"
 const CACHE_TTL_MS = 2 * 60 * 1000
-const HYDRATION_BATCH_DELAY_MS = 25
 const BASIC_LANDS = new Set(BASIC_LAND_NAMES.map(name => name.toLocaleLowerCase()))
-const COLOR_ORDER = ["W", "U", "B", "R", "G"] as const
-const TUPLE_RE = /^\((\d+),\s*(?:"([^"]*)"|([^,()]+)),\s*(\d+)\)$/
-
-interface VidereResponse<T> {
-  data?: T
-}
-
-interface MetagameRow {
-  id: number
-  archetype: string
-  count: number
-  percentage: string
-  match_count: number
-  match_winrate: string
-}
-
-interface DeckRow {
-  id: number
-  mainboard?: unknown[]
-  sideboard?: unknown[]
-}
-
-interface CardRow {
-  id: number
-  name?: string | null
-  display_name?: string | null
-  mana_value?: number | null
-  type_line?: string | null
-  colors?: string[] | null
-  rarity?: string | null
-  image_url?: string | null
-}
+const COLOR_ORDER = CARD_COLORS.map(color => color.symbol)
+type MetagameRow = components["schemas"]["Metagame"]
+type DeckRow = components["schemas"]["EventDeck"]
 
 interface CachedMetagameDecks {
   decks: MetagameDeckItem[]
@@ -55,9 +27,10 @@ export interface MetagameDeckItem extends DeckGalleryItem {
   mainboard: DeckCardEntry[]
   sideboard: DeckCardEntry[]
   detailsLoaded: boolean
+  detailsError?: string | null
 }
 
-export interface UseMetagameDecksOptions {
+interface UseMetagameDecksOptions {
   formats: string[]
   dateRange?: DateRange
   decksPerFormat?: number
@@ -65,24 +38,10 @@ export interface UseMetagameDecksOptions {
 }
 
 const cache = new Map<string, CachedMetagameDecks>()
-const cardMetadataCache = new Map<number, CardRow>()
 
 function parsePercentage(value: string | undefined): number {
   const parsed = Number.parseFloat(value ?? "")
   return Number.isFinite(parsed) ? parsed : 0
-}
-
-function parseDeckCards(values: unknown[] | undefined): DeckCardEntry[] {
-  if (!values) return []
-  return values.flatMap(value => {
-    if (typeof value !== "string") return []
-    const match = value.match(TUPLE_RE)
-    if (!match) return []
-    const catalogId = Number(match[1])
-    const name = (match[2] ?? match[3] ?? "").trim()
-    const quantity = Number(match[4])
-    return catalogId > 0 && name ? [{ catalogId, name, quantity }] : []
-  })
 }
 
 function resolveColors(cards: DeckCardEntry[], cardById: Map<number, CardRow>): string[] {
@@ -104,9 +63,9 @@ function hydrateCards(cards: DeckCardEntry[], cardById: Map<number, CardRow>): D
     return {
       ...card,
       name: metadata?.display_name?.trim() || metadata?.name?.trim() || card.name,
-      cmc: Math.max(0, Math.floor(metadata?.mana_value ?? 0)),
+      cmc: Math.max(0, Math.floor(metadata?.mana_value ?? metadata?.faces?.[0]?.mana_value ?? 0)),
       colors: metadata?.colors ?? [],
-      types: parseTypes(metadata?.type_line),
+      types: parseTypes(metadata?.type_line ?? metadata?.faces?.[0]?.type_line),
       rarity: metadata?.rarity?.toLocaleLowerCase() || "common",
       imageUrl: metadata?.image_url ?? null,
     }
@@ -118,30 +77,6 @@ function dateParameter(value: Date | undefined, endOfDay = false): string | unde
   const date = new Date(value)
   date.setHours(endOfDay ? 23 : 0, endOfDay ? 59 : 0, endOfDay ? 59 : 0, endOfDay ? 999 : 0)
   return date.toISOString()
-}
-
-async function fetchData<T>(
-  path: string,
-  signal: AbortSignal,
-  init?: Omit<RequestInit, "signal">,
-): Promise<T> {
-  const response = await fetch(`${VIDERE_API_URL}${path}`, { ...init, signal })
-  if (!response.ok) throw new Error(`Videre API request failed (${response.status})`)
-  const payload = await response.json() as VidereResponse<T>
-  return payload.data as T
-}
-
-async function fetchOptionalData<T>(
-  path: string,
-  signal: AbortSignal,
-  init?: Omit<RequestInit, "signal">,
-): Promise<T | null> {
-  try {
-    return await fetchData<T>(path, signal, init)
-  } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") throw error
-    return null
-  }
 }
 
 function getDeckKey(deck: Pick<MetagameDeckItem, "format" | "name">): string {
@@ -176,60 +111,47 @@ async function hydrateDeckBatch(
   dateParams: URLSearchParams,
   signal: AbortSignal,
 ): Promise<MetagameDeckItem[]> {
-  const deckResults = await Promise.all(decks.map(async summary => {
+  const deckResults = await Promise.allSettled(decks.map(async summary => {
+    // Keep a fetched decklist when only its card metadata needs another attempt.
+    if (summary.mainboard.length) return summary
     const params = new URLSearchParams(dateParams)
     params.set("limit", "1")
     params.set("archetype", summary.name)
-    const rows = await fetchOptionalData<DeckRow[]>(
+    const { data: rows } = await fetchVidere<DeckRow[]>(
       `/decks/${encodeURIComponent(summary.format.toLocaleLowerCase())}?${params}`,
       signal,
     )
     const deck = rows?.[0]
+    if (!deck) throw new Error("No published decklist is available for this archetype.")
     return {
-      summary,
-      deck,
-      mainboard: parseDeckCards(deck?.mainboard),
-      sideboard: parseDeckCards(deck?.sideboard),
+      ...summary,
+      revisionId: deck.id,
+      sourceDeckId: deck.id,
+      mainboard: toDeckCards(deck.mainboard),
+      sideboard: toDeckCards(deck.sideboard),
     }
   }))
 
   const catalogIds = [...new Set(deckResults.flatMap(result =>
-    [...result.mainboard, ...result.sideboard].map(card => card.catalogId),
+    result.status === "fulfilled"
+      ? [...result.value.mainboard, ...result.value.sideboard].map(card => card.catalogId) : [],
   ))]
-  const missingCatalogIds = catalogIds.filter(catalogId => !cardMetadataCache.has(catalogId))
-  const cardPages = await Promise.all(missingCatalogIds
-    .reduce<number[][]>((chunks, catalogId, index) => {
-      const chunkIndex = Math.floor(index / 500)
-      const chunk = chunks[chunkIndex] ?? (chunks[chunkIndex] = [])
-      chunk.push(catalogId)
-      return chunks
-    }, [])
-    .map(ids => fetchOptionalData<CardRow[]>(
-      "/cards/search?limit=500&unique=prints",
-      signal,
-      {
-        method: "QUERY",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          collection: { ids, mode: "only", match: "prints" },
-        }),
-      },
-    )))
-  cardPages.flatMap(cards => cards ?? []).forEach(card => {
-    cardMetadataCache.set(card.id, card)
+  let metadataError: string | null = null
+  const cardById = await getCardMetadata(catalogIds, signal).catch(() => {
+    metadataError = "Could not load card details. Try again."
+    return new Map<number, CardRow>()
   })
-  const cardById = new Map(catalogIds.flatMap(catalogId => {
-    const card = cardMetadataCache.get(catalogId)
-    return card ? [[catalogId, card] as const] : []
-  }))
+  if (signal.aborted) throw new DOMException("Aborted", "AbortError")
 
-  return deckResults.map(({ summary, deck, mainboard, sideboard }) => {
+  return deckResults.map((result, index) => {
+    if (result.status === "rejected") return {
+      ...decks[index], detailsError: "Could not load this decklist. Try again.",
+    }
+    const { mainboard, sideboard, ...summary } = result.value
     const hydratedMainboard = hydrateCards(mainboard, cardById)
     const hydratedSideboard = hydrateCards(sideboard, cardById)
     return {
       ...summary,
-      revisionId: deck?.id ?? summary.revisionId,
-      sourceDeckId: deck?.id ?? summary.sourceDeckId,
       colors: resolveColors(hydratedMainboard, cardById),
       mainboard: hydratedMainboard,
       sideboard: hydratedSideboard,
@@ -238,7 +160,8 @@ async function hydrateDeckBatch(
       featuredCards: hydratedMainboard
         .filter(card => !BASIC_LANDS.has(card.name.toLocaleLowerCase()))
         .slice(0, 5),
-      detailsLoaded: true,
+      detailsLoaded: !metadataError,
+      detailsError: metadataError,
     }
   })
 }
@@ -265,79 +188,64 @@ export function useMetagameDecks({
   )
 
   const decksRef = useRef(decks)
-  const pendingHydrationRef = useRef(new Map<string, MetagameDeckItem>())
-  const hydratingKeysRef = useRef(new Set<string>())
-  const hydrationTimerRef = useRef<number | null>(null)
-  const hydrationControllersRef = useRef(new Set<AbortController>())
-  const activeCacheKeyRef = useRef(cacheKey)
-  activeCacheKeyRef.current = cacheKey
-
-  useEffect(() => {
-    decksRef.current = decks
-  }, [decks])
+  const pending = useRef(new Map<string, MetagameDeckItem>())
+  const requests = useRef(new Map<string, AbortController>())
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const activeCacheKey = useRef(cacheKey)
+  activeCacheKey.current = cacheKey
 
   useEffect(() => () => {
-    if (hydrationTimerRef.current != null) {
-      window.clearTimeout(hydrationTimerRef.current)
-      hydrationTimerRef.current = null
-    }
-    pendingHydrationRef.current.clear()
-    hydratingKeysRef.current.clear()
-    hydrationControllersRef.current.forEach(controller => controller.abort())
-    hydrationControllersRef.current.clear()
+    if (timer.current != null) clearTimeout(timer.current)
+    timer.current = null
+    pending.current.clear()
+    requests.current.forEach(controller => controller.abort())
+    requests.current.clear()
+    decksRef.current = []
   }, [cacheKey])
 
-  const hydrateDecks = useCallback((requestedDecks: MetagameDeckItem[]) => {
-    requestedDecks.forEach(requestedDeck => {
-      const key = getDeckKey(requestedDeck)
-      const currentDeck = decksRef.current.find(deck => getDeckKey(deck) === key)
-      if (!currentDeck || currentDeck.detailsLoaded || hydratingKeysRef.current.has(key)) return
-      pendingHydrationRef.current.set(key, currentDeck)
-    })
-
-    if (pendingHydrationRef.current.size === 0 || hydrationTimerRef.current != null) return
-
-    hydrationTimerRef.current = window.setTimeout(() => {
-      hydrationTimerRef.current = null
-      const batch = [...pendingHydrationRef.current.values()]
-      pendingHydrationRef.current.clear()
-      const batchKeys = batch.map(getDeckKey)
-      batchKeys.forEach(key => hydratingKeysRef.current.add(key))
-
+  const hydrateDecks = useCallback((requested: MetagameDeckItem[]) => {
+    for (const item of requested) {
+      const key = getDeckKey(item)
+      const deck = decksRef.current.find(deck => getDeckKey(deck) === key)
+      if (deck && !deck.detailsLoaded && !requests.current.has(key)) pending.current.set(key, deck)
+    }
+    if (!pending.current.size || timer.current != null) return
+    // Visible tiles share one metadata request instead of requesting the same cards separately.
+    timer.current = setTimeout(() => {
+      timer.current = null
+      const batch = [...pending.current.values()]
+      pending.current.clear()
+      const keys = new Set(batch.map(getDeckKey))
       const controller = new AbortController()
-      hydrationControllersRef.current.add(controller)
-      const requestedCacheKey = cacheKey
-      const dateParams = new URLSearchParams()
-      if (from) dateParams.set("min_date", from)
-      if (to) dateParams.set("max_date", to)
-
-      void hydrateDeckBatch(batch, dateParams, controller.signal)
-        .then(hydratedDecks => {
-          if (activeCacheKeyRef.current !== requestedCacheKey) return
-          const hydratedByKey = new Map(
-            hydratedDecks.map(deck => [getDeckKey(deck), deck]),
-          )
-          setDecks(currentDecks => {
-            const nextDecks = currentDecks.map(deck =>
-              hydratedByKey.get(getDeckKey(deck)) ?? deck,
-            )
-            decksRef.current = nextDecks
-            cache.set(requestedCacheKey, { decks: nextDecks, timestamp: Date.now() })
-            return nextDecks
-          })
+      keys.forEach(key => requests.current.set(key, controller))
+      decksRef.current = decksRef.current.map(deck => keys.has(getDeckKey(deck))
+        ? { ...deck, detailsError: null } : deck)
+      setDecks(decksRef.current)
+      const params = new URLSearchParams()
+      if (from) params.set("min_date", from)
+      if (to) params.set("max_date", to)
+      void hydrateDeckBatch(batch, params, controller.signal)
+        .then(loaded => {
+          if (controller.signal.aborted || activeCacheKey.current !== cacheKey) return
+          const byKey = new Map(loaded.map(deck => [getDeckKey(deck), deck]))
+          const next = decksRef.current.map(deck => byKey.get(getDeckKey(deck)) ?? deck)
+          decksRef.current = next
+          cache.set(cacheKey, { decks: next, timestamp: Date.now() })
+          setDecks(next)
+          setError(next.find(deck => deck.detailsError)?.detailsError ?? null)
         })
         .catch(reason => {
-          if (reason instanceof DOMException && reason.name === "AbortError") return
+          if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : "Could not load this decklist.")
         })
         .finally(() => {
-          batchKeys.forEach(key => hydratingKeysRef.current.delete(key))
-          hydrationControllersRef.current.delete(controller)
+          keys.forEach(key => { if (requests.current.get(key) === controller) requests.current.delete(key) })
         })
-    }, HYDRATION_BATCH_DELAY_MS)
+    }, 25)
   }, [cacheKey, from, to])
 
   useEffect(() => {
     if (stableFormats.length === 0) {
+      decksRef.current = []
       setDecks([])
       setLoading(false)
       setError(null)
@@ -346,9 +254,10 @@ export function useMetagameDecks({
 
     const currentCache = cache.get(cacheKey)
     if (currentCache && Date.now() - currentCache.timestamp < CACHE_TTL_MS) {
+      decksRef.current = currentCache.decks
       setDecks(currentCache.decks)
       setLoading(false)
-      setError(null)
+      setError(currentCache.decks.find(deck => deck.detailsError)?.detailsError ?? null)
       return
     }
 
@@ -365,10 +274,10 @@ export function useMetagameDecks({
       const metagameResults = await Promise.allSettled(stableFormats.map(async format => {
         const params = new URLSearchParams(dateParams)
         params.set("limit", String(decksPerFormat))
-        const rows = await fetchData<MetagameRow[]>(
+        const rows = (await fetchVidere<MetagameRow[]>(
           `/metagame/${encodeURIComponent(format.toLocaleLowerCase())}?${params}`,
           controller.signal,
-        )
+        )).data
         return (rows ?? []).map(row => ({ format, row }))
       }))
 
@@ -381,16 +290,16 @@ export function useMetagameDecks({
       }
 
       const summaries = formatRows.map(({ format, row }) => createDeckSummary(format, row))
-      const nextDecks = hydrateLazily
-        ? summaries
-        : await hydrateDeckBatch(summaries, dateParams, controller.signal)
+      const nextDecks = hydrateLazily ? summaries : await hydrateDeckBatch(summaries, dateParams, controller.signal)
 
       if (!active) return
       cache.set(cacheKey, { decks: nextDecks, timestamp: Date.now() })
       decksRef.current = nextDecks
       setDecks(nextDecks)
+      setError(nextDecks.find(deck => deck.detailsError)?.detailsError ?? null)
     })().catch(reason => {
       if (!active || (reason instanceof DOMException && reason.name === "AbortError")) return
+      decksRef.current = []
       setDecks([])
       setError(reason instanceof Error
         ? reason.message

@@ -483,16 +483,16 @@ Each of these event types is stored with contextual information such as the turn
 
 ### 5.2 Analytics Available
 
-The comprehensive data collection enables a wide range of analytics:
+The dashboard and deck editor's Stats sidebar report:
 
-- **Deck Performance**: Win rates, match statistics, and performance against different archetypes
-- **Card Analysis**: Usage patterns, effectiveness, and impact on game outcomes
-- **Game Metrics**: Average game length, turn count, and tempo indicators
-- **Mana Efficiency**: Analysis of mana curve, color requirements, and casting costs
-- **Sideboarding Effectiveness**: Impact of sideboard changes on game outcomes
-- **Decision Points**: Analysis of critical decision points and their outcomes
+- Match and game records by saved deck, opposing archetype, and play/draw position.
+- Game winrates conditional on a card being observed in hand, in a captured
+  opening hand, moving from library to hand, or being cast. Sample counts and
+  recording coverage accompany these observations; they do not establish that a
+  card caused a win or loss.
+- Match-clock averages and performance trends for the selected date range.
 
-These analytics can be used to improve deck construction, gameplay decisions, and overall strategy.
+Sideboarding recommendations and decision-quality analysis are not implemented.
 
 ### 5.3 Deck synchronization
 
