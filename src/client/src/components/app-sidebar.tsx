@@ -3,13 +3,17 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+
 import * as React from "react"
+import { useApplicationSettings } from "@/hooks/use-application-settings"
+import { useLocation } from "react-router-dom"
+import { SettingsNavigation } from "@/components/settings-navigation"
 
 import { NavMain } from "@/components/nav-main"
 import { NavFooter } from "@/components/nav-footer"
 import { NavLogo } from "./nav-logo"
-import { ActiveGames, UpcomingGames } from "@/components/game-list"
-import { useEvents } from "@/hooks/events-context"
+import { ActivityList } from "@/components/game-list"
+import { usePersonalActivity } from "@/hooks/use-personal-activity"
 import {
   Sidebar,
   SidebarFooter,
@@ -57,9 +61,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     []
   )
 
-  const { activeGames, upcomingGames } = useEvents();
-  const activeEmpty = activeGames.length === 0;
-  const upcomingEmpty = upcomingGames.length === 0;
+  const { preferences } = useApplicationSettings();
+  const { pathname } = useLocation();
+  const settingsOpen = pathname === "/settings" || pathname.startsWith("/settings/");
+  const activity = usePersonalActivity(!settingsOpen && (preferences.showActiveEvents || preferences.showUpcomingEvents));
 
   return (
     <Sidebar collapsible="icon" {...props}>
@@ -67,17 +72,27 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <div className="p-2 pb-0">
           <NavLogo label={data.label} />
         </div>
-        <div className="-mt-2">
-          <NavMain items={navMain} />
-        </div>
+        {!settingsOpen && (
+          <div className="-mt-2">
+            <NavMain items={navMain} />
+          </div>
+        )}
       </SidebarHeader>
-      <div className="flex flex-col flex-1 overflow-y-hidden gap-0 -mt-2 mb-2">
-        <ActiveGames games={activeGames} otherListEmpty={upcomingEmpty} />
-        <UpcomingGames games={upcomingGames} className="-mt-1" otherListEmpty={activeEmpty} />
-      </div>
-      <SidebarFooter className="pt-1 pb-4">
-        <NavFooter items={navFooter} />
-      </SidebarFooter>
+      {settingsOpen ? <SettingsNavigation /> : (
+        <>
+          <div className="flex flex-col flex-1 overflow-y-hidden gap-0 -mt-2 mb-2">
+            {preferences.showActiveEvents && <ActivityList label="Active" items={activity.active}
+              loading={activity.loading} error={activity.error} connected={activity.isReady}
+              emptyMessage="No active matches or events." />}
+            {preferences.showUpcomingEvents && <ActivityList label="Registered" items={activity.registered}
+              loading={activity.loading} error={activity.error} connected={activity.isReady}
+              emptyMessage="No registered events." />}
+          </div>
+          <SidebarFooter className="pt-1 pb-4">
+            <NavFooter items={navFooter} />
+          </SidebarFooter>
+        </>
+      )}
       <SidebarRail />
     </Sidebar>
   )

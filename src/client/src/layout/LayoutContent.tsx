@@ -8,6 +8,9 @@ import { ExternalLink } from "lucide-react"
 import { Link, Outlet, useLocation, matchPath } from "react-router-dom";
 
 import { cn } from "@/lib/utils"
+import { useDeckDetail } from "@/hooks/use-decks"
+import { DeckManaSymbols } from "@videreproject/ui"
+import { UpdatesProvider } from "@/components/updates-provider"
 import { AppSidebar } from "@/components/app-sidebar"
 import {
   Breadcrumb,
@@ -20,6 +23,7 @@ import {
   SidebarInset,
   SidebarProvider,
   SidebarTrigger,
+  Skeleton,
 } from "@videreproject/ui"
 
 import { routes } from "@/router";
@@ -30,12 +34,9 @@ interface RouteFragment {
   title: string
   url: string
   noLink?: boolean
+  contextId?: string
+  colors?: string[]
   kind?: "collection" | "format" | "page"
-}
-
-interface DeckRouteState {
-  deckName?: string
-  deckFormat?: string
 }
 
 function normalizeDeckFormat(value?: string) {
@@ -49,6 +50,13 @@ function normalizeDeckFormat(value?: string) {
     .join(" ")
 }
 
+function BreadcrumbLabel({ title, contextId, colors }: Pick<RouteFragment, "title" | "contextId" | "colors">) {
+  return <span className="inline-flex items-center gap-2.5">{title}
+    {colors && <DeckManaSymbols colors={colors} className="translate-y-[2px]" />}
+    {contextId && <span id={contextId} className="inline-flex items-center empty:hidden" />}
+  </span>
+}
+
 function RouteBreadcrumb({
   currentHref,
   items,
@@ -56,24 +64,25 @@ function RouteBreadcrumb({
   currentHref?: string
   items: RouteFragment[]
 }) {
+  const { pathname } = useLocation()
   return (
     <Breadcrumb>
       <BreadcrumbList>
-        {items.map(({ title, url, noLink }: RouteFragment, index) => (
+        {items.map(({ title, url, noLink, contextId, colors }: RouteFragment, index) => (
           index < items.length - 1
-            ? (<React.Fragment key={`React.Fragment-${index}`}>
+            ? (<React.Fragment key={`React.Fragment-${contextId ?? index}`}>
               <BreadcrumbItem className="hidden md:block"
-                key={`BreadcrumbItem-${index}`}>
+                key={`BreadcrumbItem-${contextId ?? index}`}>
                 {noLink ? (
-                  <span className="text-sm font-medium text-muted-foreground">{title}</span>
+                  <span className="text-sm font-medium text-muted-foreground"><BreadcrumbLabel title={title} contextId={contextId} colors={colors} /></span>
                 ) : (
-                  <BreadcrumbLink asChild><Link to={url}>{title}</Link></BreadcrumbLink>
+                  <BreadcrumbLink asChild><Link to={url}><BreadcrumbLabel title={title} contextId={contextId} colors={colors} /></Link></BreadcrumbLink>
                 )}
               </BreadcrumbItem>
               <BreadcrumbSeparator className="hidden md:block"
                 key={`BreadcrumbSeparator-${index}`} />
             </React.Fragment>)
-            : (<BreadcrumbItem key={`BreadcrumbItem-${index}`}>
+            : (<BreadcrumbItem key={`BreadcrumbItem-${contextId ?? index}`}>
               {currentHref ? (
                 <BreadcrumbLink
                   aria-current="page"
@@ -82,11 +91,13 @@ function RouteBreadcrumb({
                   target="_blank"
                   rel="noreferrer"
                 >
-                  {title}
+                  <BreadcrumbLabel title={title} contextId={contextId} colors={colors} />
                   <ExternalLink className="h-3.5 w-3.5 translate-y-px" />
                 </BreadcrumbLink>
+              ) : url !== pathname ? (
+                <BreadcrumbLink asChild><Link to={url}><BreadcrumbLabel title={title} contextId={contextId} colors={colors} /></Link></BreadcrumbLink>
               ) : (
-                <BreadcrumbPage>{title}</BreadcrumbPage>
+                <BreadcrumbPage><BreadcrumbLabel title={title} contextId={contextId} colors={colors} /></BreadcrumbPage>
               )}
             </BreadcrumbItem>)
         ))}
@@ -116,111 +127,13 @@ export default function Layout() {
       return inferredDeckRevisionId;
     }
   })();
-  const routeState = location.state as DeckRouteState | null;
-  const [deckBreadcrumbNames, setDeckBreadcrumbNames] = React.useState<Record<string, string>>({});
-  const [deckBreadcrumbFormats, setDeckBreadcrumbFormats] = React.useState<Record<string, string>>({});
-  const currentDeckBreadcrumbName = deckRevisionId
-    ? routeState?.deckName ?? deckBreadcrumbNames[deckRevisionId]
-    : undefined;
-  const currentDeckBreadcrumbFormat = deckRevisionId
-    ? routeState?.deckFormat ?? deckBreadcrumbFormats[deckRevisionId]
-    : undefined;
-
-  React.useEffect(() => {
-    if (!deckRevisionId) return;
-
-    if (routeState?.deckName) {
-      setDeckBreadcrumbNames(current => (
-        current[deckRevisionId] === routeState.deckName
-          ? current
-          : { ...current, [deckRevisionId]: routeState.deckName! }
-      ));
-    }
-
-    if (routeState?.deckFormat) {
-      setDeckBreadcrumbFormats(current => (
-        current[deckRevisionId] === routeState.deckFormat
-          ? current
-          : { ...current, [deckRevisionId]: routeState.deckFormat! }
-      ));
-    }
-
-    if (routeState?.deckName && routeState?.deckFormat) {
-      return;
-    }
-
-    if (deckBreadcrumbNames[deckRevisionId] &&
-        deckBreadcrumbFormats[deckRevisionId]) return;
-
-    const abortController = new AbortController();
-
-    fetch(getApiUrl("/api/decks"), { signal: abortController.signal })
-      .then(response => {
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return response.json() as Promise<Record<string, {
-          revisionId: number
-          name: string
-          format: string
-        }[]>>;
-      })
-      .then(decksByFormat => {
-        const flattenedDecks = Object.values(decksByFormat).flat();
-        const deck = flattenedDecks.find(
-          candidate => candidate.revisionId.toString() === deckRevisionId
-        );
-        if (!deck) throw new Error("Deck not found in deck index");
-
-        if (deck.name) {
-          setDeckBreadcrumbNames(current => ({
-            ...current,
-            [deckRevisionId]: deck.name,
-          }));
-        }
-        if (deck.format) {
-          setDeckBreadcrumbFormats(current => ({
-            ...current,
-            [deckRevisionId]: deck.format,
-          }));
-        }
-      })
-      .catch(error => {
-        if (error instanceof Error && error.name === "AbortError") return;
-        fetch(getApiUrl("/api/decks/identifiers"), { signal: abortController.signal })
-          .then(response => {
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            return response.json() as Promise<Array<{
-              revisionId: number
-              name: string
-              format: string
-            }>>;
-          })
-          .then(decks => {
-            const deck = decks.find(
-              item => item.revisionId.toString() === deckRevisionId
-            );
-            if (!deck) return;
-
-            setDeckBreadcrumbNames(current => ({
-              ...current,
-              [deckRevisionId]: deck.name,
-            }));
-            if (deck.format) {
-              setDeckBreadcrumbFormats(current => ({
-                ...current,
-                [deckRevisionId]: deck.format,
-              }));
-            }
-          })
-          .catch(() => {
-            // Leave the route-derived breadcrumb in place when both lookups fail.
-          });
-      });
-
-    return () => abortController.abort();
-  }, [deckBreadcrumbNames, deckBreadcrumbFormats, deckRevisionId, routeState?.deckName, routeState?.deckFormat]);
+  const deck = useDeckDetail(deckRevisionId ?? null);
+  const currentDeckBreadcrumbName = deck.detail?.name;
+  const currentDeckBreadcrumbFormat = deck.detail?.format;
 
   // Routes are now nested as children under main routes
-  const allRoutes = routes.flatMap(r => r.children || []);
+  const allRoutes = routes.flatMap(r => r.children || [])
+    .flatMap(route => [route, ...(route.children || [])]);
 
   const deckBreadcrumbs = React.useMemo<RouteFragment[]>(() => {
     if (!deckRevisionId) return [];
@@ -246,22 +159,13 @@ export default function Layout() {
     breadcrumbs.push({
       title: deckTitle,
       url: `/decks/${deckRevisionId}`,
+      contextId: "deck-breadcrumb-context",
+      colors: deck.detail?.colors ?? undefined,
       kind: "page",
     });
 
     return breadcrumbs;
-  }, [deckRevisionId, currentDeckBreadcrumbFormat, currentDeckBreadcrumbName]);
-
-  const replayBreadcrumb = React.useMemo<RouteFragment | null>(() => {
-    const match = matchPath("/history/:matchId/game/:gameId/replay", location.pathname);
-    if (!match?.params.gameId) return null;
-
-    return {
-      title: `Game #${match.params.gameId}`,
-      url: location.pathname,
-      kind: "page",
-    };
-  }, [location.pathname]);
+  }, [deckRevisionId, currentDeckBreadcrumbFormat, currentDeckBreadcrumbName, deck.detail?.colors]);
 
   // Extract the breadcrumbs for each segment of the path, building
   // cumulative paths so that /settings/diagnostics resolves correctly.
@@ -269,8 +173,8 @@ export default function Layout() {
     [...allRoutes].sort((a, b) => (b.path?.length ?? 0) - (a.path?.length ?? 0))
   ), [allRoutes])
 
-  const breadcrumbs = deckRevisionId ? deckBreadcrumbs : fragments.reduce((acc, fragment) => {
-    const cumulativePath = (acc.at(-1)?.url ?? "") + fragment;
+  const breadcrumbs = deckRevisionId ? deckBreadcrumbs : fragments.reduce((acc, _fragment, index) => {
+    const cumulativePath = fragments.slice(0, index + 1).join("");
     const route = routesBySpecificity.find(({ path }) => {
       if (!path) return false;
       return matchPath(path, cumulativePath) !== null;
@@ -320,56 +224,61 @@ export default function Layout() {
     }
     return acc;
   }, [] as RouteFragment[]);
-  const breadcrumbsWithReplay = replayBreadcrumb
-    ? [...breadcrumbs, replayBreadcrumb]
-    : breadcrumbs;
-  const displayBreadcrumbsWithReplay = breadcrumbsWithReplay.map(item =>
+  const isMatchDetailsPage = Boolean(matchPath("/history/:matchId", location.pathname));
+  const displayBreadcrumbs = breadcrumbs.map(item =>
     item.url === "/decks" && item.kind === "collection"
       ? { ...item, title: "Decks" }
       : item
   );
+  const isTournamentPage = Boolean(matchPath("/events/:eventId", location.pathname));
   const isApiDocsPage = location.pathname === "/settings/api-docs";
   const currentBreadcrumbHref = isApiDocsPage ? getApiUrl("/docs") : undefined;
 
   return (
-      <EventsProvider>
-        <SidebarProvider>
-            <AppSidebar />
-            <SidebarInset className="min-w-0 relative">
-              <header className={cn("absolute top-0 left-0 right-0 z-30 h-14 pointer-events-none", location.pathname === "/events" ? "" : "bg-background")}>
-                {location.pathname === "/events" && (
-                  <div
-                    className="absolute top-3 left-0 h-8"
-                    style={{
-                      width: 200,
-                      background: 'linear-gradient(to right, hsl(var(--background)) 120px, transparent)',
-                    }}
-                  />
-                )}
-              <div className="relative h-full flex items-center gap-2 px-4 pointer-events-auto w-fit">
-                <SidebarTrigger className="-ml-1" />
-                <Separator orientation="vertical" className="mr-2 h-4" />
-                <div className="inline-flex items-center rounded-sm">
-                  <RouteBreadcrumb currentHref={currentBreadcrumbHref} items={displayBreadcrumbsWithReplay} />
-                </div>
+    <UpdatesProvider>
+    <EventsProvider liveUpdates={Boolean(matchPath("/events/*", location.pathname))}>
+      <SidebarProvider>
+          <AppSidebar />
+          <SidebarInset className="min-w-0 relative">
+            <header className={cn("absolute top-0 left-0 right-0 z-30 h-14 pointer-events-none", location.pathname === "/events" ? "" : "bg-background")}>
+              {location.pathname === "/events" && (
                 <div
-                  id="page-header-context"
-                  className="ml-5 hidden items-center self-center pt-px md:flex"
+                  className="absolute top-3 left-0 h-8"
+                  style={{
+                    width: 200,
+                    background: 'linear-gradient(to right, hsl(var(--background)) 120px, transparent)',
+                  }}
                 />
+              )}
+            <div className="relative h-full flex items-center gap-2 px-4 pointer-events-auto w-fit">
+              <SidebarTrigger className="-ml-1" />
+              <Separator orientation="vertical" className="mr-2 h-4" />
+              <div className="inline-flex items-center rounded-sm">
+                <RouteBreadcrumb currentHref={currentBreadcrumbHref} items={displayBreadcrumbs} />
               </div>
               <div
-                id="page-header-end"
-                className="pointer-events-auto absolute right-4 top-0 hidden h-full items-center md:flex"
+                id="page-header-context"
+                className="ml-5 hidden items-center self-center pt-px md:flex"
               />
-              </header>
-              <div className="flex-1 min-h-0 overflow-y-auto">
-                <div className="h-14" />
-                <Suspense>
-                  <Outlet />
-                </Suspense>
-              </div>
-            </SidebarInset>
-        </SidebarProvider>
-      </EventsProvider>
+            </div>
+            <div
+              id="page-header-end"
+              className="pointer-events-auto absolute right-4 top-0 hidden h-full items-center md:flex"
+            />
+            </header>
+            <div className={cn("flex-1 min-h-0 overflow-y-auto", (isTournamentPage || isMatchDetailsPage || location.pathname === "/collection" || location.pathname === "/history") && "flex flex-col overflow-hidden")}>
+              <div className="h-14 shrink-0" />
+              <Suspense fallback={<div role="status" aria-label="Loading page"
+                className="flex min-h-0 flex-1 flex-col gap-4 px-4 pb-4 pt-1">
+                <Skeleton className="h-8 w-64 shrink-0" />
+                <Skeleton className="h-64 w-full" />
+              </div>}>
+                <Outlet context={deck} />
+              </Suspense>
+            </div>
+          </SidebarInset>
+      </SidebarProvider>
+    </EventsProvider>
+    </UpdatesProvider>
   )
 }

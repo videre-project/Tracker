@@ -33,6 +33,13 @@ export function PluginConfigurationSheet({ plugin, onClose, onSaved }: {
     settingsRequest<PluginConfiguration>(url, { signal: controller.signal })
       .then(data => {
         const initial = { ...data.values }
+        if ((data.fields ?? []).every(field => supportedTypes.has(field.type ?? ""))) {
+          // An unchecked checkbox represents false before its first change, too.
+          for (const field of data.fields ?? []) {
+            if (field.type === "boolean" && field.key && initial[field.key] === undefined)
+              initial[field.key] = false
+          }
+        }
         setConfiguration(data)
         setValues(initial)
         setJson(JSON.stringify(initial, null, 2))
@@ -75,7 +82,7 @@ export function PluginConfigurationSheet({ plugin, onClose, onSaved }: {
         </SheetHeader>
         <form onSubmit={save}>
           <fieldset disabled={saving} className="space-y-4">
-            {error && <p role="alert" className="text-sm text-red-400">{error}</p>}
+            {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
             {!configuration ? (!error && <Skeleton className="h-24" />) : useFields ? fields.map(field => {
               const id = `plugin-setting-${field.key}`
               const value = values[field.key ?? ""]
@@ -84,12 +91,12 @@ export function PluginConfigurationSheet({ plugin, onClose, onSaved }: {
                 <div key={field.key} className="space-y-1.5">
                   <label htmlFor={id} className="flex items-center justify-between gap-4 text-sm font-medium">
                     {field.label}
-                    {field.type === "boolean" && <input id={id} aria-describedby={field.description ? `${id}-description` : undefined} type="checkbox" checked={value === true} onChange={event => update(field, event.target.checked)} className="h-4 w-4 accent-primary" />}
+                    {field.type === "boolean" && <input id={id} type="checkbox" checked={value === true} onChange={event => update(field, event.target.checked)} className="h-4 w-4 accent-primary" />}
                   </label>
                   {field.description && <p id={`${id}-description`} className="text-xs text-muted-foreground">{field.description}</p>}
                   {field.type !== "boolean" && (choices.length ? (
                     <Select value={value === undefined ? "" : JSON.stringify(value)} onValueChange={choice => update(field, JSON.parse(choice))}>
-                      <SelectTrigger id={id} aria-describedby={field.description ? `${id}-description` : undefined} className="h-8"><SelectValue placeholder="Select a value" /></SelectTrigger>
+                      <SelectTrigger id={id} className="h-8"><SelectValue placeholder="Select a value" /></SelectTrigger>
                       <SelectContent>{choices.map(choice => <SelectItem key={JSON.stringify(choice)} value={JSON.stringify(choice)}>{String(choice)}</SelectItem>)}</SelectContent>
                     </Select>
                   ) : (

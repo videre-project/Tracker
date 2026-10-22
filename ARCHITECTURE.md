@@ -464,6 +464,23 @@ The Tracker ensures robust error handling and recovery mechanisms to maintain da
 
 ----
 
+### 4.3 Joined events and current matches
+
+The sidebar uses `/api/activity/watch` for the signed-in player's joined events,
+active league courses, and matches. This is separate from the public tournament
+catalog used by the Events page. Scheduled entries and queues appear under
+Registered; ongoing participation appears under Active. An active match nests
+under its tournament or league rather than appearing twice. Completed, removed,
+eliminated, spectated, and replayed participation is excluded.
+
+The stream publishes complete snapshots when personal activity changes, checking
+the small joined collection every five seconds. Replacing snapshots removes stale
+entries after leaving or finishing an event. The client clears its snapshot on
+disconnect. Match links open Match Details and tournament links open the existing
+tournament page. League and queue titles open their MTGO window until Tracker has
+dedicated run pages. The existing `showUpcomingEvents` preference controls the
+Registered section for compatibility with saved settings.
+
 ## 5. Data Collection Details
 
 ### 5.1 Game Events Captured
@@ -665,6 +682,39 @@ Tracker's supported ASP.NET Core and Windows desktop frameworks. Tracker retains
 those desktop assemblies when publishing because plugins can use types that are
 absent from Tracker's own static references.
 
+### 6.2 User settings
+
+Settings uses the application sidebar for its own navigation, with an overview
+and pages for general preferences, appearance, tracking, deck editing, replay
+viewing, local folders, updates, and plugins. API reference and diagnostics remain available
+in the same navigation. Preference drafts are held by the parent
+settings route, so category changes preserve edits until Save or Discard.
+
+`ApplicationOptions` holds process startup configuration: arguments, environment,
+host endpoints, and installation paths. `ApplicationSettings` holds persisted user
+preferences; the native UI reads its startup snapshot directly.
+
+`SettingsService` persists application preferences and plugin configuration in
+`settings.json` below the user-data directory, using an atomic file replacement.
+Application and plugin settings share one settings document and atomic writer.
+Their sections are validated independently, so malformed plugin preferences do not
+reset tracking preferences or prevent valid application settings from being saved.
+Unreadable preferences keep the host usable, disable plugin loading, and block writes
+until the file is repaired. A shared client settings provider loads preferences before mounting the routed
+views and updates them after saving. Theme and sidebar visibility apply when saved;
+date ranges and editor layout defaults apply when their views are opened. Custom
+title bars, launch page, startup maximization, replay recording, trade history and
+outbound deck synchronization take effect after restart. Disabling replay recording preserves
+match results and initializes the SDK processors shared with plugins. Disabling
+outbound synchronization leaves queued deck changes in the database.
+
+`GET /api/settings/storage` reports the application-data, plugin-package, and
+plugin-data directories. `POST /api/settings/storage/{id}/open` opens one of these
+known folders in the host's file manager.
+
+`POST /api/settings/restart` launches the same executable and arguments. The new
+process waits for the previous process to exit before initializing the host.
+
 ### Application updates
 
 `UpdateService` reads the GitHub latest-release endpoint by default. The optional
@@ -687,7 +737,7 @@ installation after MTGO exits is persisted in the staged receipt. No Diver
 compatibility is inferred from package versions. Prior binaries are retained,
 but incompatible database migrations do not have automatic rollback.
 
-### 6.2 MTGO capability
+### 6.3 MTGO capability
 
 Plugins that need the session Tracker owns request `IMTGOContext` from the same
 `MTGOTracker.Plugins` package through dependency injection:

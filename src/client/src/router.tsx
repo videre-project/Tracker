@@ -8,9 +8,7 @@ import { type RouteObject, createBrowserRouter } from "react-router-dom";
 
 import {
   type LucideProps,
-  Bug,
   CalendarClock,
-  FileJson,
   Settings,
   LibraryBig,
   BookCopy,
@@ -20,15 +18,19 @@ import {
 } from "lucide-react";
 
 import Layout from "@/layout/LayoutContent";
+import { RouteErrorScreen } from "@/components/route-error-screen";
+import { settingsPages } from "@/lib/settings-pages";
 
 const Events = React.lazy(() => import('@/pages/events'))
 const EventDetails = React.lazy(() => import('@/pages/event-details'))
 const Home = React.lazy(() => import('@/pages/home'))
 const Metagame = React.lazy(() => import('@/pages/metagame-decks'))
-const PluginSettings = React.lazy(() => import('@/pages/plugin-settings'))
 const SettingsPage = React.lazy(() => import('@/pages/settings'))
 const ApiDocs = React.lazy(() => import('@/pages/api-docs'))
 const Diagnostics = React.lazy(() => import('@/pages/diagnostics'))
+const Development = import.meta.env.DEV
+  ? React.lazy(() => import('@/pages/development'))
+  : React.Fragment
 const Decks = React.lazy(() => import('@/pages/decks'))
 const DeckEditor = React.lazy(() => import('@/pages/deck-editor'))
 const Collection = React.lazy(() => import('@/pages/collection'))
@@ -37,7 +39,6 @@ const MatchDetails = React.lazy(() => import('@/pages/match-details'))
 const GameLog = React.lazy(() => import('@/pages/game-log'))
 const GameReplay = React.lazy(() => import('@/pages/game-replay'))
 const Trades = React.lazy(() => import('@/pages/trades'))
-
 export enum NavType {
   Primary,
   Secondary,
@@ -139,36 +140,53 @@ export const routes: RouteEntry[] = [
         element: <GameReplay />
       },
       {
-        path: "/settings/plugins",
-        name: "Plugins",
-        type: NavType.Secondary,
-        element: <PluginSettings />
-      },
-      {
-        path: "/settings/api-docs",
-        name: "API Docs",
-        icon: FileJson,
-        type: NavType.Secondary,
-        element: <ApiDocs />
-      },
-      {
-        path: "/settings/diagnostics",
-        name: "Diagnostics",
-        icon: Bug,
-        type: NavType.Secondary,
-        element: <Diagnostics />
-      },
-      {
         path: "/settings",
         name: "Settings",
         icon: Settings,
         type: NavType.Footer,
-        element: <SettingsPage />
+        children: [
+          { index: true, element: <SettingsPage /> },
+          ...settingsPages.slice(1).map(page => ({
+            path: page.path,
+            name: page.title,
+            element: <SettingsPage />,
+          })),
+          {
+            path: "/settings/api-docs",
+            name: "API reference",
+            element: <SettingsPage />,
+            children: [{ index: true, element: <ApiDocs /> }],
+          },
+          {
+            path: "/settings/diagnostics",
+            name: "Diagnostics",
+            element: <SettingsPage />,
+            children: [{ index: true, element: <Diagnostics /> }],
+          },
+          ...(import.meta.env.DEV ? [{
+            path: "/settings/development",
+            name: "Development",
+            element: <SettingsPage />,
+            children: [{ index: true, element: <Development /> }],
+          }] : []),
+        ],
       }
     ]
   }
 ];
 
-const router = createBrowserRouter(routes);
+function withErrorScreens(entries: RouteEntry[], standalone = false): RouteEntry[] {
+  return entries.map(entry => {
+    const errorElement = <RouteErrorScreen standalone={standalone} />;
+    if (entry.index) return { ...entry, errorElement };
+    return {
+      ...entry,
+      errorElement,
+      children: entry.children ? withErrorScreens(entry.children) : undefined,
+    };
+  });
+}
+
+const router = createBrowserRouter(withErrorScreens(routes, true));
 
 export default router;

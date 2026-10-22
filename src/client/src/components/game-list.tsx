@@ -1,573 +1,253 @@
 /** @file
-  Copyright (c) 2026, Cory Bennett. All rights reserved.
+  Copyright (c) 2026, The Videre Project Authors. All rights reserved.
   SPDX-License-Identifier: Apache-2.0
 **/
 
-import * as React from "react"
-import { useNavigate, useLocation } from "react-router-dom"
-import { Play, Pause, Clock, Square, Trophy, Target, Calendar } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
+import { Link } from "react-router-dom"
+import { Swords, Trophy, Target, Calendar } from "lucide-react"
+import { Badge, SidebarGroup, SidebarGroupLabel, useSidebar } from "@videreproject/ui"
+import type { PersonalActivityDTO } from "@/types/api"
 import { getApiUrl } from "@/utils/api-config"
-import {
-  type ActiveGame,
-  type EventType,
-  type GameStatus,
-  type TournamentState,
-} from "@/hooks/use-events"
-import { useEvents } from "@/hooks/events-context"
+import { MatchupDeckLabel } from "./matchup-deck-label"
 import { normalizeFormatName } from "@/utils/event-format"
+import { ActionLabel } from "./action-label"
+import { activityClockProgress } from "@/utils/activity-clock"
 
-import {
-  SidebarContent,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  useSidebar,
-} from "@videreproject/ui"
+const viewActionClassName = "inline-flex shrink-0 items-center gap-1 rounded text-xs leading-4 text-foreground outline-none transition-colors hover:text-primary focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
+const viewAction = <ActionLabel>View</ActionLabel>
 
-// Hook to calculate live countdown from a target time
-function useCountdown(targetTime?: string) {
-  const [timeLeft, setTimeLeft] = React.useState<string | null>(null)
+function ActivityProgress({ item }: { item: PersonalActivityDTO }) {
+  const league = item.kind === "league"
+  const total = (item.totalRounds ?? 0) + (item.totalRounds && !league && item.hasPlayoffs ? 3 : 0)
+  const wins = Math.max(0, item.wins ?? 0)
+  const losses = Math.max(0, item.losses ?? 0)
+  const completed = Math.min(total, league ? wins + losses : item.completedRounds ?? 0)
+  const current = item.status === "active" && completed < total && (league ? !!item.match : !!item.roundInProgress)
+  const clock = league ? item.match?.clock : item.roundClock
+  const [now, setNow] = useState(Date.now)
+  const running = current && !!clock?.running
+  useEffect(() => {
+    if (!running) return
+    const timer = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [running])
+  if (total <= 0) return null
+  const fraction = current ? activityClockProgress(clock, now) : null
+  const filledTicks = Math.floor((fraction ?? 0) * 10)
+  const unit = league ? "matches" : "rounds"
+  const description = `${completed} of ${total} ${unit} completed${league ? `; ${wins} ${wins === 1 ? "win" : "wins"}, ${losses} ${losses === 1 ? "loss" : "losses"}` : ""}${current ? `; ${league ? "match" : "round"} in progress` : ""}${fraction != null ? `; ${Math.round(fraction * 100)}% of clock used` : ""}`
+  return <div className="pointer-events-none absolute -inset-px overflow-hidden rounded-[inherit]">
+    <div role="progressbar" aria-label={`${item.name} progress`}
+      aria-valuemin={0} aria-valuemax={total} aria-valuenow={completed + (fraction ?? 0)} aria-valuetext={description}
+      className="absolute inset-x-0 bottom-0 grid h-1 gap-px"
+      style={{ gridTemplateColumns: `repeat(${total}, minmax(0, 1fr))` }}>
+      {Array.from({ length: total }, (_, index) => current && index === completed
+        ? <span key={index} data-activity-clock-fill aria-hidden="true" className="grid min-w-0 grid-cols-10 gap-px">
+          {Array.from({ length: 10 }, (_, tick) => <span key={tick}
+            className={tick < filledTicks ? "bg-foreground/90" : "bg-foreground/15"} />)}
+        </span>
+        : <span key={index} className={
+          league && index < wins ? "bg-emerald-500"
+            : league && index < completed ? "bg-rose-500"
+            : index < completed ? "bg-foreground/60"
+            : "bg-sidebar-accent/70"
+        } />)}
+    </div>
+  </div>
+}
 
-  React.useEffect(() => {
-    if (!targetTime) {
-      setTimeLeft(null)
-      return
+function ActivityTiming({ item, showDuration = false, separator = false }: {
+  item: PersonalActivityDTO; showDuration?: boolean; separator?: boolean
+}) {
+  const [now, setNow] = useState(Date.now)
+  useEffect(() => {
+    if (!item.roundEndTime) return
+    const timer = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [item.roundEndTime])
+  const end = item.roundEndTime ? new Date(item.roundEndTime).getTime() : NaN
+  const remaining = Math.ceil((end - now) / 1000)
+  if (remaining > 0) return <>
+    {separator && <span aria-hidden="true" className="mx-1 text-sidebar-foreground/50">•</span>}
+    <span className="tabular-nums">{Math.floor(remaining / 60)}m {remaining % 60}s left</span>
+  </>
+  if (item.status === "registered" && item.startTime) {
+    const date = new Date(item.startTime)
+    if (!Number.isNaN(date.getTime())) {
+      const today = new Date(now)
+      const tomorrow = new Date(today)
+      tomorrow.setDate(tomorrow.getDate() + 1)
+      const time = date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
+      const label = date.toDateString() === today.toDateString() ? `Starts at ${time}`
+        : date.toDateString() === tomorrow.toDateString() ? `Tomorrow at ${time}`
+        : `${date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })} at ${time}`
+      const minutes = item.endTime ? Math.floor((new Date(item.endTime).getTime() - date.getTime()) / 60000) : 0
+      const duration = minutes > 0 ? `${Math.floor(minutes / 60) ? `${Math.floor(minutes / 60)}h` : ""}${minutes % 60 ? ` ${minutes % 60}m` : ""}`.trim() : null
+      return <>
+        <time dateTime={item.startTime}>{label}</time>
+        {showDuration && duration && <><span aria-hidden="true" className="mx-1 text-sidebar-foreground/50">•</span><span className="text-sidebar-foreground/60">{duration}</span></>}
+      </>
     }
-
-    const calculateTimeLeft = (): string | null => {
-      const now = Date.now()
-      const end = new Date(targetTime).getTime()
-      const ms = Math.max(0, end - now)
-
-      if (ms === 0) {
-        return null
-      }
-
-      const totalSeconds = Math.floor(ms / 1000)
-      const hours = Math.floor(totalSeconds / 3600)
-      const minutes = Math.floor((totalSeconds % 3600) / 60)
-      const seconds = totalSeconds % 60
-
-      if (hours > 0) {
-        return `${hours}h ${minutes}m ${seconds}s`
-      } else if (minutes > 0) {
-        return `${minutes}m ${seconds}s`
-      } else {
-        return `${seconds}s`
-      }
-    }
-
-    // Initial calculation
-    setTimeLeft(calculateTimeLeft())
-
-    // Update every second
-    const interval = setInterval(() => {
-      setTimeLeft(calculateTimeLeft())
-    }, 1000)
-
-    return () => clearInterval(interval)
-  }, [targetTime])
-
-  return timeLeft
-}
-
-// Get a concise state label for different tournament states
-function getStateLabel(state?: TournamentState): string | null {
-  switch (state) {
-    case "Drafting":
-      return "Drafting"
-    case "Deckbuilding":
-    case "DeckbuildingDeckSubmitted":
-      return "Deckbuilding"
-    case "WaitingForFirstRoundToStart":
-    case "BetweenRounds":
-      return "Starting new round"
-    case "RoundInProgress":
-      return "Round in progress"
-    case "WaitingToStart":
-      return "Waiting to start"
-    default:
-      return null
-  }
-}
-
-function hasRoundCountdown(state?: TournamentState): boolean {
-  return state === "RoundInProgress" ||
-    state === "BetweenRounds" ||
-    state === "WaitingForFirstRoundToStart" ||
-    state === "Deckbuilding" ||
-    state === "DeckbuildingDeckSubmitted"
-}
-
-const getStatusConfig = (status: GameStatus) => {
-  switch (status) {
-    case "active":
-      return {
-        icon: Play,
-        badgeClass: "text-green-400 bg-green-900/50",
-      }
-    case "paused":
-      return {
-        icon: Pause,
-        badgeClass: "text-yellow-400 bg-yellow-900/50",
-      }
-    case "scheduled":
-      return {
-        icon: Clock,
-        badgeClass: "text-blue-400 bg-blue-900/50",
-      }
-    case "completed":
-      return {
-        icon: Square,
-        badgeClass: "text-red-400 bg-red-900/50",
-      }
-  }
-}
-
-const getEventTypeIcon = (type: EventType) => {
-  switch (type) {
-    case "league":
-      return Target
-    case "swiss":
-      return Trophy
-    case "elimination":
-      return Trophy
-    case "draft":
-      return Calendar
-    case "unknown":
-      return Calendar
-  }
-}
-
-const getRecordDisplay = (game: ActiveGame) => {
-  if (game.wins !== undefined && game.losses !== undefined) {
-    if (game.status === "completed") {
-      return game.wins === 0 ? `${game.wins}-${game.losses} Drop` : `${game.wins}-${game.losses}`
-    }
-    return `${game.wins}-${game.losses}`
   }
   return null
 }
 
-const getProgressDisplay = (game: ActiveGame, isUpcoming = false) => {
-  // Always check for totalSwissRounds or totalRounds for all event types
-  const rounds = game.totalSwissRounds || game.totalRounds;
-  // Try to get eventStructure from the game object (if present)
-  const hasPlayoffs = game.eventStructure && typeof game.eventStructure === 'object' && game.eventStructure.hasPlayoffs;
-  const eventStructureName = game.eventStructure && typeof game.eventStructure === 'object' ? game.eventStructure.name : null;
-
-  if (rounds && rounds > 0) {
-    if (isUpcoming) {
-      if (hasPlayoffs) {
-        return <>{rounds} rounds <span style={{ fontSize: 'var(--caption-font-size)' }} className="text-sidebar-foreground/50 align-baseline">(with top 8)</span></>;
-      } else {
-        return `${rounds} rounds`;
-      }
-    } else if (game.status === "active") {
-      // For active events, show round info and playoffs badge
-      const roundInfo = game.roundNumber ? `Round ${game.roundNumber}/${rounds}` : null;
-      const playoffs = game.inPlayoffs ? <span className="ml-1 px-2 py-0.5 rounded-full bg-purple-900/40 text-purple-300 text-xs font-semibold">Top 8</span> : null;
-
-      return <>
-        {roundInfo && <span>{roundInfo}</span>}
-        {playoffs}
-      </>;
-    } else if (game.roundNumber) {
-      if (hasPlayoffs) {
-        return <>
-          Round {game.roundNumber}/{rounds} <span style={{ fontSize: 'var(--caption-font-size)' }} className="text-sidebar-foreground/50 align-baseline">(with top 8)</span>
-        </>;
-      } else {
-        return `Round ${game.roundNumber}/${rounds}`;
-      }
-    }
-  }
-
-  // If rounds is 0 but we have eventStructure info for upcoming events
-  if (isUpcoming && eventStructureName) {
-    // Show the event structure name (e.g., "Premier (with top 8)")
-    return eventStructureName;
-  }
-
-  // For leagues
-  if (game.type === "league" && game.totalRounds) {
-    if (isUpcoming) {
-      return `${game.totalRounds} matches`;
-    } else if (game.wins !== undefined && game.losses !== undefined) {
-      const played = game.wins + game.losses;
-      return `${played}/${game.totalRounds} matches`;
-    }
-  }
-  // For draft pod info
-  if (game.type === "draft" && game.pod) {
-    return game.pod;
-  }
-  return null;
+function ActivityDeck({ item }: { item: PersonalActivityDTO }) {
+  if (!item.deck && !item.deckName) return null
+  return <div role="group" aria-label="Registered deck" className="-mx-2 my-2 min-w-0 rounded-md bg-black/5 p-2 dark:bg-black/20">
+    <MatchupDeckLabel deck={item.deck ?? { name: item.deckName ?? undefined }} />
+  </div>
 }
 
-// Component to display active game timing with live countdown
-function ActiveGameTiming({ game }: { game: ActiveGame }) {
-  const countdown = useCountdown(hasRoundCountdown(game.state) ? game.roundEndTime : undefined)
-  const stateLabel = getStateLabel(game.state)
-  const hasRegistrationShortfall =
-    game.state === "WaitingToStart" &&
-    (game.minimumPlayers ?? 0) > 0 &&
-    (game.totalPlayers ?? 0) < (game.minimumPlayers ?? 0)
-  const registrationText = hasRegistrationShortfall
-    ? `${game.totalPlayers ?? 0} of ${game.minimumPlayers} players`
+function ActivityFooter({ item, href, opening, onOpen }: {
+  item: PersonalActivityDTO; href: string | null; opening: boolean; onOpen: () => void
+}) {
+  const match = item.match
+  const matchActionLabel = match?.status === "Sideboarding" ? match.status
+    : match?.gameNumber != null ? `Game ${match.gameNumber}` : "View match"
+  const actionLabel = `View ${item.name}${match && (item.kind === "league" || item.kind === "match") ? " match" : ""}`
+  const action = href
+    ? <Link to={href} aria-label={actionLabel} className={viewActionClassName}>{viewAction}</Link>
+    : <button type="button" onClick={onOpen} disabled={opening} aria-label={`View ${item.name} in MTGO`} className={viewActionClassName}>{viewAction}</button>
+  if (match) return <Link to={`/history/${match.id}`} aria-label={`Open match against ${match.opponent ?? "unknown opponent"}, ${matchActionLabel}`}
+    className="group/match-action flex min-w-0 items-center justify-between gap-3 rounded text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring">
+    <span className="truncate text-sidebar-foreground/70 group-hover/match-action:text-sidebar-accent-foreground">
+      {match.opponent ? `vs ${match.opponent}` : "Current match"}
+    </span>
+    <span className="shrink-0 text-foreground transition-colors group-hover/match-action:text-primary">
+      <ActionLabel>{matchActionLabel}</ActionLabel>
+    </span>
+  </Link>
+  return <div className="flex items-center justify-between gap-2 text-xs">
+    <div className="flex min-w-0 items-center text-sidebar-foreground/80">
+      {item.status === "registered" && item.startTime
+        ? <span className="truncate"><ActivityTiming item={item} showDuration /></span>
+        : <>
+          <span className="truncate">{item.stateLabel !== "Registered" ? item.stateLabel : null}</span>
+          <span className="shrink-0 text-sidebar-foreground/60 empty:hidden"><ActivityTiming item={item} separator /></span>
+        </>}
+    </div>
+    {action}
+  </div>
+}
+
+function RegularEventCard({ item, opening, error, onOpen }: {
+  item: PersonalActivityDTO
+  opening: boolean
+  error: string | null
+  onOpen: () => void
+}) {
+  const href = item.kind === "tournament"
+    ? `/events/${item.eventId}`
     : null
+  const Icon = item.isDraft ? Calendar : Trophy
+  const progress = item.status === "active" && item.roundNumber
+    ? `Round ${item.roundNumber}${item.totalRounds ? `/${item.totalRounds}` : ""}`
+    : item.totalRounds ? `${item.totalRounds} rounds` : null
+  return <article aria-label={item.name ?? undefined} data-activity-id={item.id}
+    className="relative min-w-0 shrink-0 rounded-md border border-sidebar-border/60 bg-sidebar-accent/20 p-3 transition-colors hover:bg-sidebar-accent/40 focus-within:bg-sidebar-accent/40">
+    <div className="mb-1">
+      <div className="mb-1 flex items-center gap-1.5">
+        <Icon className="h-3 w-3 shrink-0 text-sidebar-foreground/60" />
+        <h3 className="min-w-0 truncate text-sm font-semibold text-sidebar-foreground">
+          {href ? <Link to={href} className="block truncate rounded outline-none hover:text-sidebar-accent-foreground focus-visible:ring-1 focus-visible:ring-ring">{item.name}</Link>
+            : <button type="button" onClick={onOpen} disabled={opening} className="block w-full truncate rounded text-left outline-none hover:text-sidebar-accent-foreground focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50">{item.name}</button>}
+        </h3>
+      </div>
+      <p className="text-xs text-sidebar-foreground/70">
+        {normalizeFormatName(item.format)}
+        {progress && <><span aria-hidden="true" className="mx-1 text-sidebar-foreground/50">•</span><span>{progress}</span></>}
+        {(item.inPlayoffs || item.status === "registered" && item.hasPlayoffs) && <span className="text-sidebar-foreground/50" style={{ fontSize: "var(--caption-font-size)" }}> {item.inPlayoffs ? "(in top 8)" : "(with top 8)"}</span>}
+      </p>
+    </div>
+    <ActivityDeck item={item} />
+    <ActivityFooter item={item} href={href} opening={opening} onOpen={onOpen} />
+    {error && <p role="alert" className="mt-2 text-xs text-destructive">{error}</p>}
+    <ActivityProgress item={item} />
+  </article>
+}
 
-  if (!stateLabel && !countdown && !registrationText) {
-    return null
+function ActivityCard({ item }: { item: PersonalActivityDTO }) {
+  const [opening, setOpening] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const Icon = item.kind === "match" ? Swords : item.kind === "league" ? Target : item.kind === "tournament" ? Trophy : Calendar
+  const regularEvent = item.kind === "tournament" || item.kind === "queue"
+  const href = item.kind === "tournament" ? `/events/${item.eventId}`
+    : item.kind === "match" && item.match ? `/history/${item.match.id}` : null
+  const viewHref = item.match ? `/history/${item.match.id}` : href
+  async function openInMTGO() {
+    setOpening(true)
+    setError(null)
+    try {
+      const response = await fetch(getApiUrl(`/api/events/openevent/${item.eventId}`), { method: "POST" })
+      if (!response.ok) throw new Error("Could not open this event in MTGO.")
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not open this event in MTGO.")
+    } finally { setOpening(false) }
   }
-
-  return (
-    <>
-      {stateLabel && <span>{stateLabel}</span>}
-      {stateLabel && (countdown || registrationText) && <span className="text-sidebar-foreground/50 mx-1">•</span>}
-      {countdown && <span className="text-sidebar-foreground/60">{countdown} left</span>}
-      {countdown && registrationText && <span className="text-sidebar-foreground/50 mx-1">•</span>}
-      {registrationText && <span className="text-sidebar-foreground/60">{registrationText}</span>}
-    </>
-  )
+  if (regularEvent) return <RegularEventCard item={item} opening={opening} error={error} onOpen={openInMTGO} />
+  return <article aria-label={item.name ?? undefined} data-activity-id={item.id}
+    className="relative min-w-0 shrink-0 rounded-md border border-sidebar-border/60 bg-sidebar-accent/20 px-3 py-3 text-xs transition-colors hover:bg-sidebar-accent/40 focus-within:bg-sidebar-accent/40">
+    <div className="mb-1 flex items-start justify-between gap-2">
+      <div className="min-w-0 flex-1">
+        <div className="mb-1 flex min-w-0 items-center gap-1.5">
+          <Icon className="h-3 w-3 shrink-0 text-sidebar-foreground/60" />
+          <h3 className="min-w-0 truncate text-sm font-semibold text-sidebar-foreground">
+            {href ? <Link to={href} className="block truncate rounded outline-none transition-colors hover:text-sidebar-accent-foreground focus-visible:ring-1 focus-visible:ring-ring">{item.name}</Link>
+              : <button type="button" onClick={openInMTGO} disabled={opening} aria-label={`Open ${item.name} in MTGO`}
+                  className="block w-full truncate rounded text-left outline-none transition-colors hover:text-sidebar-accent-foreground focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50">
+                  {item.name}
+                </button>}
+          </h3>
+        </div>
+      </div>
+      {item.wins != null && item.losses != null && <Badge variant="secondary" className="shrink-0 rounded-md tabular-nums">{item.wins}–{item.losses}</Badge>}
+    </div>
+    <ActivityDeck item={item} />
+    <ActivityFooter item={item} href={viewHref} opening={opening} onOpen={openInMTGO} />
+    {error && <p role="alert" className="mt-2 text-destructive">{error}</p>}
+    <ActivityProgress item={item} />
+  </article>
 }
 
-interface GameListProps {
+export function ActivityList({ label, items, loading, error, connected, emptyMessage }: {
   label: string
-  games: ActiveGame[]
-  className?: string
-}
-
-export function GameList({ label, games, className, placeholder, isUpcoming }: GameListProps & { placeholder?: React.ReactNode, isUpcoming?: boolean }) {
+  items: PersonalActivityDTO[]
+  loading: boolean
+  error: string | null
+  connected: boolean
+  emptyMessage: string
+}) {
   const { state } = useSidebar()
-  const navigate = useNavigate()
-  const location = useLocation()
-  const { hoveredEventId, setHoveredEventId, setSelectedEventId } = useEvents()
-  const isCollapsed = state === "collapsed"
-  const [showGradient, setShowGradient] = React.useState(true)
-  const scrollContainerRef = React.useRef<HTMLDivElement>(null)
-
-  // Hijack scroll wheel and keyboard to snap to next/previous card, with a deadzone
-  React.useEffect(() => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-
-    // Helper: get all card elements
-    const getCards = () => Array.from(container.querySelectorAll('[data-gamelist-card]')) as HTMLElement[];
-
-    // Helper: find the index of the topmost visible card
-    const getTopCardIndex = () => {
-      const cards = getCards();
-      const scrollTop = container.scrollTop;
-      for (let i = 0; i < cards.length; i++) {
-        if (cards[i].offsetTop + cards[i].offsetHeight/2 > scrollTop) {
-          return i;
-        }
-      }
-      return cards.length - 1;
-    };
-
-    // Deadzone logic: accumulate wheel delta, only trigger snap on threshold
-    let wheelDeltaAccum = 0;
-    const DEADZONE = 5; // px
-
-    const snapToCard = (idx: number) => {
-      const cards = getCards();
-      if (cards.length === 0) return;
-      idx = Math.max(0, Math.min(idx, cards.length - 1));
-      const target = cards[idx];
-      if (target) {
-        container.scrollTo({ top: target.offsetTop, behavior: 'smooth' });
-      }
-    };
-
-    const onWheel = (e: WheelEvent) => {
-      // Only vertical scroll
-      if (Math.abs(e.deltaY) < Math.abs(e.deltaX)) return;
-      wheelDeltaAccum += e.deltaY;
-      // Not enough scroll yet
-      if (Math.abs(wheelDeltaAccum) < DEADZONE) return;
-      e.preventDefault();
-      const cards = getCards();
-      if (cards.length === 0) return;
-      let idx = getTopCardIndex();
-      if (wheelDeltaAccum > 0) {
-        // Scroll down
-        idx = Math.min(idx + 1, cards.length - 1);
-      } else if (wheelDeltaAccum < 0) {
-        // Scroll up
-        idx = Math.max(idx - 1, 0);
-      }
-      snapToCard(idx);
-      // Reset after snapping
-      wheelDeltaAccum = 0;
-    };
-
-    // Keyboard navigation
-    const onKeyDown = (e: KeyboardEvent) => {
-      // Only handle if container is focused or contains the active element
-      if (document.activeElement !== container && !container.contains(document.activeElement)) return;
-      const cards = getCards();
-      if (cards.length === 0) return;
-      let idx = getTopCardIndex();
-      let handled = false;
-      switch (e.key) {
-        case 'ArrowDown':
-          idx = Math.min(idx + 1, cards.length - 1);
-          handled = true;
-          break;
-        case 'ArrowUp':
-          idx = Math.max(idx - 1, 0);
-          handled = true;
-          break;
-        case 'PageDown':
-          idx = Math.min(idx + 3, cards.length - 1);
-          handled = true;
-          break;
-        case 'PageUp':
-          idx = Math.max(idx - 3, 0);
-          handled = true;
-          break;
-        case 'Home':
-          idx = 0;
-          handled = true;
-          break;
-        case 'End':
-          idx = cards.length - 1;
-          handled = true;
-          break;
-      }
-      if (handled) {
-        e.preventDefault();
-        snapToCard(idx);
-      }
-    };
-
-    container.addEventListener('wheel', onWheel, { passive: false });
-    window.addEventListener('keydown', onKeyDown, true);
-    return () => {
-      container.removeEventListener('wheel', onWheel);
-      window.removeEventListener('keydown', onKeyDown, true);
-    };
-  }, []);
-
-  const handleScroll = React.useCallback(() => {
-    if (!scrollContainerRef.current) return;
-    const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
-    const isAtBottom = scrollTop + clientHeight >= scrollHeight - 1;
-    setShowGradient(!isAtBottom);
-  }, []);
-
-  React.useEffect(() => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-    container.addEventListener('scroll', handleScroll);
-    handleScroll();
-    return () => container.removeEventListener('scroll', handleScroll);
-  }, [handleScroll]);
-
-  if (isCollapsed) return null;
-
-  return (
-    <SidebarGroup className={`flex-1 min-h-0 pr-0 pb-0 ${className || ''}`} style={{ contain: 'layout' }}>
-      <SidebarGroupLabel
-        className="group-data-[collapsible=icon]:hidden flex-shrink-0"
-        style={{ width: 'calc(var(--sidebar-width, 236px) - 20px + 1px)' }}
-      >
-        {label}
-      </SidebarGroupLabel>
-      <SidebarContent className="flex flex-col relative" style={{ contain: 'layout' }}>
-        <SidebarGroup className="flex-1 min-h-0 -p-2 overflow-hidden" style={{ contain: 'layout' }}>
-          <SidebarGroupContent
-            ref={scrollContainerRef}
-            className="space-y-2 overflow-y-auto overflow-x-hidden flex-1 min-h-0 pb-2 group-data-[collapsible=icon]:hidden"
-            style={{ height: '100%', contain: 'layout' }}
-          >
-            {games.length === 0 ? (
-              placeholder || (
-                <div
-                  className="bg-sidebar-accent/10 p-4 rounded-md border border-sidebar-border/40 text-center text-xs text-sidebar-foreground/60 flex-shrink-0"
-                  style={{ width: 'calc(var(--sidebar-width, 236px) - 20px + 1px)' }}
-                >
-                  No events to display.
-                </div>
-              )
-            ) : (
-              games.map((game) => {
-                const statusConfig = getStatusConfig(game.status)
-                const EventTypeIcon = getEventTypeIcon(game.type)
-                const record = getRecordDisplay(game)
-                const progress = getProgressDisplay(game, isUpcoming)
-                const format = normalizeFormatName(game.format)
-                const hasRoundDisplay =
-                  (game.roundNumber ?? 0) > 0 &&
-                  (game.totalRounds ?? 0) > 0
-
-                return (
-                  <div
-                    key={game.id}
-                    data-gamelist-card
-                    className={`bg-sidebar-accent/20 pl-3 pr-3 py-3 rounded-md border border-sidebar-border/60 hover:bg-sidebar-accent/40 transition-colors flex-shrink-0 ${hoveredEventId === game.id ? 'bg-sidebar-accent/40' : ''}`}
-                    style={{ width: 'calc(var(--sidebar-width, 236px) - 20px + 1px)' }}
-                    onMouseEnter={() => setHoveredEventId(game.id)}
-                    onMouseLeave={() => setHoveredEventId(null)}
-                  >
-                    <div className="flex justify-between items-start mb-1">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5 mb-1">
-                          <EventTypeIcon className="w-3 h-3 text-sidebar-foreground/60 shrink-0" />
-                          <h3 className="font-semibold text-sm text-sidebar-foreground truncate">
-                            <button
-                              onClick={() => {
-                                fetch(getApiUrl(`/api/events/openevent/${game.id}`), { method: 'POST' })
-                                  .catch(err => console.error('Failed to open event:', err));
-                              }}
-                              className="hover:text-sidebar-accent-foreground transition-colors cursor-pointer text-left w-full truncate"
-                            >
-                              {game.name}
-                            </button>
-                          </h3>
-                        </div>
-                        <p className="text-xs text-sidebar-foreground/70">
-                          {/* For active events, show 'Format • Round X/Y' */}
-                          {game.status === "active" ? (
-                            <>
-                              {format}
-                              {hasRoundDisplay && (
-                                <>
-                                  <span className="text-sidebar-foreground/50 mx-1">•</span>
-                                  <span>{`Round ${game.roundNumber}/${game.totalRounds}`}</span>
-                                </>
-                              )}
-                              {game.inPlayoffs && (
-                                <span style={{ fontSize: 'var(--caption-font-size)' }} className="text-sidebar-foreground/50 align-baseline"> (in top 8)</span>
-                              )}
-                            </>
-                          ) : (
-                            <>
-                              {format}
-                              {isUpcoming && progress && (
-                                <>
-                                  <span className="text-sidebar-foreground/50 mx-1">•</span>
-                                  <span>{progress}</span>
-                                </>
-                              )}
-                            </>
-                          )}
-                          {game.deck && (
-                            <>
-                              <span className="text-sidebar-foreground/50 mx-1">•</span>
-                              <span className="italic">{game.deck}</span>
-                            </>
-                          )}
-                        </p>
-                      </div>
-
-                      {record && (
-                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 ml-2 ${statusConfig.badgeClass}`}>
-                          {record}
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="flex items-center justify-between text-xs">
-                      <div className="flex items-center text-sidebar-foreground/80">
-                        {game.status === "scheduled" && game.startTime ? (
-                          <>
-                            <span>
-                              {"_rawStartTime" in game && game._rawStartTime ? (() => {
-                                const start = new Date(String(game._rawStartTime));
-                                if (isNaN(start.getTime())) return `Starts ${game.startTime}`;
-                                const now = new Date();
-                                const isToday = start.toDateString() === now.toDateString();
-                                const isTomorrow = new Date(now.getTime() + 86400000).toDateString() === start.toDateString();
-
-                                if (isToday) {
-                                  return `Starts at ${game.startTime}`;
-                                } else if (isTomorrow) {
-                                  return `Tomorrow at ${game.startTime}`;
-                                } else {
-                                  // Show day, date and time (e.g., "Mon, Dec 8 at 2:00 PM")
-                                  const dayStr = start.toLocaleDateString([], { weekday: 'short' });
-                                  const dateStr = start.toLocaleDateString([], { month: 'short', day: 'numeric' });
-                                  return `${dayStr}, ${dateStr} at ${game.startTime}`;
-                                }
-                              })() : `Starts ${game.startTime}`}
-                            </span>
-                            {"_rawStartTime" in game && "_rawEndTime" in game && game._rawStartTime && game._rawEndTime && (
-                              <>
-                                <span className="text-sidebar-foreground/50 mx-1">•</span>
-                                <span className="text-sidebar-foreground/60">
-                                  {(() => {
-                                    const start = new Date(String(game._rawStartTime));
-                                    const end = new Date(String(game._rawEndTime));
-                                    if (isNaN(start.getTime()) || isNaN(end.getTime())) return null;
-                                    const ms = end.getTime() - start.getTime();
-                                    if (ms < 0) return null;
-                                    const min = Math.floor(ms / 60000);
-                                    const hr = Math.floor(min / 60);
-                                    const remMin = min % 60;
-                                    return hr > 0 ? `${hr}h${remMin > 0 ? ` ${remMin}m` : ''}` : `${remMin}m`;
-                                  })()}
-                                </span>
-                              </>
-                            )}
-                          </>
-                        ) : game.status === "active" ? (
-                          <ActiveGameTiming game={game} />
-                        ) : progress ? (
-                          <span>{progress}</span>
-                        ) : (
-                          <span className="capitalize">{game.status}</span>
-                        )}
-                      </div>
-
-                      <button
-                        onClick={() => {
-                          setSelectedEventId(game.id)
-                          if (location.pathname !== "/events") {
-                            navigate("/events")
-                          }
-                        }}
-                        className="text-blue-400 hover:underline shrink-0 cursor-pointer"
-                      >
-                        View
-                      </button>
-                    </div>
-                  </div>
-                )
-              })
-            )}
-          </SidebarGroupContent>
-        </SidebarGroup>
-        {/* Gradient fade at bottom to indicate scrollable content - exclude scrollbar area */}
-        {showGradient && (
-          <div className="absolute bottom-0 left-0 right-2 h-8 pointer-events-none z-10"
-               style={{
-                 background: 'linear-gradient(to top, hsl(var(--sidebar-background)), transparent)'
-               }} />
-        )}
-      </SidebarContent>
-    </SidebarGroup>
-  )
-}
-
-export function ActiveGames({ className, otherListEmpty, games }: { className?: string, otherListEmpty?: boolean, games: ActiveGame[] }) {
-  // If the other list is empty, allocate more space
-  const flexGrow = games.length === 0 && !otherListEmpty ? 'flex-1' : games.length > 0 && otherListEmpty ? 'flex-[2]' : 'flex-1';
-  return <GameList label={`Active Events – ${games.length}`}
-                   games={games}
-                   className={`${className || ''} ${flexGrow}`.trim()}
-                   placeholder={<div className="bg-sidebar-accent/10 p-4 rounded-md border border-sidebar-border/40 text-center text-xs text-sidebar-foreground/60 w-[245px] flex-shrink-0">No active events.</div>}
-                   isUpcoming={false} />;
-}
-
-export function UpcomingGames({ className, otherListEmpty, games }: { className?: string, otherListEmpty?: boolean, games: ActiveGame[] }) {
-  // If the other list is empty, allocate more space
-  const flexGrow = games.length === 0 && !otherListEmpty ? 'flex-1' : games.length > 0 && otherListEmpty ? 'flex-[2]' : 'flex-1';
-  return <GameList label={`Upcoming Events – ${games.length}`}
-                   games={games}
-                   className={`${className || ''} ${flexGrow}`.trim()}
-                   placeholder={<div className="bg-sidebar-accent/10 p-4 rounded-md border border-sidebar-border/40 text-center text-xs text-sidebar-foreground/60 w-[245px] flex-shrink-0">No upcoming events.</div>}
-                   isUpcoming={true} />;
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const [faded, setFaded] = useState(false)
+  useEffect(() => {
+    const element = scrollRef.current
+    if (!element) return
+    const update = () => setFaded(element.scrollHeight - element.scrollTop - element.clientHeight > 2)
+    const observer = new ResizeObserver(update)
+    observer.observe(element)
+    if (element.firstElementChild) observer.observe(element.firstElementChild)
+    element.addEventListener("scroll", update, { passive: true })
+    update()
+    return () => { observer.disconnect(); element.removeEventListener("scroll", update) }
+  }, [items, state])
+  if (state === "collapsed") return null
+  return <SidebarGroup className={`min-h-0 ${items.length ? "basis-0" : "shrink-0"}`}
+    style={items.length ? { flexGrow: items.length } : undefined}>
+    <SidebarGroupLabel className="shrink-0">{label} Events – {items.length}</SidebarGroupLabel>
+    <div className="relative min-h-0 flex-1">
+      <div ref={scrollRef} className="h-full overflow-x-hidden overflow-y-auto overscroll-contain pr-1">
+        <div role="list" aria-label={label} className="space-y-2 pb-2"
+          style={{ width: "calc(var(--sidebar-width, 236px) - 20px + 1px)" }}>
+          {items.map(item => <div role="listitem" key={item.id}><ActivityCard item={item} /></div>)}
+          {!items.length && <p role={error ? "status" : undefined} className="shrink-0 rounded-md border border-sidebar-border/40 bg-sidebar-accent/10 p-4 text-center text-xs text-sidebar-foreground/60">
+            {loading ? "Loading your activity…" : !connected ? "Connect MTGO to view your activity." : error ?? emptyMessage}
+          </p>}
+        </div>
+      </div>
+      {faded && <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-sidebar to-transparent" />}
+    </div>
+  </SidebarGroup>
 }
