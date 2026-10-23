@@ -37,14 +37,15 @@ function Probe() {
 describe('event update and navigation workflow', () => {
   it('events provider promotes a streamed tournament and preserves the selected event', async () => {
     streams.length = 0
-    render(
+    const { unmount } = render(
       <EventsProvider>
         <Probe />
       </EventsProvider>,
     )
 
-    expect(streams.length).toBeGreaterThanOrEqual(3)
-    act(() => streams[0]?.onMessage?.({
+    const eventStream = streams.find(stream => stream.url === '/api/Events/GetEventsList?stream=true')
+    expect(eventStream?.onMessage).toBeDefined()
+    const tournament = {
       id: 42,
       description: 'Fixture Pauper Event',
       format: 'Pauper',
@@ -52,11 +53,17 @@ describe('event update and navigation workflow', () => {
       totalRounds: 3,
       startTime: '2026-01-01T00:00:00Z',
       endTime: '2026-01-01T01:00:00Z',
-    }))
+    }
+    act(() => eventStream?.onMessage?.(tournament))
 
     await waitFor(() => expect(screen.getByTestId('events'))
       .toHaveTextContent('Fixture Pauper Event'))
     act(() => screen.getByRole('button', { name: 'select' }).click())
     expect(screen.getByTestId('selected')).toHaveTextContent('42')
+
+    act(() => eventStream?.onMessage?.([{ ...tournament, description: 'Updated Pauper Event', state: 'BetweenRounds' }]))
+    await waitFor(() => expect(screen.getByTestId('events')).toHaveTextContent('Updated Pauper Event'))
+    expect(screen.getByTestId('selected')).toHaveTextContent('42')
+    unmount()
   })
 })

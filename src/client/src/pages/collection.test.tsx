@@ -28,6 +28,7 @@ function TestCardFilterPanel() {
   return <div data-testid="card-filter-panel" />
 }
 
+// Exercise page data and callbacks here; shared layout and native-window behavior require browser checks.
 vi.mock('@videreproject/ui', async () => {
   return {
     CollectionLayout: TestCollectionLayout,
@@ -58,12 +59,12 @@ vi.mock('@/hooks/use-collection-selection', () => ({
 
 import Collection from './collection'
 
-describe('Collection page', () => {
+describe('Collection page wiring', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn())
   })
 
-  it('collection page search posts the query and hides cards outside the result set', async () => {
+  it('posts the search query and passes only matching cards to the layout', async () => {
     vi.mocked(fetch).mockResolvedValue(new Response(
       JSON.stringify({ catalogIds: [] }),
       { status: 200, headers: { 'content-type': 'application/json' } },
@@ -84,8 +85,8 @@ describe('Collection page', () => {
       }),
     ), { timeout: 1000 })
     await waitFor(() => {
-      expect(screen.getByTestId('collection-cards')).toHaveTextContent('')
+      expect(screen.getByTestId('collection-cards')).toBeEmptyDOMElement()
     })
-    expect(screen.getByTestId('collection-error')).toHaveTextContent('')
+    expect(screen.getByTestId('collection-error')).toBeEmptyDOMElement()
   })
 })

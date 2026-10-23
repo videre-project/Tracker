@@ -23,6 +23,7 @@ function TestHistoryLayout(props: HistoryLayoutProps) {
   )
 }
 
+// Exercise page data and callbacks here; shared layout and native-window behavior require browser checks.
 vi.mock('@videreproject/ui', async () => {
   return {
     HistoryLayout: TestHistoryLayout,
@@ -65,12 +66,12 @@ function LocationProbe() {
   return <output data-testid="location">{useLocation().pathname}</output>
 }
 
-describe('History page', () => {
+describe('History page wiring', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
-  it('history page renders matches, requests the next page, and navigates to a match', () => {
+  it('passes matches to the layout, requests the next page, and navigates to a match', () => {
     render(
       <MemoryRouter initialEntries={['/history']}>
         <Routes>
