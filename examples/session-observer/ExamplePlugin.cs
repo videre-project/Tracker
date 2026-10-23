@@ -14,10 +14,11 @@ public sealed class ExamplePlugin : ITrackerPlugin
   {
     // Keep context in this plugin's own options type so other plugins can have
     // their own configuration and directories without replacing this instance.
-    services.AddSingleton(new ObserverOptions(context.DataDirectory));
+    services.AddSingleton(new ObserverOptions(context.DataDirectory,
+      bool.Parse(context.Configuration["includeUserId"] ?? "true")));
     services.AddSingleton<SessionObserver>();
     services.AddHostedService(provider => provider.GetRequiredService<SessionObserver>());
   }
 }
 
-public sealed record ObserverOptions(string DataDirectory);
+public sealed record ObserverOptions(string DataDirectory, bool IncludeUserId = true);

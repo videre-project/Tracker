@@ -12,7 +12,6 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.Loader;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -56,8 +55,14 @@ public static partial class PluginService
     var catalog = new PluginCatalog(plugins.AsReadOnly(), dataDirectory,
       builder.Configuration.GetValue("Plugins:Enabled", true));
     builder.Services.AddSingleton(catalog);
+    var pluginManager = new PluginManager(installationDirectory, dataDirectory, catalog);
+    builder.Services.AddSingleton(pluginManager);
     var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     if (!catalog.Enabled)
+    {
+      return builder;
+    }
+    if (!pluginManager.Prepare())
     {
       return builder;
     }
@@ -66,6 +71,7 @@ public static partial class PluginService
     {
       manifests = Directory.Exists(installationDirectory)
         ? Directory.EnumerateDirectories(installationDirectory)
+          .Where(directory => !Path.GetFileName(directory).StartsWith('.'))
           .Select(directory => Path.Combine(directory, "plugin.json"))
           .Where(File.Exists).Order(StringComparer.Ordinal).ToArray()
         : Array.Empty<string>();
@@ -80,18 +86,24 @@ public static partial class PluginService
     {
       try
       {
-        var manifest = JsonSerializer.Deserialize<PluginManifest>(
-          File.ReadAllText(manifestPath), JsonSerializerOptions.Web)
-          ?? throw new InvalidDataException("The plugin manifest is empty.");
-        if (!manifest.Enabled)
+        string directory = Path.GetDirectoryName(Path.GetFullPath(manifestPath))!;
+        string id = Path.GetFileName(directory);
+        var settings = pluginManager.ReadSettings(id);
+        if (settings.Remove || settings.Enabled == false)
         {
+          pluginManager.RecordStartupSettings(id, settings, enabled: false);
           continue;
         }
-
-        if (!Regex.IsMatch(manifest.Id, "^[a-z][a-z0-9-]*$"))
+        var manifest = PluginManager.ReadManifest(directory);
+        if (id != manifest.Id)
         {
-          throw new InvalidDataException(
-            "The plugin ID must contain lowercase letters, digits or hyphens and begin with a letter.");
+          throw new InvalidDataException($"The installation folder must be named '{manifest.Id}'.");
+        }
+        bool enabled = settings.Enabled ?? manifest.Enabled;
+        pluginManager.RecordStartupSettings(id, settings, enabled);
+        if (!enabled)
+        {
+          continue;
         }
 
         if (!ids.Add(manifest.Id))
@@ -99,20 +111,7 @@ public static partial class PluginService
           throw new InvalidDataException($"Duplicate plugin ID '{manifest.Id}'.");
         }
 
-        if (manifest.ApiVersion != 1)
-        {
-          throw new InvalidDataException(
-            $"Unsupported plugin API version {manifest.ApiVersion}; expected 1.");
-        }
-
-        if (string.IsNullOrWhiteSpace(manifest.Assembly)
-          || Path.GetFileName(manifest.Assembly) != manifest.Assembly)
-        {
-          throw new InvalidDataException(
-            "The plugin assembly must be a filename inside its installation directory.");
-        }
-
-        string directory = Path.GetDirectoryName(Path.GetFullPath(manifestPath))!;
+        PluginManager.ValidateManifest(manifest, directory);
         string assemblyPath = Path.Combine(directory, manifest.Assembly);
         var loadContext = new PluginLoadContext(assemblyPath);
         var assembly = loadContext.LoadFromAssemblyPath(assemblyPath);
@@ -154,7 +153,7 @@ public static partial class PluginService
         var baseline = staged.ToArray();
         plugin.ConfigureServices(staged, new PluginContext(
           manifest.Id, directory, pluginData,
-          builder.Configuration.GetSection($"Plugins:{manifest.Id}")));
+          pluginManager.BuildConfiguration(manifest.Id, directory, builder.Configuration)));
 
         // Plugins extend the host. Replacing/removing host registrations could
         // corrupt recording or prevent startup even after a plugin is skipped.
@@ -403,15 +402,6 @@ public static partial class PluginService
         }
       }
     }
-  }
-
-  private sealed record PluginManifest
-  {
-    public required string Id { get; init; }
-    public required string Assembly { get; init; }
-    public required string EntryPoint { get; init; }
-    public required int ApiVersion { get; init; }
-    public bool Enabled { get; init; } = true;
   }
 
   private sealed class HostedServiceFactoryProvider(IServiceProvider provider) : IServiceProvider, IKeyedServiceProvider

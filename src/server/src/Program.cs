@@ -96,6 +96,23 @@ public class Program
   [STAThread]
   public static void Main(string[] args)
   {
+    string? restart = args.FirstOrDefault(argument => argument.StartsWith("--restart-after=", StringComparison.Ordinal));
+    if (restart is not null && int.TryParse(restart.Split('=')[1], out int previousProcess))
+    {
+      try
+      {
+        using var previous = Process.GetProcessById(previousProcess);
+        if (!previous.WaitForExit(30000))
+        {
+          return;
+        }
+      }
+      catch (ArgumentException)
+      {
+        // The previous process already exited.
+      }
+      args = args.Where(argument => argument != restart).ToArray();
+    }
 #if DEBUG
     // Only redirect console if we aren't running under dotnet watch, which manages its own console.
     if (Environment.GetEnvironmentVariable("DOTNET_WATCH") != "1")

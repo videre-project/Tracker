@@ -11,6 +11,7 @@
   <ItemGroup>
     <PackageReference Include="Tracker.Plugins" Version="$(TrackerPluginsVersion)" />
     <PackageReference Include="MTGOSDK" Version="$(MTGOSDKVersion)" />
+    <None Update="settings.schema.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <None Update="plugin.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

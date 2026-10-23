@@ -34,7 +34,7 @@ public sealed class SessionObserver(
       await foreach (bool _ in _updates.Reader.ReadAllAsync(stoppingToken))
       {
         var snapshot = new SessionSnapshot(context.Client is not null,
-          context.UserId, context.Games.Count);
+          options.IncludeUserId ? context.UserId : null, context.Games.Count);
         Volatile.Write(ref _snapshot, snapshot);
         try
         {

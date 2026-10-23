@@ -4,7 +4,7 @@
 **/
 
 import { useNavigate } from "react-router-dom"
-import { Bug, FileJson } from "lucide-react"
+import { Bug, FileJson, Plug } from "lucide-react"
 
 import { Button } from "@videreproject/ui"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@videreproject/ui"
@@ -14,6 +14,19 @@ export default function Settings() {
 
   return (
     <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
+      <Card className="border-sidebar-border/60">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Plug className="h-5 w-5" />
+            Plugins
+          </CardTitle>
+          <CardDescription>Manage installed plugins and their configuration.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button variant="outline" onClick={() => navigate('/settings/plugins')}>Manage Plugins</Button>
+        </CardContent>
+      </Card>
+
       <Card className="border-sidebar-border/60">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">

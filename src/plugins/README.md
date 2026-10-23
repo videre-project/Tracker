@@ -54,21 +54,29 @@ plugin or bundle it into a single executable.
 
 ## Install and verify
 
-1. Close Tracker.
-2. Copy the contents of `publish` into
-   `%LocalAppData%\Videre Tracker\Plugins\session-observer\`.
-   For a custom installation, use `<installRoot>\Plugins\session-observer\`.
-   `TRACKER_USER_DATA_FOLDER` overrides the data root when configured.
-3. Restart Tracker. Installations, updates, removals, and enablement changes take
-   effect on restart.
+1. Publish the example and ZIP the contents of `publish` (or a single folder
+   containing that output).
+2. Open **Settings → Plugins → Install plugin** and select the ZIP. It appears as
+   **Install pending**. Use **Configure** to review its settings before startup.
+3. Select **Restart Tracker** to apply the installation. The plugin should show
+   **Running**. Use the Enabled checkbox to disable it, or Remove to stage removal;
+   both take effect on restart. Undo removal cancels it before restarting.
 4. Open `https://localhost:7101/api/plugins` to confirm `session-observer` is listed.
    The example endpoint is
    `https://localhost:7101/api/plugins/session-observer/session`.
    Tracker uses a local HTTPS certificate; use its API Docs page if your browser
    does not trust the local certificate.
-5. Inspect `PluginData\session-observer\session.json` beneath the same data root.
+5. Inspect `PluginData\session-observer\session.json` beneath the data root.
    With MTGO disconnected, the snapshot has no user and zero games. Opening or
    closing a tracked game updates the snapshot; reconnecting reconciles the list.
+
+For manual or headless installation, close Tracker and copy the complete output to
+`%LocalAppData%\Videre Tracker\Plugins\session-observer\`, then restart.
+A custom installation uses `<installRoot>\Plugins\session-observer\`.
+`TRACKER_USER_DATA_FOLDER` overrides the data root; `Plugins__Directory` overrides
+installation discovery. The installation folder must match the manifest ID.
+Installations and updates through Settings are staged beneath `Plugins/.pending`
+and applied at the next start. Removal retains the plugin's persistent data.
 
 The manifest is:
 
@@ -101,6 +109,31 @@ entry-point constructor or `ConfigureServices`.
 pass them into your own options type as the example does. Standard .NET environment
 configuration works, for example `Plugins__session-observer__SomeOption=value`.
 `Plugins__Directory` overrides installation discovery.
+
+### User configuration
+
+Settings → Plugins persists enabled state and configuration in the data root's
+`settings.json`, independently of the installed plugin files. Values apply after
+restart. Configuration precedence is schema defaults, saved values, then the
+host's `Plugins:{id}` configuration (including environment and command-line
+settings). An unreadable settings file skips plugin startup and is reported in
+Settings without preventing Tracker from starting or overwriting that file.
+
+Include an optional `settings.schema.json` beside `plugin.json` and copy it to
+publish output. Tracker renders forms for an object with scalar properties:
+`string`, `boolean`, `integer` (signed 64-bit), and `number`. Supported field
+metadata includes `title`, `description`, `default`, `enum`, and `writeOnly`
+(password input); root `required` lists mandatory properties. Types, required
+values, and choices are checked when saving. Defaults apply to omitted fields;
+explicit null is rejected for the supported non-nullable types. This is a limited schema vocabulary,
+not a general JSON Schema validator: other constraints and cross-field rules
+belong in the plugin. Nested or untyped fields use a JSON object editor; plugins
+without a schema also use that editor. Configuration is stored locally as JSON,
+including password fields.
+
+The example includes an **Include user ID** setting. Disable it, save, and restart
+to omit the MTGO user ID from its snapshot. Install a newer published ZIP to stage
+an update while preserving configuration and plugin data.
 
 Inject `IMTGOContext` for the host-owned client, cached user ID, and games whose
 recording processors are ready. Subscribe to `Changed` before the initial read.
@@ -147,8 +180,8 @@ For troubleshooting you can explicitly bypass all plugins:
 
 Alternatively set `Plugins__Enabled=false` in the environment. This bypasses
 manifest discovery and all plugin code. Launch normally without the flag or
-environment override to re-enable plugins. You can disable an individual plugin
-with `enabled: false` in an otherwise valid manifest. Installed files and
+environment override to re-enable plugins. You can disable an individual plugin in Settings or
+with `enabled: false` in an otherwise valid manifest (unless saved enablement overrides it). Installed files and
 persistent data are preserved.
 
 `GET /api/plugins/status` reports enablement and failures for the current process.

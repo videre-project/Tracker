@@ -25,6 +25,7 @@ const Events = React.lazy(() => import('@/pages/events'))
 const EventDetails = React.lazy(() => import('@/pages/event-details'))
 const Home = React.lazy(() => import('@/pages/home'))
 const Metagame = React.lazy(() => import('@/pages/metagame-decks'))
+const PluginSettings = React.lazy(() => import('@/pages/plugin-settings'))
 const SettingsPage = React.lazy(() => import('@/pages/settings'))
 const ApiDocs = React.lazy(() => import('@/pages/api-docs'))
 const Diagnostics = React.lazy(() => import('@/pages/diagnostics'))
@@ -136,6 +137,12 @@ export const routes: RouteEntry[] = [
         name: "Game Replay",
         type: NavType.Secondary,
         element: <GameReplay />
+      },
+      {
+        path: "/settings/plugins",
+        name: "Plugins",
+        type: NavType.Secondary,
+        element: <PluginSettings />
       },
       {
         path: "/settings/api-docs",

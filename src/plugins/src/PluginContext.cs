@@ -14,7 +14,10 @@ namespace Tracker.Plugins;
 /// <param name="Id">The plugin ID from its installation manifest.</param>
 /// <param name="InstallationDirectory">The directory containing the plugin.</param>
 /// <param name="DataDirectory">The plugin's persistent data directory.</param>
-/// <param name="Configuration">The plugin's host configuration section.</param>
+/// <param name="Configuration">
+/// Effective plugin configuration: schema defaults, then saved settings, then
+/// the host's Plugins:{Id} overrides, including environment and command-line values.
+/// </param>
 public sealed record PluginContext(
   string Id,
   string InstallationDirectory,

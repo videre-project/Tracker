@@ -568,6 +568,12 @@ public sealed class ExamplePlugin : ITrackerPlugin
   does not stop Tracker or healthy plugins. Failures are reported by
   `GET /api/plugins/status`; full exceptions are saved to `PluginData/plugin-errors.log`.
 - `GET /api/plugins` lists the loaded plugin IDs and assembly versions.
+- Settings → Plugins stages ZIP installs and updates, enabled state, configuration,
+  and removals. `PluginManager` handles these operations independently of the loader;
+  `PluginSettingsStore` atomically persists preferences in the data root's `settings.json`
+  while preserving other sections. Unreadable preferences skip plugins, preserve the
+  file, and surface an error in Settings. Schema defaults and saved values are overlaid
+  by host configuration. Removal retains `PluginData/{id}`.
 - Plugins load once per process. Installation, removal, and enablement changes
   require a Tracker restart. In-process plugins run with the host's permissions;
   dependency isolation is not a security sandbox.

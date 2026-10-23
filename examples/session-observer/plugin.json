@@ -3,5 +3,8 @@
   "assembly": "SessionObserver.dll",
   "entryPoint": "Example.ExamplePlugin",
   "apiVersion": 1,
-  "enabled": true
+  "enabled": true,
+  "name": "Session Observer",
+  "description": "Writes a snapshot of the active MTGO session.",
+  "version": "0.1.0"
 }

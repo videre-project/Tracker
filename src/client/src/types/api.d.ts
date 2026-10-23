@@ -2833,6 +2833,355 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/plugins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": PluginInfo[];
+                        "application/json": PluginInfo[];
+                        "text/json": PluginInfo[];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "multipart/form-data": {
+                        /** Format: binary */
+                        package?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/plugins/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": PluginSettingsStatus;
+                        "application/json": PluginSettingsStatus;
+                        "text/json": PluginSettingsStatus;
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    [path: `/api/settings/plugins/${string}/enabled`]: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": EnablePluginRequest;
+                    "text/json": EnablePluginRequest;
+                    "application/*+json": EnablePluginRequest;
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    [path: `/api/settings/plugins/${string}`]: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    [path: `/api/settings/plugins/${string}/restore`]: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    [path: `/api/settings/plugins/${string}/configuration`]: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": PluginConfiguration;
+                        "application/json": PluginConfiguration;
+                        "text/json": PluginConfiguration;
+                    };
+                };
+            };
+        };
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        [key: string]: JsonNode;
+                    };
+                    "text/json": {
+                        [key: string]: JsonNode;
+                    };
+                    "application/*+json": {
+                        [key: string]: JsonNode;
+                    };
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/instance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": HostInstance;
+                        "application/json": HostInstance;
+                        "text/json": HostInstance;
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/restart": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/trades/history": {
         parameters: {
             query?: never;
@@ -3376,6 +3725,14 @@ export interface components {
             instance?: string | null;
         } & {
             [key: string]: unknown;
+        };
+        "System.Text.Json.Nodes.JsonNode": {
+            options?: JsonNodeOptions;
+            parent?: JsonNode;
+            root?: JsonNode;
+        };
+        "System.Text.Json.Nodes.JsonNodeOptions": {
+            propertyNameCaseInsensitive?: boolean;
         };
         /** @description Request body for updating a deck or opponent archetype */
         "Tracker.Controllers.DecksController.UpdateArchetypeRequest": {
@@ -3991,6 +4348,19 @@ export interface components {
             enabled?: boolean;
             failures?: PluginFailure[] | null;
         };
+        "Tracker.Controllers.PluginSettingsController.EnablePluginRequest": {
+            enabled?: boolean;
+        };
+        "Tracker.Controllers.PluginSettingsController.PluginSettingsStatus": {
+            hostEnabled?: boolean;
+            restartRequired?: boolean;
+            settingsError?: string | null;
+            failures?: PluginFailure[] | null;
+        };
+        "Tracker.Controllers.SettingsController.HostInstance": {
+            /** Format: int32 */
+            processId?: number;
+        };
         "Tracker.Controllers.TradeHistoryDetailDTO": {
             summary?: TradeHistorySummaryDTO;
             /** Format: uuid */
@@ -4237,6 +4607,34 @@ export interface components {
             sourceId?: number | null;
             type: string | null;
         };
+        "Tracker.Services.PluginManager.ConfigurationField": {
+            key?: string | null;
+            label?: string | null;
+            description?: string | null;
+            type?: string | null;
+            required?: boolean;
+            secret?: boolean;
+            default?: JsonNode;
+            choices?: JsonNode[] | null;
+        };
+        "Tracker.Services.PluginManager.PluginConfiguration": {
+            values?: {
+                [key: string]: JsonNode;
+            } | null;
+            fields?: ConfigurationField[] | null;
+        };
+        "Tracker.Services.PluginManager.PluginInfo": {
+            id?: string | null;
+            name?: string | null;
+            description?: string | null;
+            version?: string | null;
+            enabled?: boolean;
+            loaded?: boolean;
+            pendingUpdate?: boolean;
+            pendingRemoval?: boolean;
+            restartRequired?: boolean;
+            error?: string | null;
+        };
         /** @description Identifies a failed installation and its actionable error. */
         "Tracker.Services.PluginService.PluginFailure": {
             path?: string | null;
@@ -4279,6 +4677,8 @@ export type MtgosdkApiTradeTradePartner = TradePartner;
 export type MtgosdkApiUsersAvatar = Avatar;
 export type MtgosdkApiUsersUser = User;
 export type MicrosoftAspNetCoreMvcProblemDetails = ProblemDetails;
+export type SystemTextJsonNodesJsonNode = JsonNode;
+export type SystemTextJsonNodesJsonNodeOptions = JsonNodeOptions;
 export type TrackerControllersDecksControllerUpdateArchetypeRequest = UpdateArchetypeRequest;
 export type TrackerControllersModelsClientIClientState = IClientState;
 export type TrackerControllersModelsCollectionCollectionCardDto = CollectionCardDTO;
@@ -4327,6 +4727,9 @@ export type TrackerControllersModelsReplaysReplayLogDto = ReplayLogDTO;
 export type TrackerControllersModelsReplaysReplayPlayerDto = ReplayPlayerDTO;
 export type TrackerControllersModelsReplaysReplaySnapshotDto = ReplaySnapshotDTO;
 export type TrackerControllersPluginHostStatus = PluginHostStatus;
+export type TrackerControllersPluginSettingsControllerEnablePluginRequest = EnablePluginRequest;
+export type TrackerControllersPluginSettingsControllerPluginSettingsStatus = PluginSettingsStatus;
+export type TrackerControllersSettingsControllerHostInstance = HostInstance;
 export type TrackerControllersTradeHistoryDetailDto = TradeHistoryDetailDTO;
 export type TrackerControllersTradeHistoryEffectDto = TradeHistoryEffectDTO;
 export type TrackerControllersTradeHistoryErrorDto = TradeHistoryErrorDTO;
@@ -4353,6 +4756,9 @@ export type TrackerServicesMtgoEventsPlayerChangeData = PlayerChangeData;
 export type TrackerServicesMtgoEventsPlayerInteractionData = PlayerInteractionData;
 export type TrackerServicesMtgoEventsPromptOptionData = PromptOptionData;
 export type TrackerServicesMtgoEventsZoneTransferData = ZoneTransferData;
+export type TrackerServicesPluginManagerConfigurationField = ConfigurationField;
+export type TrackerServicesPluginManagerPluginConfiguration = PluginConfiguration;
+export type TrackerServicesPluginManagerPluginInfo = PluginInfo;
 export type TrackerServicesPluginServicePluginFailure = PluginFailure;
 export type $defs = Record<string, never>;
 export type operations = Record<string, never>;
@@ -4388,6 +4794,8 @@ export type TradePartner = components['schemas']['MTGOSDK.API.Trade.TradePartner
 export type Avatar = components['schemas']['MTGOSDK.API.Users.Avatar'];
 export type User = components['schemas']['MTGOSDK.API.Users.User'];
 export type ProblemDetails = components['schemas']['Microsoft.AspNetCore.Mvc.ProblemDetails'];
+export type JsonNode = components['schemas']['System.Text.Json.Nodes.JsonNode'];
+export type JsonNodeOptions = components['schemas']['System.Text.Json.Nodes.JsonNodeOptions'];
 export type UpdateArchetypeRequest = components['schemas']['Tracker.Controllers.DecksController.UpdateArchetypeRequest'];
 export type IClientState = components['schemas']['Tracker.Controllers.Models.Client.IClientState'];
 export type CollectionCardDTO = components['schemas']['Tracker.Controllers.Models.Collection.CollectionCardDTO'];
@@ -4436,6 +4844,9 @@ export type ReplayLogDTO = components['schemas']['Tracker.Controllers.Models.Rep
 export type ReplayPlayerDTO = components['schemas']['Tracker.Controllers.Models.Replays.ReplayPlayerDTO'];
 export type ReplaySnapshotDTO = components['schemas']['Tracker.Controllers.Models.Replays.ReplaySnapshotDTO'];
 export type PluginHostStatus = components['schemas']['Tracker.Controllers.PluginHostStatus'];
+export type EnablePluginRequest = components['schemas']['Tracker.Controllers.PluginSettingsController.EnablePluginRequest'];
+export type PluginSettingsStatus = components['schemas']['Tracker.Controllers.PluginSettingsController.PluginSettingsStatus'];
+export type HostInstance = components['schemas']['Tracker.Controllers.SettingsController.HostInstance'];
 export type TradeHistoryDetailDTO = components['schemas']['Tracker.Controllers.TradeHistoryDetailDTO'];
 export type TradeHistoryEffectDTO = components['schemas']['Tracker.Controllers.TradeHistoryEffectDTO'];
 export type TradeHistoryErrorDTO = components['schemas']['Tracker.Controllers.TradeHistoryErrorDTO'];
@@ -4462,4 +4873,7 @@ export type PlayerChangeData = components['schemas']['Tracker.Services.MTGO.Even
 export type PlayerInteractionData = components['schemas']['Tracker.Services.MTGO.Events.PlayerInteractionData'];
 export type PromptOptionData = components['schemas']['Tracker.Services.MTGO.Events.PromptOptionData'];
 export type ZoneTransferData = components['schemas']['Tracker.Services.MTGO.Events.ZoneTransferData'];
+export type ConfigurationField = components['schemas']['Tracker.Services.PluginManager.ConfigurationField'];
+export type PluginConfiguration = components['schemas']['Tracker.Services.PluginManager.PluginConfiguration'];
+export type PluginInfo = components['schemas']['Tracker.Services.PluginManager.PluginInfo'];
 export type PluginFailure = components['schemas']['Tracker.Services.PluginService.PluginFailure'];

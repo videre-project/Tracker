@@ -1,0 +1,11 @@
+{
+  "type": "object",
+  "properties": {
+    "includeUserId": {
+      "type": "boolean",
+      "title": "Include user ID",
+      "description": "Include your MTGO user ID in the session snapshot and API response.",
+      "default": true
+    }
+  }
+}
