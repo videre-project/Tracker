@@ -188,4 +188,5 @@ persistent data are preserved.
 `GET /api/plugins` lists configured plugins; check status for service failures.
 
 See [architecture](https://github.com/videre-project/Tracker/blob/main/ARCHITECTURE.md#6-extensibility)
-for host implementation details.
+for host implementation details and [publishing](https://github.com/videre-project/Tracker/blob/main/docs/plugin-publishing.md)
+for maintainer release setup.

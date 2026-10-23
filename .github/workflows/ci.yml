@@ -16,6 +16,8 @@ on:
       - 'pnpm-lock.yaml'
       - 'src/client/pnpm-lock.yaml'
       - 'src/**'
+      - 'scripts/**'
+      - 'examples/**'
       - 'docker/**'
   workflow_dispatch:
 
@@ -94,6 +96,10 @@ jobs:
         shell: pwsh
         run: dotnet publish src/server --configuration Release --output publish --no-restore
 
+      - name: Verify plugin API package matches the host
+        shell: pwsh
+        run: python scripts/ci/verify-plugin-package.py --host-assembly "src/server/bin/Release/net10.0-windows7.0/win-x64/Tracker.Plugins.dll"
+
       - name: Upload plugin API package
         uses: actions/upload-artifact@v4
         with:
@@ -159,4 +165,5 @@ jobs:
     permissions:
       actions: read
       contents: write
+      id-token: write
     secrets: inherit

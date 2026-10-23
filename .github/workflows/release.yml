@@ -21,6 +21,7 @@ on:
 permissions:
   actions: read
   contents: write
+  id-token: write
 
 concurrency:
   group: tracker-release-${{ inputs.version || github.ref }}
@@ -31,6 +32,7 @@ jobs:
     name: Publish Tracker ${{ inputs.version }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    environment: release
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -44,20 +46,22 @@ jobs:
           if [ -z "$version" ]; then
             version="$(node -p "require('./package.json').version")"
           fi
-          if [ -z "$version" ]; then
-            echo "Could not resolve a release version." >&2
+          expected="$(node -p "require('./package.json').version")"
+          if [ -z "$version" ] || [ "$version" != "$expected" ]; then
+            echo "Release version must match package.json ($expected)." >&2
             exit 1
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "tag=v$version" >> "$GITHUB_OUTPUT"
 
-      - name: Skip if the tag already exists
+      - name: Skip if the GitHub release already exists
         id: existing
         env:
           TAG: ${{ steps.version.outputs.tag }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          if git ls-remote --tags origin "refs/tags/$TAG" | grep -q .; then
-            echo "Tag $TAG already exists; skipping release."
+          if gh release view "$TAG" --json tagName >/dev/null 2>&1; then
+            echo "Release $TAG already exists; skipping release."
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
@@ -98,6 +102,69 @@ jobs:
           path: publish
           github-token: ${{ github.token }}
           run-id: ${{ steps.run.outputs.run_id }}
+
+      - name: Download CI plugin API package
+        if: steps.existing.outputs.exists != 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: tracker-plugin-api-${{ github.sha }}
+          path: packages
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.run.outputs.run_id }}
+
+      - name: Verify plugin API package identity and version
+        if: steps.existing.outputs.exists != 'true'
+        run: python3 scripts/ci/verify-plugin-package.py
+
+      - name: Setup .NET
+        if: steps.existing.outputs.exists != 'true'
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Check NuGet publishing configuration
+        if: steps.existing.outputs.exists != 'true'
+        env:
+          NUGET_USER: ${{ secrets.NUGET_USER }}
+        run: |
+          if [ -z "$NUGET_USER" ]; then
+            echo "Set the NUGET_USER secret to your NuGet.org profile username in the Tracker repository or release environment." >&2
+            exit 1
+          fi
+
+      - name: NuGet login
+        if: steps.existing.outputs.exists != 'true'
+        uses: NuGet/login@v1
+        id: nuget
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
+      - name: Publish plugin API to NuGet
+        if: steps.existing.outputs.exists != 'true'
+        env:
+          NUGET_API_KEY: ${{ steps.nuget.outputs.NUGET_API_KEY }}
+        run: |
+          package=(packages/*.nupkg)
+          status="$(curl --silent --show-error --http1.1 \
+            --request PUT \
+            --header "X-NuGet-ApiKey: $NUGET_API_KEY" \
+            --header "X-NuGet-Protocol-Version: 4.1.0" \
+            --header "Transfer-Encoding: chunked" \
+            --user-agent "VidereTrackerRelease" \
+            --form "package=@${package[0]};type=application/octet-stream" \
+            --output nuget-response.txt \
+            --write-out '%{http_code}' \
+            https://www.nuget.org/api/v2/package/)"
+          echo "NuGet HTTP status: $status"
+          cat nuget-response.txt
+          case "$status" in
+            201|202|409) ;;
+            *) exit 1 ;;
+          esac
+
+      - name: Verify published plugin API matches the CI artifact
+        if: steps.existing.outputs.exists != 'true'
+        run: python3 scripts/ci/verify-plugin-package.py --published
 
       - name: Create GitHub Release
         if: steps.existing.outputs.exists != 'true'
