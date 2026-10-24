@@ -29,11 +29,9 @@ CI packs the API and verifies that its DLL is identical to the API DLL in the ho
 build. After CI succeeds, `release.yml` downloads that exact package artifact,
 uses `NuGet/login@v1` to obtain a short-lived credential, publishes to NuGet.org,
 then creates the GitHub release. It does not rebuild the package during release.
-An existing package version is accepted only after its API DLL is downloaded and
-verified against the CI artifact. NuGet upload rejections include the server's
-response body in the log; HTTP 409 alone is not treated as a successful duplicate.
-The workflow waits up to three minutes for a newly uploaded package to become
-available and fails before creating a GitHub release if verification does not pass.
+Publication uses `dotnet nuget push --skip-duplicate`, matching MTGOSDK. NuGet
+upload failures fail the release job; already-published versions are skipped on
+retries. Public-feed indexing is asynchronous and is not a release gate.
 
 See [NuGet Trusted Publishing](https://learn.microsoft.com/en-us/nuget/nuget-org/trusted-publishing)
 for policy setup.

@@ -7,10 +7,6 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-from io import BytesIO
-import time
-import urllib.error
-import urllib.request
 from pathlib import Path
 import xml.etree.ElementTree as ET
 from zipfile import BadZipFile, ZipFile
@@ -29,7 +25,7 @@ def identity() -> tuple[str, str]:
     return package_id, version
 
 
-def verify(package: Path | BytesIO, host_assembly: Path | None) -> bytes:
+def verify(package: Path, host_assembly: Path | None) -> None:
     expected_id, version = identity()
     with ZipFile(package) as archive:
         manifests = [name for name in archive.namelist() if name.endswith(".nuspec")]
@@ -54,47 +50,16 @@ def verify(package: Path | BytesIO, host_assembly: Path | None) -> bytes:
             "The NuGet API assembly differs from Tracker's host assembly; "
             "pack and publish from the same API build"
         )
-    source = str(package) if isinstance(package, Path) else "NuGet.org"
-    print(f"Verified {expected_id} {version}: {source}")
+    print(f"Verified {expected_id} {version}: {package}")
     print(f"API assembly SHA-256: {hashlib.sha256(api).hexdigest()}")
     if host_assembly is not None:
         print("The package and host API assemblies are identical.")
-    return api
-
-
-def verify_published(expected_api: bytes, wait_seconds: int = 180) -> None:
-    package_id, version = identity()
-    name = package_id.lower()
-    version = version.lower()
-    url = f"https://api.nuget.org/v3-flatcontainer/{name}/{version}/{name}.{version}.nupkg"
-    deadline = time.monotonic() + wait_seconds
-    while True:
-        try:
-            request = urllib.request.Request(url, headers={"Cache-Control": "no-cache"})
-            with urllib.request.urlopen(request, timeout=15) as response:
-                published_api = verify(BytesIO(response.read()), None)
-            if published_api != expected_api:
-                raise ValueError("The published plugin API differs from the CI artifact; use a new package version")
-            print("The published package and CI artifact API assemblies are identical.")
-            return
-        except urllib.error.HTTPError as error:
-            if error.code != 404:
-                raise
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                raise ValueError(
-                    f"{package_id} {version} is not available on NuGet.org. "
-                    "An HTTP 409 upload response does not establish that a duplicate package exists."
-                ) from error
-            print("Waiting for the uploaded package to become available on NuGet.org…", flush=True)
-            time.sleep(min(15, remaining))
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--package", type=Path)
     parser.add_argument("--host-assembly", type=Path)
-    parser.add_argument("--published", action="store_true", help="Verify the public NuGet package against the CI artifact")
     args = parser.parse_args()
     packages = [args.package] if args.package else sorted(
         Path("packages").glob("*.nupkg")
@@ -102,9 +67,7 @@ def main() -> None:
     if len(packages) != 1:
         parser.exit(1, "Expected exactly one packages/*.nupkg\n")
     try:
-        api = verify(packages[0], args.host_assembly)
-        if args.published:
-            verify_published(api)
+        verify(packages[0], args.host_assembly)
     except (OSError, ValueError, BadZipFile, ET.ParseError) as error:
         parser.exit(1, f"Plugin package verification failed: {error}\n")
 

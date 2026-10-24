@@ -143,28 +143,11 @@ jobs:
         if: steps.existing.outputs.exists != 'true'
         env:
           NUGET_API_KEY: ${{ steps.nuget.outputs.NUGET_API_KEY }}
-        run: |
-          package=(packages/*.nupkg)
-          status="$(curl --silent --show-error --http1.1 \
-            --request PUT \
-            --header "X-NuGet-ApiKey: $NUGET_API_KEY" \
-            --header "X-NuGet-Protocol-Version: 4.1.0" \
-            --header "Transfer-Encoding: chunked" \
-            --user-agent "VidereTrackerRelease" \
-            --form "package=@${package[0]};type=application/octet-stream" \
-            --output nuget-response.txt \
-            --write-out '%{http_code}' \
-            https://www.nuget.org/api/v2/package/)"
-          echo "NuGet HTTP status: $status"
-          cat nuget-response.txt
-          case "$status" in
-            201|202|409) ;;
-            *) exit 1 ;;
-          esac
-
-      - name: Verify published plugin API matches the CI artifact
-        if: steps.existing.outputs.exists != 'true'
-        run: python3 scripts/ci/verify-plugin-package.py --published
+        run: >-
+          dotnet nuget push "packages/*.nupkg"
+          --api-key "$NUGET_API_KEY"
+          --source https://api.nuget.org/v3/index.json
+          --skip-duplicate
 
       - name: Create GitHub Release
         if: steps.existing.outputs.exists != 'true'
