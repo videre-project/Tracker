@@ -21,6 +21,7 @@ export interface ClientStateContextValue {
   state: ClientState
   loading: boolean
   isReady: boolean
+  queryCache: Map<string, unknown>
 }
 
 export const ClientStateContext = createContext<ClientStateContextValue | undefined>(undefined)

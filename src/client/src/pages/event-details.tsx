@@ -115,7 +115,7 @@ function useStandings(
   eventIdRef.current = eventId
 
   const flushStandings = useCallback(() => {
-    const sorted = Array.from(mapRef.current.values()).sort((a, b) => a.rank - b.rank)
+    const sorted = Array.from(mapRef.current.values()).sort((a, b) => (a.rank ?? Number.MAX_SAFE_INTEGER) - (b.rank ?? Number.MAX_SAFE_INTEGER))
     setStandings(sorted)
     setLastUpdatedAt(new Date())
     setLoading(false)

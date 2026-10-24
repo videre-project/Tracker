@@ -82,32 +82,32 @@ console.log(`[vite] backend proxy target: ${target}`);
 // sibling checkout path is identical on the host and at /platform in Docker.
 const localUiIndex = path.resolve(__dirname, sourcePaths.compilerOptions.paths['@videreproject/ui'][0]);
 const localUiRoot = fs.existsSync(localUiIndex) ? path.dirname(path.dirname(localUiIndex)) : null;
-if (localUiRoot) {
-  console.log(`[vite] using local @videreproject/ui from ${localUiRoot}`);
-}
 
 const alias: Array<{ find: string | RegExp; replacement: string }> = [
   { find: '@', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
 ];
 
+const localUiAliases: typeof alias = [];
 if (localUiRoot) {
   for (const [name, candidates] of Object.entries(sourcePaths.compilerOptions.paths)) {
     if (name.startsWith('@videreproject/ui')) {
-      alias.unshift({ find: name, replacement: path.resolve(__dirname, candidates[0]) });
+      localUiAliases.unshift({ find: name, replacement: path.resolve(__dirname, candidates[0]) });
     }
   }
 }
 
 // https://vitejs.dev/config/
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   plugins: [
-    react()
+    react(),
   ],
   define: {
     __APP_VERSION__: JSON.stringify(rootPackageJson.version),
   },
   resolve: {
-    alias,
+    // Production must bundle the installed package, even with a sibling checkout.
+    alias: command === 'serve' ? [...localUiAliases, ...alias] : alias,
+    dedupe: ['react', 'react-dom'],
   },
   optimizeDeps: {
     // Local UI source must not be prebundled; otherwise Tracker keeps serving
@@ -149,4 +149,4 @@ export default defineConfig({
       }
     }
   }
-});
+}));

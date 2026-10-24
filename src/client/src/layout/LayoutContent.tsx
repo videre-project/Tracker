@@ -9,7 +9,6 @@ import { Link, Outlet, useLocation, matchPath } from "react-router-dom";
 
 import { cn } from "@/lib/utils"
 import { AppSidebar } from "@/components/app-sidebar"
-import { ThemeProvider } from "@/components/theme-provider"
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -333,7 +332,6 @@ export default function Layout() {
   const currentBreadcrumbHref = isApiDocsPage ? getApiUrl("/docs") : undefined;
 
   return (
-    <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
       <EventsProvider>
         <SidebarProvider>
             <AppSidebar />
@@ -373,6 +371,5 @@ export default function Layout() {
             </SidebarInset>
         </SidebarProvider>
       </EventsProvider>
-    </ThemeProvider>
   )
 }

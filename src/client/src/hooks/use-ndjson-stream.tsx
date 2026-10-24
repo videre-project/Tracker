@@ -16,6 +16,9 @@ export interface NDJSONStreamOptions<T> {
    */
   onMessage: (data: T) => void
 
+  /** Callback invoked when a connection opens, including reconnections. */
+  onOpen?: () => void
+
   /**
    * Callback invoked when the stream ends (not an error)
    */
@@ -55,6 +58,9 @@ export interface NDJSONStreamOptions<T> {
    * @default true
    */
   enabled?: boolean
+
+  /** Restart the stream when its owning session changes. */
+  restartKey?: unknown
 
   /**
    * Use constant retry delay instead of exponential backoff
@@ -117,6 +123,7 @@ export function useNDJSONStream<T = unknown>(options: NDJSONStreamOptions<T>) {
   const {
     url,
     onMessage,
+    onOpen,
     onEnd,
     onError,
     autoReconnect = true,
@@ -124,6 +131,7 @@ export function useNDJSONStream<T = unknown>(options: NDJSONStreamOptions<T>) {
     maxReconnectDelay = 30000,
     maxReconnectAttempts = 10,
     enabled = true,
+    restartKey,
     useConstantRetry = false
   } = options
 
@@ -138,15 +146,17 @@ export function useNDJSONStream<T = unknown>(options: NDJSONStreamOptions<T>) {
 
   // Store callbacks in refs to avoid recreating connect function
   const onMessageRef = useRef(onMessage)
+  const onOpenRef = useRef(onOpen)
   const onEndRef = useRef(onEnd)
   const onErrorRef = useRef(onError)
 
   // Update refs when callbacks change
   useEffect(() => {
     onMessageRef.current = onMessage
+    onOpenRef.current = onOpen
     onEndRef.current = onEnd
     onErrorRef.current = onError
-  }, [onMessage, onEnd, onError])
+  }, [onMessage, onOpen, onEnd, onError])
 
   const cleanupConnection = useCallback(() => {
     connectionGenerationRef.current++
@@ -244,7 +254,6 @@ export function useNDJSONStream<T = unknown>(options: NDJSONStreamOptions<T>) {
           throw new Error(`Stream request failed: ${res.status} ${res.statusText}`)
         }
 
-        // Reset reconnect attempts on successful connection
         reconnectAttemptsRef.current = 0
         isConnectingRef.current = false
 
@@ -254,6 +263,7 @@ export function useNDJSONStream<T = unknown>(options: NDJSONStreamOptions<T>) {
         }
         const streamReader = reader
         readerRef.current = reader
+        onOpenRef.current?.()
 
         let buffer = ""
         const decoder = new TextDecoder()
@@ -348,7 +358,7 @@ export function useNDJSONStream<T = unknown>(options: NDJSONStreamOptions<T>) {
       reconnectAttemptsRef.current = 0
       cleanupConnection()
     }
-  }, [enabled, url, cleanupConnection]) // Reconnect when the target stream changes
+  }, [enabled, url, restartKey, cleanupConnection])
 
   return {
     reconnect: connectToStream

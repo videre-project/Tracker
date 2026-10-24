@@ -4,6 +4,8 @@
 **/
 
 import { StrictMode } from 'react'
+import { ApplicationSettingsProvider } from './components/application-settings-provider'
+import { ThemeProvider } from './components/theme-provider'
 import { createRoot } from 'react-dom/client'
 import { RouterProvider } from 'react-router-dom';
 import router from './router.tsx';
@@ -19,6 +21,10 @@ import { getApiUrl } from './utils/api-config.ts'
 import '@videreproject/ui/theme.css'
 import './index.css'
 
+document.documentElement.dataset.host = navigator.userAgent.includes('VidereTracker')
+  ? 'tracker'
+  : 'browser'
+
 async function resolveCardFace(catalogId: number): Promise<CardFaceInfo | null> {
   const response = await fetch(getApiUrl(`/api/collection/cards/${catalogId}/face`))
   if (!response.ok) return null
@@ -27,6 +33,10 @@ async function resolveCardFace(catalogId: number): Promise<CardFaceInfo | null> 
   return typeof data.catalogId === 'number'
     ? { catalogId: data.catalogId, name: data.name }
     : null
+}
+
+async function resolveOtherFaceCatalogId(catalogId: number): Promise<number | null> {
+  return (await resolveCardFace(catalogId))?.catalogId ?? null
 }
 
 const trackerCardMedia: CardMediaServices = {
@@ -43,14 +53,18 @@ const trackerCardMedia: CardMediaServices = {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <ClientStateProvider>
-      <CardArtProvider>
-        <CardMediaProvider {...trackerCardMedia}>
-          <SharedCardTooltipProvider>
-            <RouterProvider router={router} />
-          </SharedCardTooltipProvider>
-        </CardMediaProvider>
-      </CardArtProvider>
-    </ClientStateProvider>
+    <ApplicationSettingsProvider>
+      <ClientStateProvider>
+        <CardArtProvider>
+          <CardMediaProvider {...trackerCardMedia}>
+            <SharedCardTooltipProvider resolveOtherFaceCatalogId={resolveOtherFaceCatalogId}>
+              <ThemeProvider>
+                <RouterProvider router={router} useTransitions={false} />
+              </ThemeProvider>
+            </SharedCardTooltipProvider>
+          </CardMediaProvider>
+        </CardArtProvider>
+      </ClientStateProvider>
+    </ApplicationSettingsProvider>
   </StrictMode>
 )

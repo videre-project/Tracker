@@ -32,6 +32,7 @@ function TestCardFilterPanel() {
 vi.mock('@videreproject/ui', async () => {
   return {
     CollectionLayout: TestCollectionLayout,
+    CollectionDrawer: () => null,
     CardFilterPanel: TestCardFilterPanel,
     DEFAULT_CARD_FILTERS: {},
     buildCardSearchQuery: (search: string) => search.trim(),

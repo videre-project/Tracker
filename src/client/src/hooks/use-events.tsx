@@ -3,16 +3,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-// Extend the Window interface for debugging
-declare global {
-  interface Window {
-    __activeEvents?: ActiveGame[];
-    __upcomingEvents?: ActiveGame[];
-    __completedEvents?: ActiveGame[];
-  }
-}
-
-import { useEffect, useState, useRef, useCallback, type ReactNode } from "react"
+import { useEffect, useMemo, useState, useRef, useCallback, type ReactNode } from "react"
 import { useClientState } from "./use-client-state"
 import { useNDJSONStream } from "./use-ndjson-stream"
 import { EventsContext } from "./events-context"
@@ -27,7 +18,6 @@ import type {
 } from "@/types/api"
 
 
-// Tournament state type (will be replaced when OpenAPI types are regenerated)
 export type { TournamentState } from "@/types/api"
 
 const ACTIVE_TOURNAMENT_STATES: TournamentState[] = [
@@ -69,24 +59,20 @@ export interface ActiveGame {
   eventStructure?: IEventStructure;
   activePlayerNames?: string[];
   playerNamesWithMatchesInProgress?: string[];
-  // Tournament state
   state?: TournamentState;
   _rawStartTime?: string;
   _rawEndTime?: string;
 }
 
-// Use EventStructure if available, fallback to format string
-// League events do not have eventStructure; treat as 'league' for now.
-// When ILeague is added to the API, update this logic to handle both types.
+// Older snapshots identify event structure by name rather than flags.
 function inferEventTypeFromStructure(structure?: IEventStructure | string | null): EventType {
   if (!structure) return "league" // League events have no eventStructure
   if (typeof structure === "object") {
     if (structure.isDraft) return "draft"
     if (structure.isSingleElimination) return "elimination"
     if (structure.isSwiss) return "swiss"
-    if (structure.isConstructed) return "league" // fallback for constructed
-    if (structure.isLimited) return "draft" // fallback for limited
-    // fallback to name if present
+    if (structure.isConstructed) return "league"
+    if (structure.isLimited) return "draft"
     const s = structure.name || ""
     if (/league/i.test(s)) return "league"
     if (/swiss/i.test(s)) return "swiss"
@@ -114,7 +100,6 @@ function inferGameStatus(t: ITournament): GameStatus {
     if (state === "Finished") return "completed"
     if (ACTIVE_TOURNAMENT_STATES.includes(state)) return "active"
 
-    // WaitingToStart and other states before the event fires
     if (state === "WaitingToStart" || state === "NotSet") return "scheduled"
   }
 
@@ -131,14 +116,6 @@ function inferStatusFromState(current: GameStatus, state?: TournamentState): Gam
   return current
 }
 
-export interface ActiveGameWithRawTimes extends ActiveGame {
-  _rawStartTime?: string;
-  _rawEndTime?: string;
-  eventStructure?: IEventStructure;
-  roundEndTime?: string;
-  inPlayoffs?: boolean;
-}
-
 function hasRoundCountdown(state?: TournamentState): boolean {
   return state === "RoundInProgress" ||
     state === "BetweenRounds" ||
@@ -153,6 +130,7 @@ function hasPreRoundCountdown(state?: TournamentState): boolean {
 }
 
 function getRoundEndTimeForState(state?: TournamentState, roundEndTime?: string): string | undefined {
+  // Unset .NET DateTime values arrive as "0001-01-01..." rather than null.
   if (!hasRoundCountdown(state) ||
       !roundEndTime ||
       roundEndTime.startsWith('0001-01-01')) {
@@ -181,8 +159,7 @@ function mergeRoundScopedMatchPlayers(
   return incoming ?? existing
 }
 
-function mapTournamentToActiveGame(t: ITournament): ActiveGameWithRawTimes {
-  // Filter out invalid DateTime values (C# DateTime.MinValue serializes to 0001-01-01)
+function mapTournamentToActiveGame(t: ITournament): ActiveGame {
   const update = t as ITournament & Partial<ITournamentStateUpdate>
   const state = update.state
   const roundEndTime = update.roundEndTime
@@ -202,7 +179,6 @@ function mapTournamentToActiveGame(t: ITournament): ActiveGameWithRawTimes {
     minimumPlayers: t.minimumPlayers,
     _rawStartTime: t.startTime,
     _rawEndTime: t.endTime,
-    // Pass through eventStructure for playoff/top 8 display
     eventStructure: t.eventStructure,
     hasPlayoffs: t.eventStructure?.hasPlayoffs,
     roundNumber: update.roundNumber,
@@ -215,46 +191,37 @@ function mapTournamentToActiveGame(t: ITournament): ActiveGameWithRawTimes {
   }
 }
 
-function shouldIncludeEvent(game: ActiveGameWithRawTimes) {
+function shouldIncludeEvent(game: ActiveGame) {
   return game.totalRounds == null || game.totalRounds >= 3
 }
 
-export function EventsProvider({ children }: { children: ReactNode }) {
-  const [activeGames, setActiveGames] = useState<ActiveGame[]>([])
-  const [upcomingGames, setUpcomingGames] = useState<ActiveGame[]>([])
-  const [completedGames, setCompletedGames] = useState<ActiveGame[]>([])
+export function EventsProvider({ children, liveUpdates = true }: { children: ReactNode; liveUpdates?: boolean }) {
+  const [games, setGames] = useState<ActiveGame[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [hoveredEventId, setHoveredEventId] = useState<string | null>(null)
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
 
-  // Wait for MTGO client to be ready before fetching events
-  const { isReady: clientReady, loading: clientLoading } = useClientState()
+  const { queryCache, isReady: clientReady, loading: clientLoading } = useClientState()
 
-  // Shared games map that both streams can access
-  const gamesMapRef = useRef(new Map<string, ActiveGameWithRawTimes>())
-  
-  // Dirty flag to track if we need to update React state
-  const isDirtyRef = useRef(false)
+  // Streams accumulate bursts here; React receives one immutable snapshot per flush.
+  const gamesMapRef = useRef(new Map<string, ActiveGame>())
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const transitionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const updateGamesState = useCallback(() => {
-    const allGames = Array.from(gamesMapRef.current.values())
+  const publishSnapshot = useCallback(() => {
+    const allGames = Array.from(gamesMapRef.current.values(), game => ({ ...game }))
 
-    // Reconcile state/status inconsistencies before filtering
     const now = Date.now()
     let nextTransitionMs = Infinity
 
     for (const game of allGames) {
-      game.format = normalizeFormatName(game.format)
       if (game.state === "Finished" && game.status !== "completed") {
         game.status = "completed"
       }
       if (game.state && ACTIVE_TOURNAMENT_STATES.includes(game.state)) {
         game.status = "active"
       }
-      // Promote scheduled events whose start time has passed
       if (game.status === "scheduled" && game._rawStartTime) {
         const start = new Date(game._rawStartTime).getTime()
         if (now >= start) {
@@ -264,7 +231,6 @@ export function EventsProvider({ children }: { children: ReactNode }) {
           if (diff > 0 && diff < nextTransitionMs) nextTransitionMs = diff
         }
       }
-      // Demote active events whose end time has passed
       if (game.status === "active" && !game.state && game._rawEndTime) {
         const end = new Date(game._rawEndTime).getTime()
         if (now > end) {
@@ -276,29 +242,20 @@ export function EventsProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    // Sort by start time ascending (chronological)
     allGames.sort((a, b) => {
       const dateA = a._rawStartTime ? new Date(a._rawStartTime).getTime() : 0
       const dateB = b._rawStartTime ? new Date(b._rawStartTime).getTime() : 0
       return dateA - dateB
     })
 
-    const active = allGames.filter(g => g.status === "active")
-    const upcoming = allGames.filter(g => g.status === "scheduled")
-    const completed = allGames.filter(g => g.status === "completed")
-    setActiveGames(active)
-    setUpcomingGames(upcoming)
-    setCompletedGames(completed)
-    if (typeof window !== "undefined") {
-      window.__activeEvents = active
-      window.__upcomingEvents = upcoming
-      window.__completedEvents = completed
+    setGames(allGames)
+    setLoading(false)
+    if (flushTimerRef.current !== null) {
+      clearTimeout(flushTimerRef.current)
+      flushTimerRef.current = null
     }
-    
-    // Reset dirty flag
-    isDirtyRef.current = false
 
-    // Schedule targeted timer for the next closest status transition
+    // Start/end boundaries can pass without a new tournament update.
     if (transitionTimerRef.current) {
       clearTimeout(transitionTimerRef.current)
       transitionTimerRef.current = null
@@ -307,37 +264,40 @@ export function EventsProvider({ children }: { children: ReactNode }) {
       const delay = Math.min(nextTransitionMs + 100, 2147483647)
       transitionTimerRef.current = setTimeout(() => {
         transitionTimerRef.current = null
-        isDirtyRef.current = true
-        updateGamesState()
+        publishSnapshot()
       }, delay)
     }
   }, [])
 
-  const markDirtyAndScheduleFlush = useCallback(() => {
-    isDirtyRef.current = true
+  const scheduleSnapshot = useCallback(() => {
     if (flushTimerRef.current !== null) return
 
     flushTimerRef.current = setTimeout(() => {
       flushTimerRef.current = null
-      if (isDirtyRef.current) {
-        updateGamesState()
-      }
+      publishSnapshot()
     }, 200)
-  }, [updateGamesState])
+  }, [publishSnapshot])
 
-  // Clean up any pending timers on unmount
   useEffect(() => {
+    gamesMapRef.current.clear()
+    setGames([])
+    setLoading(clientReady)
+    setError(null)
+    setHoveredEventId(null)
+    setSelectedEventId(null)
     return () => {
       if (flushTimerRef.current) clearTimeout(flushTimerRef.current)
       if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current)
+      flushTimerRef.current = null
+      transitionTimerRef.current = null
     }
-  }, [])
+  }, [clientReady, queryCache])
 
   const applyTournamentUpdate = useCallback((t: ITournament) => {
     const game = mapTournamentToActiveGame(t)
     if (!shouldIncludeEvent(game)) {
       gamesMapRef.current.delete(game.id)
-      markDirtyAndScheduleFlush()
+      scheduleSnapshot()
       return
     }
 
@@ -385,37 +345,37 @@ export function EventsProvider({ children }: { children: ReactNode }) {
     }
 
     gamesMapRef.current.set(game.id, game)
-    markDirtyAndScheduleFlush()
-    setLoading(false)
-  }, [markDirtyAndScheduleFlush])
+    scheduleSnapshot()
+    setError(null)
+  }, [scheduleSnapshot])
 
   const applyTournamentMessage = useCallback((message: ITournament | ITournament[]) => {
     const tournaments = Array.isArray(message) ? message : [message]
     for (const tournament of tournaments) applyTournamentUpdate(tournament)
   }, [applyTournamentUpdate])
 
-  // Initial events stream
+  // Load the catalogue once per client session; watch streams provide later changes.
   useNDJSONStream<ITournament | ITournament[]>({
     url: getApiUrl("/api/Events/GetEventsList?stream=true"),
+    restartKey: queryCache,
     enabled: !clientLoading && clientReady,
     onMessage: applyTournamentMessage,
     onEnd: () => {
-      setLoading(false)
-      // Force immediate update on completion
-      updateGamesState()
+      publishSnapshot()
     },
     onError: (e) => {
       console.error("Events list stream error:", e.message)
       setError(e.message)
       setLoading(false)
     },
-    autoReconnect: false // One-time load only, no reconnection
+    autoReconnect: false,
   })
 
-  // Stream event-driven tournament state updates for the sidebar.
+  // Keep the snapshot available for navigation; watch changes while an Events page is open.
   useNDJSONStream<ITournament | ITournament[]>({
     url: getApiUrl("/api/Events/WatchTournamentListUpdates"),
-    enabled: !clientLoading && clientReady,
+    restartKey: queryCache,
+    enabled: liveUpdates && !clientLoading && clientReady,
     onMessage: applyTournamentMessage,
     onError: (e) => {
       console.error("Tournament list updates stream error:", e)
@@ -426,12 +386,11 @@ export function EventsProvider({ children }: { children: ReactNode }) {
     useConstantRetry: true,
   })
 
-  // Stream player count updates for all events
-  useNDJSONStream<ITournamentPlayerUpdate>({
+  useNDJSONStream<ITournamentPlayerUpdate | ITournamentPlayerUpdate[]>({
     url: getApiUrl("/api/Events/WatchPlayerCount"),
-    enabled: !clientLoading && clientReady,
+    restartKey: queryCache,
+    enabled: liveUpdates && !clientLoading && clientReady,
     onMessage: (update) => {
-      // The update could be a single object or an array (due to controller's NdjsonStream handling)
       const updates = Array.isArray(update) ? update : [update]
       
       for (const item of updates) {
@@ -439,9 +398,9 @@ export function EventsProvider({ children }: { children: ReactNode }) {
         const game = gamesMapRef.current.get(eventId)
         if (!game) continue
 
-        if (item.totalRounds < 3) {
+        if (item.totalRounds !== undefined && item.totalRounds < 3) {
           gamesMapRef.current.delete(eventId)
-          markDirtyAndScheduleFlush()
+          scheduleSnapshot()
           continue
         }
 
@@ -451,12 +410,11 @@ export function EventsProvider({ children }: { children: ReactNode }) {
           game._rawEndTime !== item.endTime
 
         if (hasChanges) {
-          game.totalPlayers = item.totalPlayers
-          game.totalRounds = item.totalRounds
-          game._rawEndTime = item.endTime
-          game.endTime = formatTimeShort(item.endTime)
-          
-          markDirtyAndScheduleFlush()
+          gamesMapRef.current.set(eventId, {
+            ...game, totalPlayers: item.totalPlayers, totalRounds: item.totalRounds,
+            _rawEndTime: item.endTime, endTime: formatTimeShort(item.endTime),
+          })
+          scheduleSnapshot()
         }
       }
     },
@@ -468,20 +426,17 @@ export function EventsProvider({ children }: { children: ReactNode }) {
   })
 
 
-  // Set loading state based on client readiness
-  useEffect(() => {
-    if (clientLoading) {
-      setLoading(true)
-    } else if (!clientReady) {
-      setLoading(false)
-      setError("MTGO client is not ready")
-    } else {
-      setError(null)
-    }
-  }, [clientLoading, clientReady])
+  const { activeGames, upcomingGames, completedGames } = useMemo(() => ({
+    activeGames: clientReady ? games.filter(game => game.status === "active") : [],
+    upcomingGames: clientReady ? games.filter(game => game.status === "scheduled") : [],
+    completedGames: clientReady ? games.filter(game => game.status === "completed") : [],
+  }), [games, clientReady])
 
   return (
-    <EventsContext.Provider value={{ activeGames, upcomingGames, completedGames, loading, error, hoveredEventId, setHoveredEventId, selectedEventId, setSelectedEventId }}>
+    <EventsContext.Provider value={{ activeGames, upcomingGames, completedGames,
+      loading: clientLoading || (clientReady && loading),
+      error: !clientLoading && !clientReady ? "MTGO client is not ready" : error,
+      hoveredEventId, setHoveredEventId, selectedEventId, setSelectedEventId }}>
       {children}
     </EventsContext.Provider>
   )

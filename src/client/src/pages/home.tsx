@@ -186,7 +186,6 @@ export default function Home() {
         </Link>
       )}
       getArtUrl={getArtUrl}
-      renderViewMoreDecks={({ children }) => <Link to="/decks">{children}</Link>}
       />
 
       <MetagameDeckPreview

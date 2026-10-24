@@ -3,42 +3,29 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-import { useEffect, useState } from "react"
+import { useEffect, type ReactNode } from "react"
+import { useApplicationSettings } from "@/hooks/use-application-settings"
 
-type Theme = "dark" | "light" | "system"
-
-type ThemeProviderProps = {
-  children: React.ReactNode
-  defaultTheme?: Theme
+export function ThemeProvider({ children, storageKey = "vite-ui-theme" }: {
+  children: ReactNode
   storageKey?: string
-}
-
-export function ThemeProvider({
-  children,
-  defaultTheme = "system",
-  storageKey = "vite-ui-theme",
-}: ThemeProviderProps) {
-  const [theme] = useState<Theme>(
-    () => (localStorage.getItem(storageKey) as Theme) || defaultTheme
-  )
+}) {
+  const { preferences: { theme } } = useApplicationSettings()
 
   useEffect(() => {
-    const root = window.document.documentElement
-
-    root.classList.remove("light", "dark")
-
-    if (theme === "system") {
-      const systemTheme = window.matchMedia("(prefers-color-scheme: dark)")
-        .matches
-        ? "dark"
-        : "light"
-
-      root.classList.add(systemTheme)
-      return
+    localStorage.setItem(storageKey, theme)
+    const media = window.matchMedia("(prefers-color-scheme: dark)")
+    const apply = () => {
+      const root = document.documentElement
+      root.classList.remove("light", "dark")
+      root.classList.add(theme === "system" ? media.matches ? "dark" : "light" : theme)
+      const host = window as Window & { chrome?: { webview?: { postMessage: (message: string) => void } } }
+      host.chrome?.webview?.postMessage("tracker-theme-changed")
     }
-
-    root.classList.add(theme)
-  }, [theme])
+    apply()
+    if (theme === "system") media.addEventListener("change", apply)
+    return () => media.removeEventListener("change", apply)
+  }, [theme, storageKey])
 
   return <>{children}</>
 }

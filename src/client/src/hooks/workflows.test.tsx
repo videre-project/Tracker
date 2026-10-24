@@ -17,6 +17,7 @@ import { useTrades } from './use-trades'
 const clientState = vi.mocked(useClientState)
 
 const readyState = {
+  queryCache: new Map<string, unknown>(),
   state: {
     isConnected: true,
     isInitialized: true,
@@ -63,7 +64,7 @@ describe('representative data workflows', () => {
 
     vi.mocked(fetch).mockRejectedValueOnce(new Error('collection unavailable'))
     await act(async () => {
-      await result.current.refresh({ force: true })
+      result.current.refresh()
     })
     expect(result.current.error).toBe('collection unavailable')
   })
@@ -270,7 +271,6 @@ describe('representative data workflows', () => {
       totalCount: 1, page: 1, pageSize: 25, totalPages: 1,
     }
     vi.mocked(fetch)
-      .mockResolvedValueOnce(jsonResponse(['Pauper']))
       .mockResolvedValueOnce(jsonResponse(stats))
       .mockResolvedValueOnce(jsonResponse(trend))
 
@@ -278,14 +278,23 @@ describe('representative data workflows', () => {
     await waitFor(() => expect(dashboard.result.current.loading).toBe(false))
     expect(dashboard.result.current.stats).toEqual(stats)
     expect(dashboard.result.current.trend).toEqual(trend)
+    clientState.mockReturnValue({ ...readyState, isReady: false })
+    dashboard.rerender()
+    expect(dashboard.result.current.stats).toBeNull()
+    expect(dashboard.result.current.trend).toEqual([])
+    dashboard.unmount()
+    clientState.mockReturnValue(readyState)
 
     vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(history))
     const matches = renderHook(() => useGamesHistory(1, 25, 'ALL', 'Pauper'))
     await waitFor(() => expect(matches.result.current.loading).toBe(false))
     expect(matches.result.current.data?.items[0]?.eventName).toBe('Fixture Event')
-    expect(fetch).toHaveBeenLastCalledWith(
-      expect.stringMatching(/^\/api\/games\/history\?page=1&pageSize=25&format=Pauper&maxDate=/),
-      expect.objectContaining({ signal: expect.any(AbortSignal) }),
-    )
+    const [historyUrl, options] = vi.mocked(fetch).mock.lastCall!
+    const params = new URL(String(historyUrl), 'http://localhost').searchParams
+    expect(params.get('page')).toBe('1')
+    expect(params.get('pageSize')).toBe('25')
+    expect(params.get('format')).toBe('Pauper')
+    expect(params.has('maxDate')).toBe(true)
+    expect(options).toEqual(expect.objectContaining({ signal: expect.any(AbortSignal) }))
   })
 })

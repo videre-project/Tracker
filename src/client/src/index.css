@@ -25,10 +25,16 @@
 
 	#root {
 		@apply bg-background text-foreground;
-		height: calc(100vh + 16px);
-		transform: translateY(-16px);
+		height: 100%;
+		transform: translateY(0);
 		overflow: hidden;
 		overscroll-behavior: none;
+	}
+
+	:root[data-host="tracker"] #root {
+		--tracker-content-offset: 16px;
+		height: calc(100vh + var(--tracker-content-offset));
+		transform: translateY(calc(-1 * var(--tracker-content-offset)));
 	}
 
 	/* Ensure child elements use the full root height instead of viewport height */

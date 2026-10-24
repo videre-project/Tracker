@@ -98,9 +98,8 @@ NuGet source. Client development uses the shared UI source from
 `../platform/packages/ui`. Vite and TypeScript share the source mappings in
 `src/client/tsconfig.paths.json`; Docker mounts the same checkout at `/platform`.
 UI edits are picked up directly, without rebuilding the UI package or copying
-declarations into `node_modules`. Run `pnpm -C src/client build` to type-check
-and build Tracker against that source. Install dependencies in the `platform`
-checkout too (`pnpm -C ../platform install`).
+declarations into `node_modules`. Production builds bundle the installed UI
+package. Install dependencies in the `platform` checkout too (`pnpm -C ../platform install`).
 
 To follow the service logs or stop the container, use:
 

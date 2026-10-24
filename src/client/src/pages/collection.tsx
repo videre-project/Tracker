@@ -9,7 +9,9 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { createPortal } from "react-dom"
 import {
   CollectionLayout,
+  CollectionDrawer,
   type CollectionSelection,
+  type CollectionSelectionKey,
   type CollectionSortDirection,
   type CollectionSortMode,
   type CollectionViewMode,
@@ -23,6 +25,7 @@ import {
   getActiveCardFilterCount,
   type CardFilterState,
 } from "@videreproject/ui"
+import { CollectionBinders } from "@/components/collection-binders"
 import { useCollectionCards } from "@/hooks/use-collection"
 import { useCollectionSelection } from "@/hooks/use-collection-selection"
 import { getApiUrl } from "@/utils/api-config"
@@ -49,8 +52,11 @@ export default function Collection() {
   const [sortMode, setSortMode] = useState<CollectionSortMode>("name")
   const [sortDirection, setSortDirection] = useState<CollectionSortDirection>(DEFAULT_SORT_DIRECTION.name)
   const [viewMode, setViewMode] = useState<CollectionViewMode>("cards")
-  const [selectedItem, setSelectedItem] = useState<CollectionSelection | null>(null)
-  const resolvedSelection = useCollectionSelection(selectedItem)
+  const [selection, setSelection] = useState<CollectionSelectionKey | null>(null)
+  const selectItem = useCallback((value: CollectionSelection | null) => {
+    setSelection(value ? { catalogId: value.item.catalogId, viewMode: value.viewMode } : null)
+  }, [])
+  const resolvedSelection = useCollectionSelection(selection, snapshot)
 
   const activeFilterCount = useMemo(
     () => getActiveCardFilterCount(collectionFilters),
@@ -127,9 +133,9 @@ export default function Collection() {
   ), [collectionFilterActive, filterCatalogIds, products])
 
   useEffect(() => {
-    if (!selectedItem || !collectionFilterActive || !filterCatalogIds) return
-    if (!filterCatalogIds.has(selectedItem.item.catalogId)) setSelectedItem(null)
-  }, [collectionFilterActive, filterCatalogIds, selectedItem])
+    if (!selection || !collectionFilterActive || !filterCatalogIds) return
+    if (!filterCatalogIds.has(selection.catalogId)) setSelection(null)
+  }, [collectionFilterActive, filterCatalogIds, selection])
 
   const breadcrumbContextHost = typeof document === "undefined"
     ? null
@@ -154,7 +160,10 @@ export default function Collection() {
         breadcrumbContextHost,
       ) : null}
       <CollectionLayout
-        className="h-[calc(100vh-2.5rem)]"
+        className="h-auto min-h-0 flex-1"
+        bottomPanel={<CollectionDrawer title="Binders">
+          <CollectionBinders cards={cards} onSelectItem={selectItem} />
+        </CollectionDrawer>}
         cards={visibleCards}
         products={visibleProducts}
         filterItems={false}
@@ -170,8 +179,8 @@ export default function Collection() {
         }}
         onSortDirectionChange={setSortDirection}
         selection={resolvedSelection.selection}
-        onSelectionChange={setSelectedItem}
-        onCloseDetails={() => setSelectedItem(null)}
+        onSelectionChange={selectItem}
+        onCloseDetails={() => setSelection(null)}
         loading={loading || filterLoading || resolvedSelection.loading}
         error={filterError
           ? `Collection search failed: ${filterError}`

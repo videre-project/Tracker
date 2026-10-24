@@ -36,7 +36,7 @@ export default function History() {
   const [selectedFormat, setSelectedFormat] = useState<string>("")
   const [gameType, setGameType] = useState<GameType>("All")
   const [page, setPage] = useState(1)
-  const pageSize = 50
+  const [pageSize, setPageSize] = useState(50)
 
   // The format list is shared with the dashboard and deck filters.
   const { formats } = useGames("ALL", "")
@@ -118,14 +118,17 @@ export default function History() {
       pagination={
         data
           ? {
-              page: data.page,
-              totalPages: data.totalPages,
+              pageIndex: page - 1,
+              pageSize,
+              pageCount: data.totalPages ?? null,
+              hasPreviousPage: page > 1,
+              hasNextPage: page < (data.totalPages ?? page),
+              onPageIndexChange: index => setPage(index + 1),
+              onPageSizeChange: size => { setPageSize(size); setPage(1) },
               totalCount: data.totalCount,
             }
           : null
       }
-      onPreviousPage={() => setPage(p => Math.max(1, p - 1))}
-      onNextPage={() => setPage(p => Math.min(data?.totalPages ?? p, p + 1))}
     />
   )
 }

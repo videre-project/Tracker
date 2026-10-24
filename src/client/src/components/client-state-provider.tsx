@@ -15,10 +15,15 @@ export function ClientStateProvider({ children }: { children: ReactNode }) {
     status: "disconnected",
   })
   const [loading, setLoading] = useState(true)
+  // Replacing the cache invalidates earlier responses, even when React batches
+  // a disconnect and reconnect into one render.
+  const [queryCache, setQueryCache] = useState(() => new Map<string, unknown>())
 
   useNDJSONStream<ClientState>({
     url: getApiUrl("/api/Client/WatchState"),
     onMessage: (update) => {
+      if (!update.isInitialized || update.status !== "ready" || update.processId !== state.processId)
+        setQueryCache(new Map())
       setState(update)
       setLoading(false)
     },
@@ -40,6 +45,7 @@ export function ClientStateProvider({ children }: { children: ReactNode }) {
       state,
       loading,
       isReady: state.isInitialized && state.status === "ready",
+      queryCache,
     }}>
       {children}
     </ClientStateContext.Provider>
