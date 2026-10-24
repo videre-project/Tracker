@@ -11,10 +11,10 @@ using MTGOSDK.API;
 using MTGOSDK.API.Play.Games;
 using MTGOSDK.Core.Logging;
 
-using Tracker.Plugins;
+using MTGOTracker.Plugins;
 
 
-namespace Tracker.Services.MTGO;
+namespace MTGOTracker.Services.MTGO;
 
 /// <summary>
 /// Publishes host-owned games after their recording processors are ready.

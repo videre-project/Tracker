@@ -18,13 +18,13 @@ using MTGOSDK.API.Trade;
 using MTGOSDK.Core.Logging;
 using static MTGOSDK.Core.Reflection.DLRWrapper;
 
-using Tracker.Database;
-using Tracker.Database.Models.Collection;
-using Tracker.Services.MTGO.Collection;
-using static Tracker.Services.DatabaseService;
+using MTGOTracker.Database;
+using MTGOTracker.Database.Models.Collection;
+using MTGOTracker.Services.MTGO.Collection;
+using static MTGOTracker.Services.DatabaseService;
 
 
-namespace Tracker.Services.MTGO;
+namespace MTGOTracker.Services.MTGO;
 
 public static class CollectionAPIService
 {

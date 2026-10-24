@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 
 
-namespace Tracker.WebView.Extensions;
+namespace MTGOTracker.WebView.Extensions;
 
 /// <summary>
 /// WebView2 Console API Extensions

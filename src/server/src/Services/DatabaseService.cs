@@ -19,7 +19,7 @@ using Microsoft.EntityFrameworkCore;
 using MTGOSDK.Core.Logging;
 
 
-namespace Tracker.Services;
+namespace MTGOTracker.Services;
 
 /// <summary>
 /// Provides methods for configuring the SQLite database service.

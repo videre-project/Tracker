@@ -1,9 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net10.0-windows7.0</TargetFramework>
-    <AssemblyName>Tracker.Plugins</AssemblyName>
-    <RootNamespace>Tracker.Plugins</RootNamespace>
-    <PackageId>Tracker.Plugins</PackageId>
+    <AssemblyName>MTGOTracker.Plugins</AssemblyName>
+    <RootNamespace>MTGOTracker.Plugins</RootNamespace>
+    <PackageId>MTGOTracker.Plugins</PackageId>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <Version>$(TrackerPluginsVersion)</Version>

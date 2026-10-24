@@ -10,7 +10,7 @@ using MTGOSDK.API.Collection;
 using MTGOSDK.API.Play;
 
 
-namespace Tracker.Services.MTGO.Collection;
+namespace MTGOTracker.Services.MTGO.Collection;
 
 internal static class DeckFormatResolver
 {

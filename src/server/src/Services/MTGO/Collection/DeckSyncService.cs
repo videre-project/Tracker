@@ -15,12 +15,12 @@ using Microsoft.Extensions.Hosting;
 
 using MTGOSDK.Core.Logging;
 
-using Tracker.Database;
-using Tracker.Database.Models.Collection;
-using static Tracker.Services.DatabaseService;
+using MTGOTracker.Database;
+using MTGOTracker.Database.Models.Collection;
+using static MTGOTracker.Services.DatabaseService;
 
 
-namespace Tracker.Services.MTGO.Collection;
+namespace MTGOTracker.Services.MTGO.Collection;
 
 /// <summary>
 /// Reconciles controller-authored deck state in SQLite to MTGO.

@@ -14,7 +14,7 @@ using MTGOSDK.API.Play.Games;
 using MTGOSDK.API.Play.Games.Processors.Snapshots;
 
 
-namespace Tracker.Services.MTGO.Events;
+namespace MTGOTracker.Services.MTGO.Events;
 
 /// <summary>
 /// Complete replay interaction flags, with display data for pending abilities.

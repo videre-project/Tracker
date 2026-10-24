@@ -5,7 +5,7 @@
 
 using System.Collections.Generic;
 
-namespace Tracker.Controllers.Models.Decks;
+namespace MTGOTracker.Controllers.Models.Decks;
 
 public sealed record DeckHistoryView(
   long CurrentRevisionId,

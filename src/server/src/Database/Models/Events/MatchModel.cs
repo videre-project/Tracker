@@ -8,10 +8,10 @@ using System.Collections.Generic;
 
 using MTGOSDK.API.Play;
 
-using Tracker.Database.Models;
+using MTGOTracker.Database.Models;
 
 
-namespace Tracker.Database.Models.Events;
+namespace MTGOTracker.Database.Models.Events;
 
 public class MatchModel
 {

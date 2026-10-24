@@ -29,13 +29,13 @@ using Swashbuckle.AspNetCore.SwaggerGen;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection.Serialization;
 
-using Tracker.Services.Base;
-using Tracker.Services.MTGO.Events;
-using Tracker.Services.Videre;
-using Tracker.Services.Videre.Generated;
+using MTGOTracker.Services.Base;
+using MTGOTracker.Services.MTGO.Events;
+using MTGOTracker.Services.Videre;
+using MTGOTracker.Services.Videre.Generated;
 
 
-namespace Tracker.Services;
+namespace MTGOTracker.Services;
 
 /// <summary>
 /// Provides methods for configuring the ASP.NET Core Web API service.

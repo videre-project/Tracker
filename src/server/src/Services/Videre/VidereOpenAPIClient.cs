@@ -9,7 +9,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 
 
-namespace Tracker.Services.Videre.Generated;
+namespace MTGOTracker.Services.Videre.Generated;
 
 internal partial class VidereOpenAPIClient
 {

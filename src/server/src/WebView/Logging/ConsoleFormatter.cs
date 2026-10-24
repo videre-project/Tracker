@@ -7,7 +7,7 @@ using System;
 using Microsoft.Extensions.Logging;
 
 
-namespace Tracker.WebView.Logging;
+namespace MTGOTracker.WebView.Logging;
 
 public class ConsoleFormatter
 {

@@ -20,10 +20,10 @@ using System.Text.RegularExpressions;
 
 using MTGOSDK.API.Collection;
 
-using Tracker.Controllers.Models.Decks;
+using MTGOTracker.Controllers.Models.Decks;
 
 
-namespace Tracker.Services.Videre;
+namespace MTGOTracker.Services.Videre;
 
 public sealed class VidereAPIClient
 {

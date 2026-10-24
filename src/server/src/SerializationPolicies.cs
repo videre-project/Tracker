@@ -6,7 +6,7 @@
 using System.Text.Json;
 
 
-namespace Tracker;
+namespace MTGOTracker;
 
 public static class SerializationPolicies
 {

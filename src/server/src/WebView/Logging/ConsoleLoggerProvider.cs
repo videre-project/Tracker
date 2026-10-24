@@ -8,7 +8,7 @@ using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
 
 
-namespace Tracker.WebView.Logging;
+namespace MTGOTracker.WebView.Logging;
 
 public class ConsoleLoggerProvider(HostForm hostForm) : ILoggerProvider
 {

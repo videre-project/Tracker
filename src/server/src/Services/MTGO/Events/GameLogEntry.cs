@@ -9,7 +9,7 @@ using MTGOSDK.Core.Reflection;
 using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 
-namespace Tracker.Services.MTGO.Events;
+namespace MTGOTracker.Services.MTGO.Events;
 
 public struct GameLogEntry : IComparable<GameLogEntry>
 {

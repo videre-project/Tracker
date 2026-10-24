@@ -9,7 +9,7 @@
     <MTGOSDKVersion Condition="'$(MTGOSDKVersion)' == ''">1.8.0.20261018</MTGOSDKVersion>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Tracker.Plugins" Version="$(TrackerPluginsVersion)" />
+    <PackageReference Include="MTGOTracker.Plugins" Version="$(TrackerPluginsVersion)" />
     <PackageReference Include="MTGOSDK" Version="$(MTGOSDKVersion)" />
     <None Update="settings.schema.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <None Update="plugin.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />

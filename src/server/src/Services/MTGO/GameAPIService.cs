@@ -22,16 +22,16 @@ using MTGOSDK.Core.Remoting;
 using MTGOSDK.Core.Reflection;
 using static MTGOSDK.Core.Reflection.DLRWrapper;
 
-using Tracker.Services.Base;
-using Tracker.Services.MTGO.Events;
-using Tracker.Database.Extensions;
+using MTGOTracker.Services.Base;
+using MTGOTracker.Services.MTGO.Events;
+using MTGOTracker.Database.Extensions;
 
 using MTGOSDK.API.Play.Leagues;
 using MTGOSDK.API.Play.Tournaments;
 using static MTGOSDK.API.Events;
 
 
-namespace Tracker.Services.MTGO;
+namespace MTGOTracker.Services.MTGO;
 
 /// <summary>
 /// A singleton service that manages the Tracker's monitoring of MTGO events,

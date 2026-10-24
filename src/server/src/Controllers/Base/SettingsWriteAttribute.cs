@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 
-namespace Tracker.Controllers.Base;
+namespace MTGOTracker.Controllers.Base;
 
 /// <summary>
 /// Requires an explicit API request when changing settings or installing executable plugins.

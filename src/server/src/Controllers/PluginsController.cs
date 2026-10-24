@@ -5,10 +5,10 @@
 
 using Microsoft.AspNetCore.Mvc;
 
-using Tracker.Services;
+using MTGOTracker.Services;
 
 
-namespace Tracker.Controllers;
+namespace MTGOTracker.Controllers;
 
 [ApiController]
 [Route("api/plugins")]

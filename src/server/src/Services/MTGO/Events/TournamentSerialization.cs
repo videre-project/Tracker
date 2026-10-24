@@ -12,13 +12,13 @@ using MTGOSDK.API.Play.Tournaments;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection.Serialization;
 
-using Tracker.Controllers.Models.Events;
+using MTGOTracker.Controllers.Models.Events;
 
 using TournamentMatch = MTGOSDK.API.Play.Match;
 using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 
-namespace Tracker.Services.MTGO.Events;
+namespace MTGOTracker.Services.MTGO.Events;
 
 internal static class TournamentSerialization
 {

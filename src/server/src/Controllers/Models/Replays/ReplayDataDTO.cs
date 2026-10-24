@@ -6,7 +6,7 @@
 using System.Collections.Generic;
 
 
-namespace Tracker.Controllers.Models.Replays;
+namespace MTGOTracker.Controllers.Models.Replays;
 
 public class ReplayDataDTO
 {

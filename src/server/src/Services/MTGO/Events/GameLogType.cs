@@ -4,7 +4,7 @@
 **/
 
 
-namespace Tracker.Services.MTGO.Events;
+namespace MTGOTracker.Services.MTGO.Events;
 
 public enum GameLogType
 {

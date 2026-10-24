@@ -7,9 +7,9 @@
 using System;
 using System.Collections.Generic;
 
-using Tracker.Services.MTGO.Events;
+using MTGOTracker.Services.MTGO.Events;
 
-namespace Tracker.Database.Models.Events;
+namespace MTGOTracker.Database.Models.Events;
 
 public class GameStateModel
 {

@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 using Microsoft.Web.WebView2.Core;
 
 
-namespace Tracker.WebView.Extensions;
+namespace MTGOTracker.WebView.Extensions;
 
 /// <summary>
 /// Chrome DevTools Protocol (CDP) Extensions

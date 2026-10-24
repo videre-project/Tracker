@@ -10,10 +10,10 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Tracker.Services;
-using Tracker.Controllers.Base;
+using MTGOTracker.Services;
+using MTGOTracker.Controllers.Base;
 
-namespace Tracker.Controllers;
+namespace MTGOTracker.Controllers;
 
 [ApiController]
 [SettingsWrite]

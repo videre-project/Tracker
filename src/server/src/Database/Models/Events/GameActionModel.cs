@@ -12,7 +12,7 @@ using MTGOSDK.API.Play.Games;
 using MTGOSDK.Core.Reflection.Serialization;
 
 
-namespace Tracker.Database.Models.Events;
+namespace MTGOTracker.Database.Models.Events;
 
 public class GameActionModel
 {

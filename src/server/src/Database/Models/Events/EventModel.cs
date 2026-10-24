@@ -7,7 +7,7 @@ using System;
 using System.Collections.Generic;
 
 
-namespace Tracker.Database.Models.Events;
+namespace MTGOTracker.Database.Models.Events;
 
 
 public enum EventType

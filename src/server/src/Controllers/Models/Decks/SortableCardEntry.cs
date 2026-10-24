@@ -6,7 +6,7 @@
 using System.Collections.Generic;
 
 
-namespace Tracker.Controllers.Models.Decks;
+namespace MTGOTracker.Controllers.Models.Decks;
 
 /// <summary>
 /// Card entry with sortable metadata (CMC, Colors, Types)

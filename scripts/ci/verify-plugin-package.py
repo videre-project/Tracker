@@ -44,10 +44,10 @@ def verify(package: Path | BytesIO, host_assembly: Path | None) -> bytes:
             )
         assemblies = [
             name for name in archive.namelist()
-            if name.startswith("lib/") and name.endswith("/Tracker.Plugins.dll")
+            if name.startswith("lib/") and name.endswith("/MTGOTracker.Plugins.dll")
         ]
         if len(assemblies) != 1:
-            raise ValueError("Expected exactly one Tracker.Plugins runtime assembly")
+            raise ValueError("Expected exactly one MTGOTracker.Plugins runtime assembly")
         api = archive.read(assemblies[0])
     if host_assembly is not None and api != host_assembly.read_bytes():
         raise ValueError(

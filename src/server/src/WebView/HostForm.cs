@@ -23,12 +23,12 @@ using Microsoft.Web.WebView2.Core;
 
 using MTGOSDK.Core.Logging;
 
-using Tracker.Services;
-using Tracker.WebView.Components;
-using Tracker.WebView.Extensions;
+using MTGOTracker.Services;
+using MTGOTracker.WebView.Components;
+using MTGOTracker.WebView.Extensions;
 
 
-namespace Tracker.WebView;
+namespace MTGOTracker.WebView;
 
 public partial class HostForm : Form
 {

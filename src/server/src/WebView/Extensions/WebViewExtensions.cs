@@ -7,7 +7,7 @@ using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
 
 
-namespace Tracker.WebView.Extensions;
+namespace MTGOTracker.WebView.Extensions;
 
 public static class WebViewExtensions
 {

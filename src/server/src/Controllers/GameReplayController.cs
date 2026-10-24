@@ -13,14 +13,14 @@ using Microsoft.EntityFrameworkCore;
 
 using MTGOSDK.API.Chat;
 
-using Tracker.Controllers.Base;
-using Tracker.Database;
-using Tracker.Database.Models.Events;
-using Tracker.Controllers.Models.Replays;
-using Tracker.Services.MTGO;
-using Tracker.Services.MTGO.Events;
+using MTGOTracker.Controllers.Base;
+using MTGOTracker.Database;
+using MTGOTracker.Database.Models.Events;
+using MTGOTracker.Controllers.Models.Replays;
+using MTGOTracker.Services.MTGO;
+using MTGOTracker.Services.MTGO.Events;
 
-namespace Tracker.Controllers;
+namespace MTGOTracker.Controllers;
 
 [ApiController]
 public sealed class GameReplayController(

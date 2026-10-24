@@ -6,7 +6,7 @@
 using System;
 
 
-namespace Tracker.Database.Models.Collection;
+namespace MTGOTracker.Database.Models.Collection;
 
 public enum CardGroupingRevisionType
 {

@@ -1,4 +1,4 @@
-# Publishing Tracker.Plugins
+# Publishing MTGOTracker.Plugins
 
 The package version is `TrackerPluginsVersion` in `Directory.Packages.props`,
 independent of the Tracker application version in `package.json`. Bump the package
@@ -13,7 +13,7 @@ Publishing with these values:
 | Repository | `Tracker` |
 | Workflow file | `release.yml` |
 | Environment | `release` |
-| Package scope | `Tracker.Plugins` |
+| Package scope | `MTGOTracker.Plugins` |
 
 Choose the NuGet user or organization that should own the package and permit
 publishing new packages and new versions. The workflow file is `release.yml`,

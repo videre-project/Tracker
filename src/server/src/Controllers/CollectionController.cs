@@ -16,13 +16,13 @@ using Microsoft.AspNetCore.Mvc;
 using MTGOSDK.API.Collection;
 using MTGOSDK.Core.Logging;
 
-using Tracker.Controllers.Base;
-using Tracker.Controllers.Models.Collection;
-using Tracker.Services.MTGO;
-using Tracker.Services.Videre;
+using MTGOTracker.Controllers.Base;
+using MTGOTracker.Controllers.Models.Collection;
+using MTGOTracker.Services.MTGO;
+using MTGOTracker.Services.Videre;
 
 
-namespace Tracker.Controllers;
+namespace MTGOTracker.Controllers;
 
 /// <summary>
 /// Collection management API for rendering and streaming card images

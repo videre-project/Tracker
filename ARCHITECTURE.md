@@ -482,7 +482,7 @@ These analytics can be used to improve deck construction, gameplay decisions, an
 ### 6.1 Backend plugin host
 
 Tracker loads backend plugins at startup. Plugins register C# services and public
-ASP.NET controllers through the `Tracker.Plugins` NuGet package. MTGOSDK supplies
+ASP.NET controllers through the `MTGOTracker.Plugins` NuGet package. MTGOSDK supplies
 the shared game types, state processors, events, and actions. Tracker's package
 adds service registration, plugin configuration, and access to its existing session.
 
@@ -490,7 +490,7 @@ The host implementation lives in
 `src/server/src/Services/PluginService.cs`. The public library lives
 in `src/plugins/` and depends on MTGOSDK. Plugin authors consume the API as a NuGet package; plugins do not need Tracker's
 source or executable.
-All public Tracker integration types use the `Tracker.Plugins` namespace.
+All public Tracker integration types use the `MTGOTracker.Plugins` namespace.
 
 Build the package with:
 
@@ -587,7 +587,7 @@ absent from Tracker's own static references.
 ### 6.2 MTGO capability
 
 Plugins that need the session Tracker owns request `IMTGOContext` from the same
-`Tracker.Plugins` package through dependency injection:
+`MTGOTracker.Plugins` package through dependency injection:
 
 - `Client` is Tracker's ready client, or null while disconnected.
 - `UserId` is the ready session's cached user identity, avoiding another remote

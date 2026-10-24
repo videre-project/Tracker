@@ -4,7 +4,7 @@
 **/
 
 
-namespace Tracker.WebView;
+namespace MTGOTracker.WebView;
 
 public sealed class WebViewHostAccessor(HostForm? hostForm)
 {

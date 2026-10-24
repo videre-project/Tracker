@@ -6,7 +6,7 @@
 using System.Collections.Generic;
 
 
-namespace Tracker.Controllers.Models.Games;
+namespace MTGOTracker.Controllers.Models.Games;
 
 public class GameDetailsDTO
 {

@@ -26,17 +26,17 @@ using MTGOSDK.API.Play;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection.Serialization;
 
-using Tracker.Controllers.Base;
-using Tracker.Database;
-using Tracker.Database.Models;
-using Tracker.Controllers.Models.Decks;
-using Tracker.Services.MTGO;
-using Tracker.Services.MTGO.Collection;
-using Tracker.Services.Videre;
-using Tracker.WebView;
+using MTGOTracker.Controllers.Base;
+using MTGOTracker.Database;
+using MTGOTracker.Database.Models;
+using MTGOTracker.Controllers.Models.Decks;
+using MTGOTracker.Services.MTGO;
+using MTGOTracker.Services.MTGO.Collection;
+using MTGOTracker.Services.Videre;
+using MTGOTracker.WebView;
 
 
-namespace Tracker.Controllers;
+namespace MTGOTracker.Controllers;
 
 /// <summary>
 /// Decks management API

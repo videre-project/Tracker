@@ -8,7 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 
 
-namespace Tracker.Services.MTGO;
+namespace MTGOTracker.Services.MTGO;
 
 public sealed record DeckSyncCard(
   int CatalogId,

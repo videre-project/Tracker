@@ -7,7 +7,7 @@ using MTGOSDK.API;
 using MTGOSDK.API.Play.Games;
 
 
-namespace Tracker.Plugins;
+namespace MTGOTracker.Plugins;
 
 /// <summary>
 /// Provides access to Tracker's ready SDK client and initialized games.

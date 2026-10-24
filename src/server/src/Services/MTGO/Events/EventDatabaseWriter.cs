@@ -28,14 +28,14 @@ using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection;
 using MTGOSDK.Core.Reflection.Serialization;
 
-using Tracker.Database;
-using Tracker.Database.Models;
-using Tracker.Database.Models.Events;
-using Tracker.Database.Extensions;
-using Tracker.Services.MTGO.Collection;
+using MTGOTracker.Database;
+using MTGOTracker.Database.Models;
+using MTGOTracker.Database.Models.Events;
+using MTGOTracker.Database.Extensions;
+using MTGOTracker.Services.MTGO.Collection;
 
 
-namespace Tracker.Services.MTGO.Events;
+namespace MTGOTracker.Services.MTGO.Events;
 
 public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
 {

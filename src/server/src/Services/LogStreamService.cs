@@ -16,9 +16,9 @@ using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Remoting;
 
 
-[assembly: MetadataUpdateHandler(typeof(Tracker.Services.LogStreamHotReloadHandler))]
+[assembly: MetadataUpdateHandler(typeof(MTGOTracker.Services.LogStreamHotReloadHandler))]
 
-namespace Tracker.Services;
+namespace MTGOTracker.Services;
 
 /// <summary>
 /// Flushes the log buffer on hot reload so stale entries don't persist.

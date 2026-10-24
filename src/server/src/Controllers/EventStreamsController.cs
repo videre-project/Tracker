@@ -16,14 +16,14 @@ using MTGOSDK.API.Play.Tournaments;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection.Serialization;
 
-using Tracker.Controllers.Base;
-using Tracker.Controllers.Models.Events;
-using Tracker.Services.MTGO;
+using MTGOTracker.Controllers.Base;
+using MTGOTracker.Controllers.Models.Events;
+using MTGOTracker.Services.MTGO;
 
-using static Tracker.Services.MTGO.Events.TournamentSerialization;
+using static MTGOTracker.Services.MTGO.Events.TournamentSerialization;
 
 
-namespace Tracker.Controllers;
+namespace MTGOTracker.Controllers;
 
 [ApiController]
 public sealed class EventStreamsController : APIController

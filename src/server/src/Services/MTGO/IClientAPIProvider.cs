@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 using MTGOSDK.API;
 
 
-namespace Tracker.Services.MTGO;
+namespace MTGOTracker.Services.MTGO;
 
 public sealed record UserIdentity(int Id, string Username)
 {

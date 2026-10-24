@@ -7,7 +7,7 @@ using System.Text.Json;
 using System.Threading.Channels;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Tracker.Plugins;
+using MTGOTracker.Plugins;
 
 namespace Example;
 

@@ -4,7 +4,7 @@
 **/
 
 
-namespace Tracker.WebView.Components;
+namespace MTGOTracker.WebView.Components;
 
 public enum TitleBarButtonStyle
 {

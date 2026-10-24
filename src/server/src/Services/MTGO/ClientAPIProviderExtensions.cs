@@ -8,7 +8,7 @@ using System;
 using MTGOSDK.Core.Logging;
 
 
-namespace Tracker.Services.MTGO;
+namespace MTGOTracker.Services.MTGO;
 
 public static class ClientAPIProviderExtensions
 {

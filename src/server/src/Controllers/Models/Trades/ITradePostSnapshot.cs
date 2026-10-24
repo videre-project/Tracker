@@ -9,7 +9,7 @@ using MTGOSDK.API.Collection;
 using MTGOSDK.API.Trade.Enums;
 
 
-namespace Tracker.Controllers.Models.Trades;
+namespace MTGOTracker.Controllers.Models.Trades;
 
 /// <summary>
 /// Immutable projection used by MTGOSDK's bulk marketplace serializer.

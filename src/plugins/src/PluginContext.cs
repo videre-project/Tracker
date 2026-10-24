@@ -6,7 +6,7 @@
 using Microsoft.Extensions.Configuration;
 
 
-namespace Tracker.Plugins;
+namespace MTGOTracker.Plugins;
 
 /// <summary>
 /// Configuration and storage belonging to one installed plugin.

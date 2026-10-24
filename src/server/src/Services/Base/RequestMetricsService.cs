@@ -13,7 +13,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 
 
-namespace Tracker.Services.Base;
+namespace MTGOTracker.Services.Base;
 
 /// <summary>
 /// Per-endpoint request metrics for the Tracker's API.

@@ -17,15 +17,15 @@ using Microsoft.Extensions.DependencyInjection;
 using MTGOSDK.API.Collection;
 using MTGOSDK.Core.Logging;
 
-using Tracker.Controllers.Models.Decks;
-using Tracker.Database;
-using Tracker.Database.Models;
-using Tracker.Database.Models.Collection;
-using Tracker.Services.Videre;
-using static Tracker.Services.DatabaseService;
+using MTGOTracker.Controllers.Models.Decks;
+using MTGOTracker.Database;
+using MTGOTracker.Database.Models;
+using MTGOTracker.Database.Models.Collection;
+using MTGOTracker.Services.Videre;
+using static MTGOTracker.Services.DatabaseService;
 
 
-namespace Tracker.Services.MTGO.Collection;
+namespace MTGOTracker.Services.MTGO.Collection;
 
 public sealed record DeckRevisionView(
   long RevisionId,

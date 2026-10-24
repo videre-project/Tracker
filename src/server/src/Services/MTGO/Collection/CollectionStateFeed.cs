@@ -12,7 +12,7 @@ using System.Threading.Tasks;
 using MTGOSDK.API.Trade;
 
 
-namespace Tracker.Services.MTGO.Collection;
+namespace MTGOTracker.Services.MTGO.Collection;
 
 public sealed record CollectionStateSnapshot(
   int AccountId,

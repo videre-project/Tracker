@@ -18,14 +18,14 @@ using Microsoft.Win32.SafeHandles;
 
 using MTGOSDK.Core.Logging;
 
-using Tracker.Database;
-using Tracker.Installer;
-using Tracker.Services;
-using Tracker.Services.MTGO;
-using Tracker.WebView;
+using MTGOTracker.Database;
+using MTGOTracker.Installer;
+using MTGOTracker.Services;
+using MTGOTracker.Services.MTGO;
+using MTGOTracker.WebView;
 
 
-namespace Tracker;
+namespace MTGOTracker;
 
 public class Program
 {

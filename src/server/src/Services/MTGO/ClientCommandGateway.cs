@@ -12,10 +12,10 @@ using System.Threading.Tasks;
 using MTGOSDK.API.Collection;
 using MTGOSDK.API.Play;
 
-using Tracker.Services.MTGO.Collection;
+using MTGOTracker.Services.MTGO.Collection;
 
 
-namespace Tracker.Services.MTGO;
+namespace MTGOTracker.Services.MTGO;
 
 /// <summary>
 /// Applies Tracker-owned commands to the connected MTGO client.

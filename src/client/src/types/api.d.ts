@@ -3716,29 +3716,11 @@ export interface components {
             readonly isLoggedIn?: boolean;
             readonly lastLogin?: string | null;
         };
-        "Microsoft.AspNetCore.Mvc.ProblemDetails": {
-            type?: string | null;
-            title?: string | null;
-            /** Format: int32 */
-            status?: number | null;
-            detail?: string | null;
-            instance?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        "System.Text.Json.Nodes.JsonNode": {
-            options?: JsonNodeOptions;
-            parent?: JsonNode;
-            root?: JsonNode;
-        };
-        "System.Text.Json.Nodes.JsonNodeOptions": {
-            propertyNameCaseInsensitive?: boolean;
-        };
         /** @description Request body for updating a deck or opponent archetype */
-        "Tracker.Controllers.DecksController.UpdateArchetypeRequest": {
+        "MTGOTracker.Controllers.DecksController.UpdateArchetypeRequest": {
             archetype?: string | null;
         };
-        "Tracker.Controllers.Models.Client.IClientState": {
+        "MTGOTracker.Controllers.Models.Client.IClientState": {
             readonly isConnected?: boolean;
             readonly isInitialized?: boolean;
             /** Format: int32 */
@@ -3751,7 +3733,7 @@ export interface components {
             /** Format: int64 */
             readonly virtualMemory?: number | null;
         };
-        "Tracker.Controllers.Models.Collection.CollectionCardDTO": {
+        "MTGOTracker.Controllers.Models.Collection.CollectionCardDTO": {
             /** Format: int32 */
             catalogId: number;
             name: string | null;
@@ -3762,7 +3744,7 @@ export interface components {
             priceDate?: string | null;
             priceSource?: string | null;
         };
-        "Tracker.Controllers.Models.Collection.CollectionCardDetailDTO": {
+        "MTGOTracker.Controllers.Models.Collection.CollectionCardDetailDTO": {
             /** Format: int32 */
             catalogId: number;
             name: string | null;
@@ -3789,20 +3771,20 @@ export interface components {
             /** Format: int32 */
             otherFaceCatalogId?: number | null;
         };
-        "Tracker.Controllers.Models.Collection.CollectionPriceHistoryDTO": {
+        "MTGOTracker.Controllers.Models.Collection.CollectionPriceHistoryDTO": {
             /** Format: int32 */
             catalogId: number;
             /** Format: date-time */
             priceCacheExpiresAt: string;
             prices: CollectionPricePointDTO[] | null;
         };
-        "Tracker.Controllers.Models.Collection.CollectionPricePointDTO": {
+        "MTGOTracker.Controllers.Models.Collection.CollectionPricePointDTO": {
             date: string | null;
             /** Format: double */
             price: number;
             source?: string | null;
         };
-        "Tracker.Controllers.Models.Collection.CollectionProductDTO": {
+        "MTGOTracker.Controllers.Models.Collection.CollectionProductDTO": {
             /** Format: int32 */
             catalogId: number;
             name: string | null;
@@ -3819,14 +3801,14 @@ export interface components {
             priceDate?: string | null;
             priceSource?: string | null;
         };
-        "Tracker.Controllers.Models.Collection.CollectionSearchRequestDTO": {
+        "MTGOTracker.Controllers.Models.Collection.CollectionSearchRequestDTO": {
             query?: string | null;
         };
-        "Tracker.Controllers.Models.Collection.CollectionSearchResultDTO": {
+        "MTGOTracker.Controllers.Models.Collection.CollectionSearchResultDTO": {
             query: string | null;
             catalogIds: number[] | null;
         };
-        "Tracker.Controllers.Models.Collection.CollectionSnapshotDTO": {
+        "MTGOTracker.Controllers.Models.Collection.CollectionSnapshotDTO": {
             hash: string | null;
             /** Format: int32 */
             itemCount: number;
@@ -3843,7 +3825,7 @@ export interface components {
             cards: CollectionCardDTO[] | null;
             products: CollectionProductDTO[] | null;
         };
-        "Tracker.Controllers.Models.Decks.AggregatedArchetypeDTO": {
+        "MTGOTracker.Controllers.Models.Decks.AggregatedArchetypeDTO": {
             archetype: string | null;
             colors: string[] | null;
             /** Format: int32 */
@@ -3856,7 +3838,7 @@ export interface components {
             winrate: number;
             topCard: string | null;
         };
-        "Tracker.Controllers.Models.Decks.CardSearchResultDTO": {
+        "MTGOTracker.Controllers.Models.Decks.CardSearchResultDTO": {
             id: string | null;
             /** Format: int32 */
             mtgoId: number;
@@ -3875,18 +3857,18 @@ export interface components {
             loyalty?: string | null;
             defense?: string | null;
         };
-        "Tracker.Controllers.Models.Decks.DeckCardMoveItem": {
+        "MTGOTracker.Controllers.Models.Decks.DeckCardMoveItem": {
             /** Format: int32 */
             catalogId: number;
             /** Format: int32 */
             quantity?: number;
         };
-        "Tracker.Controllers.Models.Decks.DeckCardMoveRequest": {
+        "MTGOTracker.Controllers.Models.Decks.DeckCardMoveRequest": {
             fromZone: DeckCardZone;
             toZone: DeckCardZone;
             cards: DeckCardMoveItem[] | null;
         };
-        "Tracker.Controllers.Models.Decks.DeckCardMutationRequest": {
+        "MTGOTracker.Controllers.Models.Decks.DeckCardMutationRequest": {
             /** Format: int32 */
             catalogId: number;
             name?: string | null;
@@ -3902,14 +3884,14 @@ export interface components {
             rarity?: string | null;
         };
         /** @enum {string} */
-        "Tracker.Controllers.Models.Decks.DeckCardZone": "Mainboard" | "Sideboard";
-        "Tracker.Controllers.Models.Decks.DeckColorsDTO": {
+        "MTGOTracker.Controllers.Models.Decks.DeckCardZone": "Mainboard" | "Sideboard";
+        "MTGOTracker.Controllers.Models.Decks.DeckColorsDTO": {
             /** Format: int64 */
             revisionId: number;
             colors: string[] | null;
             colorString: string | null;
         };
-        "Tracker.Controllers.Models.Decks.DeckDTO": {
+        "MTGOTracker.Controllers.Models.Decks.DeckDTO": {
             /** Format: int64 */
             revisionId: number;
             /** Format: int32 */
@@ -3932,7 +3914,7 @@ export interface components {
             colors?: string[] | null;
             featuredCards?: CardEntry[] | null;
         };
-        "Tracker.Controllers.Models.Decks.DeckDetailDTO": {
+        "MTGOTracker.Controllers.Models.Decks.DeckDetailDTO": {
             /** Format: int64 */
             revisionId: number;
             /** Format: int32 */
@@ -3946,7 +3928,7 @@ export interface components {
             mainboard: CardEntry[] | null;
             sideboard: CardEntry[] | null;
         };
-        "Tracker.Controllers.Models.Decks.DeckHistoryChangeView": {
+        "MTGOTracker.Controllers.Models.Decks.DeckHistoryChangeView": {
             /** Format: int32 */
             catalogId?: number;
             name?: string | null;
@@ -3959,7 +3941,7 @@ export interface components {
             types?: string[] | null;
             rarity?: string | null;
         };
-        "Tracker.Controllers.Models.Decks.DeckHistoryRevisionView": {
+        "MTGOTracker.Controllers.Models.Decks.DeckHistoryRevisionView": {
             /** Format: int64 */
             revisionId?: number;
             /** Format: int64 */
@@ -3982,7 +3964,7 @@ export interface components {
             changesFromPrevious?: DeckHistoryChangeView[] | null;
             changesFromLatest?: DeckHistoryChangeView[] | null;
         };
-        "Tracker.Controllers.Models.Decks.DeckHistoryView": {
+        "MTGOTracker.Controllers.Models.Decks.DeckHistoryView": {
             /** Format: int64 */
             currentRevisionId?: number;
             /** Format: int64 */
@@ -3991,7 +3973,7 @@ export interface components {
             format?: string | null;
             revisions?: DeckHistoryRevisionView[] | null;
         };
-        "Tracker.Controllers.Models.Decks.DeckIdentifierDTO": {
+        "MTGOTracker.Controllers.Models.Decks.DeckIdentifierDTO": {
             /** Format: int64 */
             revisionId: number;
             /** Format: int32 */
@@ -3999,14 +3981,14 @@ export interface components {
             name: string | null;
             format: string | null;
         };
-        "Tracker.Controllers.Models.Decks.DeckMutationResponse": {
+        "MTGOTracker.Controllers.Models.Decks.DeckMutationResponse": {
             /** Format: int64 */
             revisionId: number;
             /** Format: int32 */
             netDeckId: number;
             deleted: boolean;
         };
-        "Tracker.Controllers.Models.Decks.ImportDeckCardDTO": {
+        "MTGOTracker.Controllers.Models.Decks.ImportDeckCardDTO": {
             /** Format: int32 */
             catalogId: number;
             name: string | null;
@@ -4018,14 +4000,14 @@ export interface components {
             types?: string[] | null;
             rarity?: string | null;
         };
-        "Tracker.Controllers.Models.Decks.ImportDeckRequest": {
+        "MTGOTracker.Controllers.Models.Decks.ImportDeckRequest": {
             name: string | null;
             format: string | null;
             archetype?: string | null;
             mainboard?: ImportDeckCardDTO[] | null;
             sideboard?: ImportDeckCardDTO[] | null;
         };
-        "Tracker.Controllers.Models.Decks.ImportDeckResponse": {
+        "MTGOTracker.Controllers.Models.Decks.ImportDeckResponse": {
             /** Format: int64 */
             revisionId: number;
             /** Format: int32 */
@@ -4033,7 +4015,7 @@ export interface components {
             created: boolean;
         };
         /** @description Card entry with sortable metadata (CMC, Colors, Types) */
-        "Tracker.Controllers.Models.Decks.SortableCardEntry": {
+        "MTGOTracker.Controllers.Models.Decks.SortableCardEntry": {
             /** Format: int32 */
             index?: number;
             /** Format: int32 */
@@ -4050,7 +4032,7 @@ export interface components {
             rarity: string | null;
             zone?: string | null;
         };
-        "Tracker.Controllers.Models.Events.IEventStructure": {
+        "MTGOTracker.Controllers.Models.Events.IEventStructure": {
             readonly name?: string | null;
             readonly isConstructed?: boolean;
             readonly isLimited?: boolean;
@@ -4060,7 +4042,7 @@ export interface components {
             readonly isSwiss?: boolean;
             readonly hasPlayoffs?: boolean;
         };
-        "Tracker.Controllers.Models.Events.IStandingResult": {
+        "MTGOTracker.Controllers.Models.Events.IStandingResult": {
             /** Format: int32 */
             readonly rank?: number;
             /** Format: int32 */
@@ -4070,7 +4052,7 @@ export interface components {
             readonly gameWinPercentage?: string | null;
             readonly opponentGameWinPercentage?: string | null;
         };
-        "Tracker.Controllers.Models.Events.ITournament": {
+        "MTGOTracker.Controllers.Models.Events.ITournament": {
             /** Format: int32 */
             readonly id?: number;
             readonly description?: string | null;
@@ -4095,7 +4077,7 @@ export interface components {
             readonly totalRoundDuration?: string;
             readonly inPlayoffs?: boolean;
         };
-        "Tracker.Controllers.Models.Events.ITournamentPlayerUpdate": {
+        "MTGOTracker.Controllers.Models.Events.ITournamentPlayerUpdate": {
             /** Format: int32 */
             readonly id?: number;
             /** Format: int32 */
@@ -4105,7 +4087,7 @@ export interface components {
             /** Format: date-time */
             readonly endTime?: string;
         };
-        "Tracker.Controllers.Models.Events.ITournamentStateUpdate": {
+        "MTGOTracker.Controllers.Models.Events.ITournamentStateUpdate": {
             /** Format: int32 */
             readonly id?: number;
             state?: TournamentState;
@@ -4119,7 +4101,7 @@ export interface components {
             readonly activePlayerNames?: string[] | null;
             readonly playerNamesWithMatchesInProgress?: string[] | null;
         };
-        "Tracker.Controllers.Models.Games.DashboardStatsDTO": {
+        "MTGOTracker.Controllers.Models.Games.DashboardStatsDTO": {
             /** Format: double */
             overallWinrate?: number;
             /** Format: int32 */
@@ -4142,7 +4124,7 @@ export interface components {
             durationTwoGames?: string | null;
             durationThreeGames?: string | null;
         };
-        "Tracker.Controllers.Models.Games.GameDetailsDTO": {
+        "MTGOTracker.Controllers.Models.Games.GameDetailsDTO": {
             /** Format: int32 */
             id?: number;
             /** Format: int32 */
@@ -4153,7 +4135,7 @@ export interface components {
             sideboardChanges?: SideboardChangeDTO[] | null;
             logs?: GameLogDTO[] | null;
         };
-        "Tracker.Controllers.Models.Games.GameLogDTO": {
+        "MTGOTracker.Controllers.Models.Games.GameLogDTO": {
             /** Format: int32 */
             id?: number;
             /** Format: int32 */
@@ -4165,7 +4147,7 @@ export interface components {
             /** Format: int32 */
             nonce?: number;
         };
-        "Tracker.Controllers.Models.Games.MatchDetailsDTO": {
+        "MTGOTracker.Controllers.Models.Games.MatchDetailsDTO": {
             /** Format: int32 */
             id?: number;
             /** Format: int32 */
@@ -4189,7 +4171,7 @@ export interface components {
             isActive?: boolean;
             games?: GameDetailsDTO[] | null;
         };
-        "Tracker.Controllers.Models.Games.MatchHistoryDTO": {
+        "MTGOTracker.Controllers.Models.Games.MatchHistoryDTO": {
             /** Format: int32 */
             id?: number;
             /** Format: int32 */
@@ -4213,7 +4195,7 @@ export interface components {
             isEvent?: boolean;
             matches?: MatchHistoryDTO[] | null;
         };
-        "Tracker.Controllers.Models.Games.PaginatedMatchesDTO": {
+        "MTGOTracker.Controllers.Models.Games.PaginatedMatchesDTO": {
             items?: MatchHistoryDTO[] | null;
             /** Format: int32 */
             totalCount?: number;
@@ -4224,7 +4206,7 @@ export interface components {
             /** Format: int32 */
             totalPages?: number;
         };
-        "Tracker.Controllers.Models.Games.PerformanceTrendDTO": {
+        "MTGOTracker.Controllers.Models.Games.PerformanceTrendDTO": {
             date: string | null;
             /** Format: date-time */
             rawDate: string;
@@ -4238,14 +4220,14 @@ export interface components {
             ci80?: number[] | null;
             ci50?: number[] | null;
         };
-        "Tracker.Controllers.Models.Games.SideboardChangeDTO": {
+        "MTGOTracker.Controllers.Models.Games.SideboardChangeDTO": {
             /** Format: int32 */
             catalogId?: number;
             name: string | null;
             /** Format: int32 */
             quantity?: number;
         };
-        "Tracker.Controllers.Models.Replays.ReplayActionDTO": {
+        "MTGOTracker.Controllers.Models.Replays.ReplayActionDTO": {
             actionType: string | null;
             actionName?: string | null;
             /** Format: int32 */
@@ -4258,7 +4240,7 @@ export interface components {
             /** Format: int32 */
             nonce?: number;
         };
-        "Tracker.Controllers.Models.Replays.ReplayCardDTO": {
+        "MTGOTracker.Controllers.Models.Replays.ReplayCardDTO": {
             /** Format: int32 */
             cardId?: number;
             name: string | null;
@@ -4283,7 +4265,7 @@ export interface components {
             /** Format: int32 */
             firstSeenSnapshotIndex?: number;
         };
-        "Tracker.Controllers.Models.Replays.ReplayDataDTO": {
+        "MTGOTracker.Controllers.Models.Replays.ReplayDataDTO": {
             /** Format: int32 */
             gameId?: number;
             /** Format: int32 */
@@ -4292,12 +4274,12 @@ export interface components {
             cards?: ReplayCardDTO[] | null;
             snapshots?: ReplaySnapshotDTO[] | null;
         };
-        "Tracker.Controllers.Models.Replays.ReplayLogDTO": {
+        "MTGOTracker.Controllers.Models.Replays.ReplayLogDTO": {
             /** Format: date-time */
             timestamp?: string;
             data: string | null;
         };
-        "Tracker.Controllers.Models.Replays.ReplayPlayerDTO": {
+        "MTGOTracker.Controllers.Models.Replays.ReplayPlayerDTO": {
             /** Format: int32 */
             playerIndex?: number;
             name: string | null;
@@ -4319,7 +4301,7 @@ export interface components {
             /** Format: int32 */
             avatarId?: number;
         };
-        "Tracker.Controllers.Models.Replays.ReplaySnapshotDTO": {
+        "MTGOTracker.Controllers.Models.Replays.ReplaySnapshotDTO": {
             /** Format: int32 */
             index?: number;
             /** Format: int32 */
@@ -4344,24 +4326,24 @@ export interface components {
             logs?: ReplayLogDTO[] | null;
         };
         /** @description Whether this process allows installed plugins to run. */
-        "Tracker.Controllers.PluginHostStatus": {
+        "MTGOTracker.Controllers.PluginHostStatus": {
             enabled?: boolean;
             failures?: PluginFailure[] | null;
         };
-        "Tracker.Controllers.PluginSettingsController.EnablePluginRequest": {
+        "MTGOTracker.Controllers.PluginSettingsController.EnablePluginRequest": {
             enabled?: boolean;
         };
-        "Tracker.Controllers.PluginSettingsController.PluginSettingsStatus": {
+        "MTGOTracker.Controllers.PluginSettingsController.PluginSettingsStatus": {
             hostEnabled?: boolean;
             restartRequired?: boolean;
             settingsError?: string | null;
             failures?: PluginFailure[] | null;
         };
-        "Tracker.Controllers.SettingsController.HostInstance": {
+        "MTGOTracker.Controllers.SettingsController.HostInstance": {
             /** Format: int32 */
             processId?: number;
         };
-        "Tracker.Controllers.TradeHistoryDetailDTO": {
+        "MTGOTracker.Controllers.TradeHistoryDetailDTO": {
             summary?: TradeHistorySummaryDTO;
             /** Format: uuid */
             token?: string;
@@ -4372,14 +4354,14 @@ export interface components {
             messages?: TradeHistoryMessageDTO[] | null;
             errors?: TradeHistoryErrorDTO[] | null;
         };
-        "Tracker.Controllers.TradeHistoryEffectDTO": {
+        "MTGOTracker.Controllers.TradeHistoryEffectDTO": {
             /** Format: int32 */
             catalogId?: number;
             /** Format: int32 */
             quantity?: number;
             isInferred?: boolean;
         };
-        "Tracker.Controllers.TradeHistoryErrorDTO": {
+        "MTGOTracker.Controllers.TradeHistoryErrorDTO": {
             /** Format: int64 */
             id?: number;
             /** Format: date-time */
@@ -4388,7 +4370,7 @@ export interface components {
             errorCode?: number;
             errorName?: string | null;
         };
-        "Tracker.Controllers.TradeHistoryItemDTO": {
+        "MTGOTracker.Controllers.TradeHistoryItemDTO": {
             role?: TradeEscrowItemRole;
             /** Format: int32 */
             catalogId?: number;
@@ -4399,7 +4381,7 @@ export interface components {
             rarity?: string | null;
             objectType?: string | null;
         };
-        "Tracker.Controllers.TradeHistoryMessageDTO": {
+        "MTGOTracker.Controllers.TradeHistoryMessageDTO": {
             /** Format: int64 */
             id?: number;
             /** Format: date-time */
@@ -4409,12 +4391,12 @@ export interface components {
             senderName?: string | null;
             text?: string | null;
         };
-        "Tracker.Controllers.TradeHistoryPageDTO": {
+        "MTGOTracker.Controllers.TradeHistoryPageDTO": {
             items?: TradeHistorySummaryDTO[] | null;
             /** Format: int64 */
             nextBeforeId?: number | null;
         };
-        "Tracker.Controllers.TradeHistorySummaryDTO": {
+        "MTGOTracker.Controllers.TradeHistorySummaryDTO": {
             /** Format: int64 */
             id?: number;
             /** Format: int32 */
@@ -4443,24 +4425,24 @@ export interface components {
             /** Format: int32 */
             incomingCatalogCount?: number;
         };
-        "Tracker.Controllers.TradePartnerAvatarDTO": {
+        "MTGOTracker.Controllers.TradePartnerAvatarDTO": {
             /** Format: int32 */
             productCatalogId?: number;
             productName?: string | null;
             productImageUrl?: string | null;
         };
-        "Tracker.Controllers.TradesController.TradeMarketplaceUpdateDTO": {
+        "MTGOTracker.Controllers.TradesController.TradeMarketplaceUpdateDTO": {
             /** Format: date-time */
             timestamp: string;
         };
-        "Tracker.Controllers.TradesController.TradePostDTO": {
+        "MTGOTracker.Controllers.TradesController.TradePostDTO": {
             posterName: string | null;
             format: TradePostFormat;
             message: string | null;
             wanted: CardQuantityPair[] | null;
             offered: CardQuantityPair[] | null;
         };
-        "Tracker.Controllers.TradesController.TradePostsPageDTO": {
+        "MTGOTracker.Controllers.TradesController.TradePostsPageDTO": {
             /** Format: int32 */
             page: number;
             /** Format: int32 */
@@ -4473,12 +4455,12 @@ export interface components {
             hasPreviousPage: boolean;
             posts?: TradePostDTO[] | null;
         };
-        "Tracker.Controllers.TradesController.TradeSnapshotDTO": {
+        "MTGOTracker.Controllers.TradesController.TradeSnapshotDTO": {
             myPost?: TradePostDTO;
             tradePartners?: TradePartner[] | null;
             currentTrade?: TradeEscrow;
         };
-        "Tracker.Database.Models.CardEntry": {
+        "MTGOTracker.Database.Models.CardEntry": {
             /** Format: int32 */
             catalogId?: number;
             name?: string | null;
@@ -4491,15 +4473,15 @@ export interface components {
             rarity?: string | null;
         };
         /** @enum {string} */
-        "Tracker.Database.Models.Trades.TradeAttributionStatus": "NotApplicable" | "Pending" | "Inferred" | "InferredAmbiguous" | "Unavailable";
+        "MTGOTracker.Database.Models.Trades.TradeAttributionStatus": "NotApplicable" | "Pending" | "Inferred" | "InferredAmbiguous" | "Unavailable";
         /** @enum {string} */
-        "Tracker.Database.Models.Trades.TradeEscrowItemRole": "LocalOffer" | "RemoteOffer" | "InferredOutput";
+        "MTGOTracker.Database.Models.Trades.TradeEscrowItemRole": "LocalOffer" | "RemoteOffer" | "InferredOutput";
         /** @enum {string} */
-        "Tracker.Database.Models.Trades.TradeEscrowKind": "Player" | "NonPlayer";
+        "MTGOTracker.Database.Models.Trades.TradeEscrowKind": "Player" | "NonPlayer";
         /** @enum {string} */
-        "Tracker.Database.Models.Trades.TradeEscrowResult": "InProgress" | "Completed" | "Cancelled" | "Failed" | "ClosedUnknown" | "Interrupted";
+        "MTGOTracker.Database.Models.Trades.TradeEscrowResult": "InProgress" | "Completed" | "Cancelled" | "Failed" | "ClosedUnknown" | "Interrupted";
         /** @description Display identity and visual flags for an ability awaiting placement on the stack. */
-        "Tracker.Services.MTGO.Events.AbilityInteractionData": {
+        "MTGOTracker.Services.MTGO.Events.AbilityInteractionData": {
             logicalAddress?: string | null;
             zone?: CardZone;
             name?: string | null;
@@ -4513,10 +4495,10 @@ export interface components {
             isActive?: boolean;
         };
         /**
-         * @description Data payload item for Tracker.Services.MTGO.Events.GameLogType.CardChange events.
+         * @description Data payload item for MTGOTracker.Services.MTGO.Events.GameLogType.CardChange events.
          *     Each event contains an array of these representing property diffs.
          */
-        "Tracker.Services.MTGO.Events.CardChangeData": {
+        "MTGOTracker.Services.MTGO.Events.CardChangeData": {
             /** Format: int32 */
             cardId?: number;
             cardName: string | null;
@@ -4528,7 +4510,7 @@ export interface components {
          * @description Complete replay interaction flags, with display data for pending abilities.
          *     Empty lists clear the preceding state's flags.
          */
-        "Tracker.Services.MTGO.Events.GameInteractionData": {
+        "MTGOTracker.Services.MTGO.Events.GameInteractionData": {
             mode?: InteractionMode;
             promptText?: string | null;
             selectable?: number[] | null;
@@ -4540,12 +4522,12 @@ export interface components {
             players?: PlayerInteractionData[] | null;
         };
         /** @enum {string} */
-        "Tracker.Services.MTGO.Events.GameLogType": "GameState" | "GameAction" | "ZoneChange" | "CardChange" | "PlayerChange" | "LogMessage" | "DamageAssignment" | "Reveal" | "Interaction";
+        "MTGOTracker.Services.MTGO.Events.GameLogType": "GameState" | "GameAction" | "ZoneChange" | "CardChange" | "PlayerChange" | "LogMessage" | "DamageAssignment" | "Reveal" | "Interaction";
         /**
-         * @description Data payload for Tracker.Services.MTGO.Events.GameLogType.GameState events.
+         * @description Data payload for MTGOTracker.Services.MTGO.Events.GameLogType.GameState events.
          *     Emitted when the turn number or phase changes between snapshots.
          */
-        "Tracker.Services.MTGO.Events.GameStateData": {
+        "MTGOTracker.Services.MTGO.Events.GameStateData": {
             /** Format: int32 */
             turn?: number;
             phase: string | null;
@@ -4554,10 +4536,10 @@ export interface components {
             previousPhase?: string | null;
         };
         /**
-         * @description Data payload item for Tracker.Services.MTGO.Events.GameLogType.PlayerChange events.
+         * @description Data payload item for MTGOTracker.Services.MTGO.Events.GameLogType.PlayerChange events.
          *     Each event contains an array of these representing property diffs.
          */
-        "Tracker.Services.MTGO.Events.PlayerChangeData": {
+        "MTGOTracker.Services.MTGO.Events.PlayerChangeData": {
             /** Format: int32 */
             playerIndex?: number;
             playerName: string | null;
@@ -4565,7 +4547,7 @@ export interface components {
             oldValue?: string | null;
             newValue?: string | null;
         };
-        "Tracker.Services.MTGO.Events.PlayerInteractionData": {
+        "MTGOTracker.Services.MTGO.Events.PlayerInteractionData": {
             /** Format: int32 */
             playerIndex?: number;
             isTargetable?: boolean;
@@ -4576,7 +4558,7 @@ export interface components {
          * @description A captured prompt option with typed action identity and local control fields.
          *     Native action-specific fields retain the schema emitted by MTGOSDK's ToJSON().
          */
-        "Tracker.Services.MTGO.Events.PromptOptionData": {
+        "MTGOTracker.Services.MTGO.Events.PromptOptionData": {
             type: ActionType;
             name?: string | null;
             $type?: string | null;
@@ -4594,10 +4576,10 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * @description Data payload item for Tracker.Services.MTGO.Events.GameLogType.ZoneChange events.
+         * @description Data payload item for MTGOTracker.Services.MTGO.Events.GameLogType.ZoneChange events.
          *     Each event contains an array of these representing correlated zone transfers.
          */
-        "Tracker.Services.MTGO.Events.ZoneTransferData": {
+        "MTGOTracker.Services.MTGO.Events.ZoneTransferData": {
             /** Format: int32 */
             cardId?: number;
             cardName: string | null;
@@ -4607,7 +4589,7 @@ export interface components {
             sourceId?: number | null;
             type: string | null;
         };
-        "Tracker.Services.PluginManager.ConfigurationField": {
+        "MTGOTracker.Services.PluginManager.ConfigurationField": {
             key?: string | null;
             label?: string | null;
             description?: string | null;
@@ -4617,13 +4599,13 @@ export interface components {
             default?: JsonNode;
             choices?: JsonNode[] | null;
         };
-        "Tracker.Services.PluginManager.PluginConfiguration": {
+        "MTGOTracker.Services.PluginManager.PluginConfiguration": {
             values?: {
                 [key: string]: JsonNode;
             } | null;
             fields?: ConfigurationField[] | null;
         };
-        "Tracker.Services.PluginManager.PluginInfo": {
+        "MTGOTracker.Services.PluginManager.PluginInfo": {
             id?: string | null;
             name?: string | null;
             description?: string | null;
@@ -4636,9 +4618,27 @@ export interface components {
             error?: string | null;
         };
         /** @description Identifies a failed installation and its actionable error. */
-        "Tracker.Services.PluginService.PluginFailure": {
+        "MTGOTracker.Services.PluginService.PluginFailure": {
             path?: string | null;
             message?: string | null;
+        };
+        "Microsoft.AspNetCore.Mvc.ProblemDetails": {
+            type?: string | null;
+            title?: string | null;
+            /** Format: int32 */
+            status?: number | null;
+            detail?: string | null;
+            instance?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        "System.Text.Json.Nodes.JsonNode": {
+            options?: JsonNodeOptions;
+            parent?: JsonNode;
+            root?: JsonNode;
+        };
+        "System.Text.Json.Nodes.JsonNodeOptions": {
+            propertyNameCaseInsensitive?: boolean;
         };
     };
     responses: never;
@@ -4676,90 +4676,90 @@ export type MtgosdkApiTradeTradeEscrow = TradeEscrow;
 export type MtgosdkApiTradeTradePartner = TradePartner;
 export type MtgosdkApiUsersAvatar = Avatar;
 export type MtgosdkApiUsersUser = User;
+export type MtgoTrackerControllersDecksControllerUpdateArchetypeRequest = UpdateArchetypeRequest;
+export type MtgoTrackerControllersModelsClientIClientState = IClientState;
+export type MtgoTrackerControllersModelsCollectionCollectionCardDto = CollectionCardDTO;
+export type MtgoTrackerControllersModelsCollectionCollectionCardDetailDto = CollectionCardDetailDTO;
+export type MtgoTrackerControllersModelsCollectionCollectionPriceHistoryDto = CollectionPriceHistoryDTO;
+export type MtgoTrackerControllersModelsCollectionCollectionPricePointDto = CollectionPricePointDTO;
+export type MtgoTrackerControllersModelsCollectionCollectionProductDto = CollectionProductDTO;
+export type MtgoTrackerControllersModelsCollectionCollectionSearchRequestDto = CollectionSearchRequestDTO;
+export type MtgoTrackerControllersModelsCollectionCollectionSearchResultDto = CollectionSearchResultDTO;
+export type MtgoTrackerControllersModelsCollectionCollectionSnapshotDto = CollectionSnapshotDTO;
+export type MtgoTrackerControllersModelsDecksAggregatedArchetypeDto = AggregatedArchetypeDTO;
+export type MtgoTrackerControllersModelsDecksCardSearchResultDto = CardSearchResultDTO;
+export type MtgoTrackerControllersModelsDecksDeckCardMoveItem = DeckCardMoveItem;
+export type MtgoTrackerControllersModelsDecksDeckCardMoveRequest = DeckCardMoveRequest;
+export type MtgoTrackerControllersModelsDecksDeckCardMutationRequest = DeckCardMutationRequest;
+export type MtgoTrackerControllersModelsDecksDeckCardZone = DeckCardZone;
+export type MtgoTrackerControllersModelsDecksDeckColorsDto = DeckColorsDTO;
+export type MtgoTrackerControllersModelsDecksDeckDto = DeckDTO;
+export type MtgoTrackerControllersModelsDecksDeckDetailDto = DeckDetailDTO;
+export type MtgoTrackerControllersModelsDecksDeckHistoryChangeView = DeckHistoryChangeView;
+export type MtgoTrackerControllersModelsDecksDeckHistoryRevisionView = DeckHistoryRevisionView;
+export type MtgoTrackerControllersModelsDecksDeckHistoryView = DeckHistoryView;
+export type MtgoTrackerControllersModelsDecksDeckIdentifierDto = DeckIdentifierDTO;
+export type MtgoTrackerControllersModelsDecksDeckMutationResponse = DeckMutationResponse;
+export type MtgoTrackerControllersModelsDecksImportDeckCardDto = ImportDeckCardDTO;
+export type MtgoTrackerControllersModelsDecksImportDeckRequest = ImportDeckRequest;
+export type MtgoTrackerControllersModelsDecksImportDeckResponse = ImportDeckResponse;
+export type MtgoTrackerControllersModelsDecksSortableCardEntry = SortableCardEntry;
+export type MtgoTrackerControllersModelsEventsIEventStructure = IEventStructure;
+export type MtgoTrackerControllersModelsEventsIStandingResult = IStandingResult;
+export type MtgoTrackerControllersModelsEventsITournament = ITournament;
+export type MtgoTrackerControllersModelsEventsITournamentPlayerUpdate = ITournamentPlayerUpdate;
+export type MtgoTrackerControllersModelsEventsITournamentStateUpdate = ITournamentStateUpdate;
+export type MtgoTrackerControllersModelsGamesDashboardStatsDto = DashboardStatsDTO;
+export type MtgoTrackerControllersModelsGamesGameDetailsDto = GameDetailsDTO;
+export type MtgoTrackerControllersModelsGamesGameLogDto = GameLogDTO;
+export type MtgoTrackerControllersModelsGamesMatchDetailsDto = MatchDetailsDTO;
+export type MtgoTrackerControllersModelsGamesMatchHistoryDto = MatchHistoryDTO;
+export type MtgoTrackerControllersModelsGamesPaginatedMatchesDto = PaginatedMatchesDTO;
+export type MtgoTrackerControllersModelsGamesPerformanceTrendDto = PerformanceTrendDTO;
+export type MtgoTrackerControllersModelsGamesSideboardChangeDto = SideboardChangeDTO;
+export type MtgoTrackerControllersModelsReplaysReplayActionDto = ReplayActionDTO;
+export type MtgoTrackerControllersModelsReplaysReplayCardDto = ReplayCardDTO;
+export type MtgoTrackerControllersModelsReplaysReplayDataDto = ReplayDataDTO;
+export type MtgoTrackerControllersModelsReplaysReplayLogDto = ReplayLogDTO;
+export type MtgoTrackerControllersModelsReplaysReplayPlayerDto = ReplayPlayerDTO;
+export type MtgoTrackerControllersModelsReplaysReplaySnapshotDto = ReplaySnapshotDTO;
+export type MtgoTrackerControllersPluginHostStatus = PluginHostStatus;
+export type MtgoTrackerControllersPluginSettingsControllerEnablePluginRequest = EnablePluginRequest;
+export type MtgoTrackerControllersPluginSettingsControllerPluginSettingsStatus = PluginSettingsStatus;
+export type MtgoTrackerControllersSettingsControllerHostInstance = HostInstance;
+export type MtgoTrackerControllersTradeHistoryDetailDto = TradeHistoryDetailDTO;
+export type MtgoTrackerControllersTradeHistoryEffectDto = TradeHistoryEffectDTO;
+export type MtgoTrackerControllersTradeHistoryErrorDto = TradeHistoryErrorDTO;
+export type MtgoTrackerControllersTradeHistoryItemDto = TradeHistoryItemDTO;
+export type MtgoTrackerControllersTradeHistoryMessageDto = TradeHistoryMessageDTO;
+export type MtgoTrackerControllersTradeHistoryPageDto = TradeHistoryPageDTO;
+export type MtgoTrackerControllersTradeHistorySummaryDto = TradeHistorySummaryDTO;
+export type MtgoTrackerControllersTradePartnerAvatarDto = TradePartnerAvatarDTO;
+export type MtgoTrackerControllersTradesControllerTradeMarketplaceUpdateDto = TradeMarketplaceUpdateDTO;
+export type MtgoTrackerControllersTradesControllerTradePostDto = TradePostDTO;
+export type MtgoTrackerControllersTradesControllerTradePostsPageDto = TradePostsPageDTO;
+export type MtgoTrackerControllersTradesControllerTradeSnapshotDto = TradeSnapshotDTO;
+export type MtgoTrackerDatabaseModelsCardEntry = CardEntry;
+export type MtgoTrackerDatabaseModelsTradesTradeAttributionStatus = TradeAttributionStatus;
+export type MtgoTrackerDatabaseModelsTradesTradeEscrowItemRole = TradeEscrowItemRole;
+export type MtgoTrackerDatabaseModelsTradesTradeEscrowKind = TradeEscrowKind;
+export type MtgoTrackerDatabaseModelsTradesTradeEscrowResult = TradeEscrowResult;
+export type MtgoTrackerServicesMtgoEventsAbilityInteractionData = AbilityInteractionData;
+export type MtgoTrackerServicesMtgoEventsCardChangeData = CardChangeData;
+export type MtgoTrackerServicesMtgoEventsGameInteractionData = GameInteractionData;
+export type MtgoTrackerServicesMtgoEventsGameLogType = GameLogType;
+export type MtgoTrackerServicesMtgoEventsGameStateData = GameStateData;
+export type MtgoTrackerServicesMtgoEventsPlayerChangeData = PlayerChangeData;
+export type MtgoTrackerServicesMtgoEventsPlayerInteractionData = PlayerInteractionData;
+export type MtgoTrackerServicesMtgoEventsPromptOptionData = PromptOptionData;
+export type MtgoTrackerServicesMtgoEventsZoneTransferData = ZoneTransferData;
+export type MtgoTrackerServicesPluginManagerConfigurationField = ConfigurationField;
+export type MtgoTrackerServicesPluginManagerPluginConfiguration = PluginConfiguration;
+export type MtgoTrackerServicesPluginManagerPluginInfo = PluginInfo;
+export type MtgoTrackerServicesPluginServicePluginFailure = PluginFailure;
 export type MicrosoftAspNetCoreMvcProblemDetails = ProblemDetails;
 export type SystemTextJsonNodesJsonNode = JsonNode;
 export type SystemTextJsonNodesJsonNodeOptions = JsonNodeOptions;
-export type TrackerControllersDecksControllerUpdateArchetypeRequest = UpdateArchetypeRequest;
-export type TrackerControllersModelsClientIClientState = IClientState;
-export type TrackerControllersModelsCollectionCollectionCardDto = CollectionCardDTO;
-export type TrackerControllersModelsCollectionCollectionCardDetailDto = CollectionCardDetailDTO;
-export type TrackerControllersModelsCollectionCollectionPriceHistoryDto = CollectionPriceHistoryDTO;
-export type TrackerControllersModelsCollectionCollectionPricePointDto = CollectionPricePointDTO;
-export type TrackerControllersModelsCollectionCollectionProductDto = CollectionProductDTO;
-export type TrackerControllersModelsCollectionCollectionSearchRequestDto = CollectionSearchRequestDTO;
-export type TrackerControllersModelsCollectionCollectionSearchResultDto = CollectionSearchResultDTO;
-export type TrackerControllersModelsCollectionCollectionSnapshotDto = CollectionSnapshotDTO;
-export type TrackerControllersModelsDecksAggregatedArchetypeDto = AggregatedArchetypeDTO;
-export type TrackerControllersModelsDecksCardSearchResultDto = CardSearchResultDTO;
-export type TrackerControllersModelsDecksDeckCardMoveItem = DeckCardMoveItem;
-export type TrackerControllersModelsDecksDeckCardMoveRequest = DeckCardMoveRequest;
-export type TrackerControllersModelsDecksDeckCardMutationRequest = DeckCardMutationRequest;
-export type TrackerControllersModelsDecksDeckCardZone = DeckCardZone;
-export type TrackerControllersModelsDecksDeckColorsDto = DeckColorsDTO;
-export type TrackerControllersModelsDecksDeckDto = DeckDTO;
-export type TrackerControllersModelsDecksDeckDetailDto = DeckDetailDTO;
-export type TrackerControllersModelsDecksDeckHistoryChangeView = DeckHistoryChangeView;
-export type TrackerControllersModelsDecksDeckHistoryRevisionView = DeckHistoryRevisionView;
-export type TrackerControllersModelsDecksDeckHistoryView = DeckHistoryView;
-export type TrackerControllersModelsDecksDeckIdentifierDto = DeckIdentifierDTO;
-export type TrackerControllersModelsDecksDeckMutationResponse = DeckMutationResponse;
-export type TrackerControllersModelsDecksImportDeckCardDto = ImportDeckCardDTO;
-export type TrackerControllersModelsDecksImportDeckRequest = ImportDeckRequest;
-export type TrackerControllersModelsDecksImportDeckResponse = ImportDeckResponse;
-export type TrackerControllersModelsDecksSortableCardEntry = SortableCardEntry;
-export type TrackerControllersModelsEventsIEventStructure = IEventStructure;
-export type TrackerControllersModelsEventsIStandingResult = IStandingResult;
-export type TrackerControllersModelsEventsITournament = ITournament;
-export type TrackerControllersModelsEventsITournamentPlayerUpdate = ITournamentPlayerUpdate;
-export type TrackerControllersModelsEventsITournamentStateUpdate = ITournamentStateUpdate;
-export type TrackerControllersModelsGamesDashboardStatsDto = DashboardStatsDTO;
-export type TrackerControllersModelsGamesGameDetailsDto = GameDetailsDTO;
-export type TrackerControllersModelsGamesGameLogDto = GameLogDTO;
-export type TrackerControllersModelsGamesMatchDetailsDto = MatchDetailsDTO;
-export type TrackerControllersModelsGamesMatchHistoryDto = MatchHistoryDTO;
-export type TrackerControllersModelsGamesPaginatedMatchesDto = PaginatedMatchesDTO;
-export type TrackerControllersModelsGamesPerformanceTrendDto = PerformanceTrendDTO;
-export type TrackerControllersModelsGamesSideboardChangeDto = SideboardChangeDTO;
-export type TrackerControllersModelsReplaysReplayActionDto = ReplayActionDTO;
-export type TrackerControllersModelsReplaysReplayCardDto = ReplayCardDTO;
-export type TrackerControllersModelsReplaysReplayDataDto = ReplayDataDTO;
-export type TrackerControllersModelsReplaysReplayLogDto = ReplayLogDTO;
-export type TrackerControllersModelsReplaysReplayPlayerDto = ReplayPlayerDTO;
-export type TrackerControllersModelsReplaysReplaySnapshotDto = ReplaySnapshotDTO;
-export type TrackerControllersPluginHostStatus = PluginHostStatus;
-export type TrackerControllersPluginSettingsControllerEnablePluginRequest = EnablePluginRequest;
-export type TrackerControllersPluginSettingsControllerPluginSettingsStatus = PluginSettingsStatus;
-export type TrackerControllersSettingsControllerHostInstance = HostInstance;
-export type TrackerControllersTradeHistoryDetailDto = TradeHistoryDetailDTO;
-export type TrackerControllersTradeHistoryEffectDto = TradeHistoryEffectDTO;
-export type TrackerControllersTradeHistoryErrorDto = TradeHistoryErrorDTO;
-export type TrackerControllersTradeHistoryItemDto = TradeHistoryItemDTO;
-export type TrackerControllersTradeHistoryMessageDto = TradeHistoryMessageDTO;
-export type TrackerControllersTradeHistoryPageDto = TradeHistoryPageDTO;
-export type TrackerControllersTradeHistorySummaryDto = TradeHistorySummaryDTO;
-export type TrackerControllersTradePartnerAvatarDto = TradePartnerAvatarDTO;
-export type TrackerControllersTradesControllerTradeMarketplaceUpdateDto = TradeMarketplaceUpdateDTO;
-export type TrackerControllersTradesControllerTradePostDto = TradePostDTO;
-export type TrackerControllersTradesControllerTradePostsPageDto = TradePostsPageDTO;
-export type TrackerControllersTradesControllerTradeSnapshotDto = TradeSnapshotDTO;
-export type TrackerDatabaseModelsCardEntry = CardEntry;
-export type TrackerDatabaseModelsTradesTradeAttributionStatus = TradeAttributionStatus;
-export type TrackerDatabaseModelsTradesTradeEscrowItemRole = TradeEscrowItemRole;
-export type TrackerDatabaseModelsTradesTradeEscrowKind = TradeEscrowKind;
-export type TrackerDatabaseModelsTradesTradeEscrowResult = TradeEscrowResult;
-export type TrackerServicesMtgoEventsAbilityInteractionData = AbilityInteractionData;
-export type TrackerServicesMtgoEventsCardChangeData = CardChangeData;
-export type TrackerServicesMtgoEventsGameInteractionData = GameInteractionData;
-export type TrackerServicesMtgoEventsGameLogType = GameLogType;
-export type TrackerServicesMtgoEventsGameStateData = GameStateData;
-export type TrackerServicesMtgoEventsPlayerChangeData = PlayerChangeData;
-export type TrackerServicesMtgoEventsPlayerInteractionData = PlayerInteractionData;
-export type TrackerServicesMtgoEventsPromptOptionData = PromptOptionData;
-export type TrackerServicesMtgoEventsZoneTransferData = ZoneTransferData;
-export type TrackerServicesPluginManagerConfigurationField = ConfigurationField;
-export type TrackerServicesPluginManagerPluginConfiguration = PluginConfiguration;
-export type TrackerServicesPluginManagerPluginInfo = PluginInfo;
-export type TrackerServicesPluginServicePluginFailure = PluginFailure;
 export type $defs = Record<string, never>;
 export type operations = Record<string, never>;
 
@@ -4793,87 +4793,87 @@ export type TradeEscrow = components['schemas']['MTGOSDK.API.Trade.TradeEscrow']
 export type TradePartner = components['schemas']['MTGOSDK.API.Trade.TradePartner'];
 export type Avatar = components['schemas']['MTGOSDK.API.Users.Avatar'];
 export type User = components['schemas']['MTGOSDK.API.Users.User'];
+export type UpdateArchetypeRequest = components['schemas']['MTGOTracker.Controllers.DecksController.UpdateArchetypeRequest'];
+export type IClientState = components['schemas']['MTGOTracker.Controllers.Models.Client.IClientState'];
+export type CollectionCardDTO = components['schemas']['MTGOTracker.Controllers.Models.Collection.CollectionCardDTO'];
+export type CollectionCardDetailDTO = components['schemas']['MTGOTracker.Controllers.Models.Collection.CollectionCardDetailDTO'];
+export type CollectionPriceHistoryDTO = components['schemas']['MTGOTracker.Controllers.Models.Collection.CollectionPriceHistoryDTO'];
+export type CollectionPricePointDTO = components['schemas']['MTGOTracker.Controllers.Models.Collection.CollectionPricePointDTO'];
+export type CollectionProductDTO = components['schemas']['MTGOTracker.Controllers.Models.Collection.CollectionProductDTO'];
+export type CollectionSearchRequestDTO = components['schemas']['MTGOTracker.Controllers.Models.Collection.CollectionSearchRequestDTO'];
+export type CollectionSearchResultDTO = components['schemas']['MTGOTracker.Controllers.Models.Collection.CollectionSearchResultDTO'];
+export type CollectionSnapshotDTO = components['schemas']['MTGOTracker.Controllers.Models.Collection.CollectionSnapshotDTO'];
+export type AggregatedArchetypeDTO = components['schemas']['MTGOTracker.Controllers.Models.Decks.AggregatedArchetypeDTO'];
+export type CardSearchResultDTO = components['schemas']['MTGOTracker.Controllers.Models.Decks.CardSearchResultDTO'];
+export type DeckCardMoveItem = components['schemas']['MTGOTracker.Controllers.Models.Decks.DeckCardMoveItem'];
+export type DeckCardMoveRequest = components['schemas']['MTGOTracker.Controllers.Models.Decks.DeckCardMoveRequest'];
+export type DeckCardMutationRequest = components['schemas']['MTGOTracker.Controllers.Models.Decks.DeckCardMutationRequest'];
+export type DeckCardZone = components['schemas']['MTGOTracker.Controllers.Models.Decks.DeckCardZone'];
+export type DeckColorsDTO = components['schemas']['MTGOTracker.Controllers.Models.Decks.DeckColorsDTO'];
+export type DeckDTO = components['schemas']['MTGOTracker.Controllers.Models.Decks.DeckDTO'];
+export type DeckDetailDTO = components['schemas']['MTGOTracker.Controllers.Models.Decks.DeckDetailDTO'];
+export type DeckHistoryChangeView = components['schemas']['MTGOTracker.Controllers.Models.Decks.DeckHistoryChangeView'];
+export type DeckHistoryRevisionView = components['schemas']['MTGOTracker.Controllers.Models.Decks.DeckHistoryRevisionView'];
+export type DeckHistoryView = components['schemas']['MTGOTracker.Controllers.Models.Decks.DeckHistoryView'];
+export type DeckIdentifierDTO = components['schemas']['MTGOTracker.Controllers.Models.Decks.DeckIdentifierDTO'];
+export type DeckMutationResponse = components['schemas']['MTGOTracker.Controllers.Models.Decks.DeckMutationResponse'];
+export type ImportDeckCardDTO = components['schemas']['MTGOTracker.Controllers.Models.Decks.ImportDeckCardDTO'];
+export type ImportDeckRequest = components['schemas']['MTGOTracker.Controllers.Models.Decks.ImportDeckRequest'];
+export type ImportDeckResponse = components['schemas']['MTGOTracker.Controllers.Models.Decks.ImportDeckResponse'];
+export type SortableCardEntry = components['schemas']['MTGOTracker.Controllers.Models.Decks.SortableCardEntry'];
+export type IEventStructure = components['schemas']['MTGOTracker.Controllers.Models.Events.IEventStructure'];
+export type IStandingResult = components['schemas']['MTGOTracker.Controllers.Models.Events.IStandingResult'];
+export type ITournament = components['schemas']['MTGOTracker.Controllers.Models.Events.ITournament'];
+export type ITournamentPlayerUpdate = components['schemas']['MTGOTracker.Controllers.Models.Events.ITournamentPlayerUpdate'];
+export type ITournamentStateUpdate = components['schemas']['MTGOTracker.Controllers.Models.Events.ITournamentStateUpdate'];
+export type DashboardStatsDTO = components['schemas']['MTGOTracker.Controllers.Models.Games.DashboardStatsDTO'];
+export type GameDetailsDTO = components['schemas']['MTGOTracker.Controllers.Models.Games.GameDetailsDTO'];
+export type GameLogDTO = components['schemas']['MTGOTracker.Controllers.Models.Games.GameLogDTO'];
+export type MatchDetailsDTO = components['schemas']['MTGOTracker.Controllers.Models.Games.MatchDetailsDTO'];
+export type MatchHistoryDTO = components['schemas']['MTGOTracker.Controllers.Models.Games.MatchHistoryDTO'];
+export type PaginatedMatchesDTO = components['schemas']['MTGOTracker.Controllers.Models.Games.PaginatedMatchesDTO'];
+export type PerformanceTrendDTO = components['schemas']['MTGOTracker.Controllers.Models.Games.PerformanceTrendDTO'];
+export type SideboardChangeDTO = components['schemas']['MTGOTracker.Controllers.Models.Games.SideboardChangeDTO'];
+export type ReplayActionDTO = components['schemas']['MTGOTracker.Controllers.Models.Replays.ReplayActionDTO'];
+export type ReplayCardDTO = components['schemas']['MTGOTracker.Controllers.Models.Replays.ReplayCardDTO'];
+export type ReplayDataDTO = components['schemas']['MTGOTracker.Controllers.Models.Replays.ReplayDataDTO'];
+export type ReplayLogDTO = components['schemas']['MTGOTracker.Controllers.Models.Replays.ReplayLogDTO'];
+export type ReplayPlayerDTO = components['schemas']['MTGOTracker.Controllers.Models.Replays.ReplayPlayerDTO'];
+export type ReplaySnapshotDTO = components['schemas']['MTGOTracker.Controllers.Models.Replays.ReplaySnapshotDTO'];
+export type PluginHostStatus = components['schemas']['MTGOTracker.Controllers.PluginHostStatus'];
+export type EnablePluginRequest = components['schemas']['MTGOTracker.Controllers.PluginSettingsController.EnablePluginRequest'];
+export type PluginSettingsStatus = components['schemas']['MTGOTracker.Controllers.PluginSettingsController.PluginSettingsStatus'];
+export type HostInstance = components['schemas']['MTGOTracker.Controllers.SettingsController.HostInstance'];
+export type TradeHistoryDetailDTO = components['schemas']['MTGOTracker.Controllers.TradeHistoryDetailDTO'];
+export type TradeHistoryEffectDTO = components['schemas']['MTGOTracker.Controllers.TradeHistoryEffectDTO'];
+export type TradeHistoryErrorDTO = components['schemas']['MTGOTracker.Controllers.TradeHistoryErrorDTO'];
+export type TradeHistoryItemDTO = components['schemas']['MTGOTracker.Controllers.TradeHistoryItemDTO'];
+export type TradeHistoryMessageDTO = components['schemas']['MTGOTracker.Controllers.TradeHistoryMessageDTO'];
+export type TradeHistoryPageDTO = components['schemas']['MTGOTracker.Controllers.TradeHistoryPageDTO'];
+export type TradeHistorySummaryDTO = components['schemas']['MTGOTracker.Controllers.TradeHistorySummaryDTO'];
+export type TradePartnerAvatarDTO = components['schemas']['MTGOTracker.Controllers.TradePartnerAvatarDTO'];
+export type TradeMarketplaceUpdateDTO = components['schemas']['MTGOTracker.Controllers.TradesController.TradeMarketplaceUpdateDTO'];
+export type TradePostDTO = components['schemas']['MTGOTracker.Controllers.TradesController.TradePostDTO'];
+export type TradePostsPageDTO = components['schemas']['MTGOTracker.Controllers.TradesController.TradePostsPageDTO'];
+export type TradeSnapshotDTO = components['schemas']['MTGOTracker.Controllers.TradesController.TradeSnapshotDTO'];
+export type CardEntry = components['schemas']['MTGOTracker.Database.Models.CardEntry'];
+export type TradeAttributionStatus = components['schemas']['MTGOTracker.Database.Models.Trades.TradeAttributionStatus'];
+export type TradeEscrowItemRole = components['schemas']['MTGOTracker.Database.Models.Trades.TradeEscrowItemRole'];
+export type TradeEscrowKind = components['schemas']['MTGOTracker.Database.Models.Trades.TradeEscrowKind'];
+export type TradeEscrowResult = components['schemas']['MTGOTracker.Database.Models.Trades.TradeEscrowResult'];
+export type AbilityInteractionData = components['schemas']['MTGOTracker.Services.MTGO.Events.AbilityInteractionData'];
+export type CardChangeData = components['schemas']['MTGOTracker.Services.MTGO.Events.CardChangeData'];
+export type GameInteractionData = components['schemas']['MTGOTracker.Services.MTGO.Events.GameInteractionData'];
+export type GameLogType = components['schemas']['MTGOTracker.Services.MTGO.Events.GameLogType'];
+export type GameStateData = components['schemas']['MTGOTracker.Services.MTGO.Events.GameStateData'];
+export type PlayerChangeData = components['schemas']['MTGOTracker.Services.MTGO.Events.PlayerChangeData'];
+export type PlayerInteractionData = components['schemas']['MTGOTracker.Services.MTGO.Events.PlayerInteractionData'];
+export type PromptOptionData = components['schemas']['MTGOTracker.Services.MTGO.Events.PromptOptionData'];
+export type ZoneTransferData = components['schemas']['MTGOTracker.Services.MTGO.Events.ZoneTransferData'];
+export type ConfigurationField = components['schemas']['MTGOTracker.Services.PluginManager.ConfigurationField'];
+export type PluginConfiguration = components['schemas']['MTGOTracker.Services.PluginManager.PluginConfiguration'];
+export type PluginInfo = components['schemas']['MTGOTracker.Services.PluginManager.PluginInfo'];
+export type PluginFailure = components['schemas']['MTGOTracker.Services.PluginService.PluginFailure'];
 export type ProblemDetails = components['schemas']['Microsoft.AspNetCore.Mvc.ProblemDetails'];
 export type JsonNode = components['schemas']['System.Text.Json.Nodes.JsonNode'];
 export type JsonNodeOptions = components['schemas']['System.Text.Json.Nodes.JsonNodeOptions'];
-export type UpdateArchetypeRequest = components['schemas']['Tracker.Controllers.DecksController.UpdateArchetypeRequest'];
-export type IClientState = components['schemas']['Tracker.Controllers.Models.Client.IClientState'];
-export type CollectionCardDTO = components['schemas']['Tracker.Controllers.Models.Collection.CollectionCardDTO'];
-export type CollectionCardDetailDTO = components['schemas']['Tracker.Controllers.Models.Collection.CollectionCardDetailDTO'];
-export type CollectionPriceHistoryDTO = components['schemas']['Tracker.Controllers.Models.Collection.CollectionPriceHistoryDTO'];
-export type CollectionPricePointDTO = components['schemas']['Tracker.Controllers.Models.Collection.CollectionPricePointDTO'];
-export type CollectionProductDTO = components['schemas']['Tracker.Controllers.Models.Collection.CollectionProductDTO'];
-export type CollectionSearchRequestDTO = components['schemas']['Tracker.Controllers.Models.Collection.CollectionSearchRequestDTO'];
-export type CollectionSearchResultDTO = components['schemas']['Tracker.Controllers.Models.Collection.CollectionSearchResultDTO'];
-export type CollectionSnapshotDTO = components['schemas']['Tracker.Controllers.Models.Collection.CollectionSnapshotDTO'];
-export type AggregatedArchetypeDTO = components['schemas']['Tracker.Controllers.Models.Decks.AggregatedArchetypeDTO'];
-export type CardSearchResultDTO = components['schemas']['Tracker.Controllers.Models.Decks.CardSearchResultDTO'];
-export type DeckCardMoveItem = components['schemas']['Tracker.Controllers.Models.Decks.DeckCardMoveItem'];
-export type DeckCardMoveRequest = components['schemas']['Tracker.Controllers.Models.Decks.DeckCardMoveRequest'];
-export type DeckCardMutationRequest = components['schemas']['Tracker.Controllers.Models.Decks.DeckCardMutationRequest'];
-export type DeckCardZone = components['schemas']['Tracker.Controllers.Models.Decks.DeckCardZone'];
-export type DeckColorsDTO = components['schemas']['Tracker.Controllers.Models.Decks.DeckColorsDTO'];
-export type DeckDTO = components['schemas']['Tracker.Controllers.Models.Decks.DeckDTO'];
-export type DeckDetailDTO = components['schemas']['Tracker.Controllers.Models.Decks.DeckDetailDTO'];
-export type DeckHistoryChangeView = components['schemas']['Tracker.Controllers.Models.Decks.DeckHistoryChangeView'];
-export type DeckHistoryRevisionView = components['schemas']['Tracker.Controllers.Models.Decks.DeckHistoryRevisionView'];
-export type DeckHistoryView = components['schemas']['Tracker.Controllers.Models.Decks.DeckHistoryView'];
-export type DeckIdentifierDTO = components['schemas']['Tracker.Controllers.Models.Decks.DeckIdentifierDTO'];
-export type DeckMutationResponse = components['schemas']['Tracker.Controllers.Models.Decks.DeckMutationResponse'];
-export type ImportDeckCardDTO = components['schemas']['Tracker.Controllers.Models.Decks.ImportDeckCardDTO'];
-export type ImportDeckRequest = components['schemas']['Tracker.Controllers.Models.Decks.ImportDeckRequest'];
-export type ImportDeckResponse = components['schemas']['Tracker.Controllers.Models.Decks.ImportDeckResponse'];
-export type SortableCardEntry = components['schemas']['Tracker.Controllers.Models.Decks.SortableCardEntry'];
-export type IEventStructure = components['schemas']['Tracker.Controllers.Models.Events.IEventStructure'];
-export type IStandingResult = components['schemas']['Tracker.Controllers.Models.Events.IStandingResult'];
-export type ITournament = components['schemas']['Tracker.Controllers.Models.Events.ITournament'];
-export type ITournamentPlayerUpdate = components['schemas']['Tracker.Controllers.Models.Events.ITournamentPlayerUpdate'];
-export type ITournamentStateUpdate = components['schemas']['Tracker.Controllers.Models.Events.ITournamentStateUpdate'];
-export type DashboardStatsDTO = components['schemas']['Tracker.Controllers.Models.Games.DashboardStatsDTO'];
-export type GameDetailsDTO = components['schemas']['Tracker.Controllers.Models.Games.GameDetailsDTO'];
-export type GameLogDTO = components['schemas']['Tracker.Controllers.Models.Games.GameLogDTO'];
-export type MatchDetailsDTO = components['schemas']['Tracker.Controllers.Models.Games.MatchDetailsDTO'];
-export type MatchHistoryDTO = components['schemas']['Tracker.Controllers.Models.Games.MatchHistoryDTO'];
-export type PaginatedMatchesDTO = components['schemas']['Tracker.Controllers.Models.Games.PaginatedMatchesDTO'];
-export type PerformanceTrendDTO = components['schemas']['Tracker.Controllers.Models.Games.PerformanceTrendDTO'];
-export type SideboardChangeDTO = components['schemas']['Tracker.Controllers.Models.Games.SideboardChangeDTO'];
-export type ReplayActionDTO = components['schemas']['Tracker.Controllers.Models.Replays.ReplayActionDTO'];
-export type ReplayCardDTO = components['schemas']['Tracker.Controllers.Models.Replays.ReplayCardDTO'];
-export type ReplayDataDTO = components['schemas']['Tracker.Controllers.Models.Replays.ReplayDataDTO'];
-export type ReplayLogDTO = components['schemas']['Tracker.Controllers.Models.Replays.ReplayLogDTO'];
-export type ReplayPlayerDTO = components['schemas']['Tracker.Controllers.Models.Replays.ReplayPlayerDTO'];
-export type ReplaySnapshotDTO = components['schemas']['Tracker.Controllers.Models.Replays.ReplaySnapshotDTO'];
-export type PluginHostStatus = components['schemas']['Tracker.Controllers.PluginHostStatus'];
-export type EnablePluginRequest = components['schemas']['Tracker.Controllers.PluginSettingsController.EnablePluginRequest'];
-export type PluginSettingsStatus = components['schemas']['Tracker.Controllers.PluginSettingsController.PluginSettingsStatus'];
-export type HostInstance = components['schemas']['Tracker.Controllers.SettingsController.HostInstance'];
-export type TradeHistoryDetailDTO = components['schemas']['Tracker.Controllers.TradeHistoryDetailDTO'];
-export type TradeHistoryEffectDTO = components['schemas']['Tracker.Controllers.TradeHistoryEffectDTO'];
-export type TradeHistoryErrorDTO = components['schemas']['Tracker.Controllers.TradeHistoryErrorDTO'];
-export type TradeHistoryItemDTO = components['schemas']['Tracker.Controllers.TradeHistoryItemDTO'];
-export type TradeHistoryMessageDTO = components['schemas']['Tracker.Controllers.TradeHistoryMessageDTO'];
-export type TradeHistoryPageDTO = components['schemas']['Tracker.Controllers.TradeHistoryPageDTO'];
-export type TradeHistorySummaryDTO = components['schemas']['Tracker.Controllers.TradeHistorySummaryDTO'];
-export type TradePartnerAvatarDTO = components['schemas']['Tracker.Controllers.TradePartnerAvatarDTO'];
-export type TradeMarketplaceUpdateDTO = components['schemas']['Tracker.Controllers.TradesController.TradeMarketplaceUpdateDTO'];
-export type TradePostDTO = components['schemas']['Tracker.Controllers.TradesController.TradePostDTO'];
-export type TradePostsPageDTO = components['schemas']['Tracker.Controllers.TradesController.TradePostsPageDTO'];
-export type TradeSnapshotDTO = components['schemas']['Tracker.Controllers.TradesController.TradeSnapshotDTO'];
-export type CardEntry = components['schemas']['Tracker.Database.Models.CardEntry'];
-export type TradeAttributionStatus = components['schemas']['Tracker.Database.Models.Trades.TradeAttributionStatus'];
-export type TradeEscrowItemRole = components['schemas']['Tracker.Database.Models.Trades.TradeEscrowItemRole'];
-export type TradeEscrowKind = components['schemas']['Tracker.Database.Models.Trades.TradeEscrowKind'];
-export type TradeEscrowResult = components['schemas']['Tracker.Database.Models.Trades.TradeEscrowResult'];
-export type AbilityInteractionData = components['schemas']['Tracker.Services.MTGO.Events.AbilityInteractionData'];
-export type CardChangeData = components['schemas']['Tracker.Services.MTGO.Events.CardChangeData'];
-export type GameInteractionData = components['schemas']['Tracker.Services.MTGO.Events.GameInteractionData'];
-export type GameLogType = components['schemas']['Tracker.Services.MTGO.Events.GameLogType'];
-export type GameStateData = components['schemas']['Tracker.Services.MTGO.Events.GameStateData'];
-export type PlayerChangeData = components['schemas']['Tracker.Services.MTGO.Events.PlayerChangeData'];
-export type PlayerInteractionData = components['schemas']['Tracker.Services.MTGO.Events.PlayerInteractionData'];
-export type PromptOptionData = components['schemas']['Tracker.Services.MTGO.Events.PromptOptionData'];
-export type ZoneTransferData = components['schemas']['Tracker.Services.MTGO.Events.ZoneTransferData'];
-export type ConfigurationField = components['schemas']['Tracker.Services.PluginManager.ConfigurationField'];
-export type PluginConfiguration = components['schemas']['Tracker.Services.PluginManager.PluginConfiguration'];
-export type PluginInfo = components['schemas']['Tracker.Services.PluginManager.PluginInfo'];
-export type PluginFailure = components['schemas']['Tracker.Services.PluginService.PluginFailure'];

@@ -11,10 +11,10 @@ using MTGOSDK.API.Play.Tournaments;
 using MTGOSDK.Core.Logging;
 using static MTGOSDK.Core.Reflection.DLRWrapper;
 
-using Tracker.Database.Extensions;
+using MTGOTracker.Database.Extensions;
 
 
-namespace Tracker.Services.MTGO.Events;
+namespace MTGOTracker.Services.MTGO.Events;
 
 public class EventTracker : IDisposable
 {

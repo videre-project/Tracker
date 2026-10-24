@@ -12,7 +12,7 @@ using MTGOSDK.Core.Reflection.Serialization;
 using Swashbuckle.AspNetCore.SwaggerGen;
 
 
-namespace Tracker.Services.Base;
+namespace MTGOTracker.Services.Base;
 
 /// <summary>
 /// Aligns Tracker's OpenAPI schemas with MTGOSDK's runtime NonSerializableAttribute

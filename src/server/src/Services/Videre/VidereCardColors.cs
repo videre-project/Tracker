@@ -8,7 +8,7 @@ using System.Collections.Generic;
 using System.Linq;
 
 
-namespace Tracker.Services.Videre;
+namespace MTGOTracker.Services.Videre;
 
 public static class VidereCardColors
 {

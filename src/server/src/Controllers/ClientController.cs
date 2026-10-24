@@ -13,12 +13,12 @@ using Microsoft.AspNetCore.Mvc;
 
 using MTGOSDK.Core.Remoting;
 
-using Tracker.Controllers.Base;
-using Tracker.Controllers.Models.Client;
-using Tracker.Services.MTGO;
+using MTGOTracker.Controllers.Base;
+using MTGOTracker.Controllers.Models.Client;
+using MTGOTracker.Services.MTGO;
 
 
-namespace Tracker.Controllers;
+namespace MTGOTracker.Controllers;
 
 /// <summary>
 /// Client connection state management API

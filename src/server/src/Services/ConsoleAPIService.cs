@@ -9,11 +9,11 @@ using Microsoft.Extensions.DependencyInjection;
 
 using MTGOSDK.Core.Logging;
 
-using Tracker.WebView;
-using Tracker.WebView.Logging;
+using MTGOTracker.WebView;
+using MTGOTracker.WebView.Logging;
 
 
-namespace Tracker.Services;
+namespace MTGOTracker.Services;
 
 /// <summary>
 /// Provides methods for configuring the WebView2 DevTools Console.

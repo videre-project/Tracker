@@ -10,7 +10,7 @@ using System.Linq;
 using MTGOSDK.Win32.API;
 
 
-namespace Tracker.Installer;
+namespace MTGOTracker.Installer;
 
 /// <summary>
 /// Small wrapper around Restart Manager to retrieve lock owners for files.

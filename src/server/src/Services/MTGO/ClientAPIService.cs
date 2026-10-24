@@ -17,10 +17,10 @@ using MTGOSDK.Core.Exceptions;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Remoting;
 
-using Tracker.Plugins;
+using MTGOTracker.Plugins;
 
 
-namespace Tracker.Services.MTGO;
+namespace MTGOTracker.Services.MTGO;
 
 /// <summary>
 /// Provides methods for configuring the MTGOSDK API service.

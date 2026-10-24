@@ -4,7 +4,7 @@
 **/
 
 
-namespace Tracker.Controllers.Models.Events;
+namespace MTGOTracker.Controllers.Models.Events;
 
 public interface IEventStructure
 {

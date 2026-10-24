@@ -19,18 +19,18 @@ using MTGOSDK.API.Play;
 using MTGOSDK.API.Play.Games;
 using MTGOSDK.Core.Logging;
 
-using Tracker.Controllers.Base;
-using Tracker.Controllers.Models.Decks;
-using Tracker.Database;
-using Tracker.Database.Models.Events;
-using Tracker.Controllers.Models.Games;
-using Tracker.Services.MTGO;
-using Tracker.Services.MTGO.Collection;
-using Tracker.Services.Videre;
-using static Tracker.Services.MTGO.Events.MatchHistorySerialization;
+using MTGOTracker.Controllers.Base;
+using MTGOTracker.Controllers.Models.Decks;
+using MTGOTracker.Database;
+using MTGOTracker.Database.Models.Events;
+using MTGOTracker.Controllers.Models.Games;
+using MTGOTracker.Services.MTGO;
+using MTGOTracker.Services.MTGO.Collection;
+using MTGOTracker.Services.Videre;
+using static MTGOTracker.Services.MTGO.Events.MatchHistorySerialization;
 
 
-namespace Tracker.Controllers;
+namespace MTGOTracker.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]

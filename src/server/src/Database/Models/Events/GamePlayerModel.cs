@@ -7,7 +7,7 @@
 using System;
 
 
-namespace Tracker.Database.Models.Events;
+namespace MTGOTracker.Database.Models.Events;
 
 public class GamePlayerModel
 {

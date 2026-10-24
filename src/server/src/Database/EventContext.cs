@@ -10,16 +10,16 @@ using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 
-using Tracker.Database.Models;
-using Tracker.Database.Models.Events;
-using Tracker.Database.Extensions;
-using Tracker.Services.MTGO.Events;
+using MTGOTracker.Database.Models;
+using MTGOTracker.Database.Models.Events;
+using MTGOTracker.Database.Extensions;
+using MTGOTracker.Services.MTGO.Events;
 
 using MTGOSDK.API.Play;
 using MTGOSDK.API.Play.Games;
 
 
-namespace Tracker.Database;
+namespace MTGOTracker.Database;
 
 public class EventContext(DbContextOptions<EventContext> options)
     : DbContext(options)

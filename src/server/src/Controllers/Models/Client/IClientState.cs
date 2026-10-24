@@ -4,7 +4,7 @@
 **/
 
 
-namespace Tracker.Controllers.Models.Client;
+namespace MTGOTracker.Controllers.Models.Client;
 
 public interface IClientState
 {

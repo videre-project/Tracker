@@ -14,13 +14,13 @@ using Microsoft.AspNetCore.Mvc;
 using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Remoting;
 
-using Tracker.Controllers.Base;
-using Tracker.Services;
-using Tracker.Services.Base;
-using Tracker.WebView;
+using MTGOTracker.Controllers.Base;
+using MTGOTracker.Services;
+using MTGOTracker.Services.Base;
+using MTGOTracker.WebView;
 
 
-namespace Tracker.Controllers;
+namespace MTGOTracker.Controllers;
 
 /// <summary>
 /// SDK and Diver diagnostics streaming API.

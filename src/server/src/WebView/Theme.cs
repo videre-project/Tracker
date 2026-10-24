@@ -7,7 +7,7 @@ using System.Drawing;
 using System.Windows.Forms;
 
 
-namespace Tracker.WebView;
+namespace MTGOTracker.WebView;
 
 public static class Theme
 {

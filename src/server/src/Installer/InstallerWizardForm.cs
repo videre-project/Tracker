@@ -15,7 +15,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 
 
-namespace Tracker.Installer;
+namespace MTGOTracker.Installer;
 
 /// <summary>
 /// Basic installer wizard UI.

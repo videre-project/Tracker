@@ -11,11 +11,11 @@ using System.Threading.Tasks;
 
 using Microsoft.EntityFrameworkCore;
 
-using Tracker.Database;
-using Tracker.Database.Models.Trades;
+using MTGOTracker.Database;
+using MTGOTracker.Database.Models.Trades;
 
 
-namespace Tracker.Services.MTGO.Trade;
+namespace MTGOTracker.Services.MTGO.Trade;
 
 internal sealed record TradeItemWrite(
   TradeEscrowItemRole Role,

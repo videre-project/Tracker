@@ -15,17 +15,17 @@ using Microsoft.Extensions.DependencyInjection;
 
 using MTGOSDK.API.Play.Games;
 
-using Tracker.Controllers.Base;
-using Tracker.Database;
-using Tracker.Controllers.Models.Games;
-using Tracker.Services.MTGO;
-using Tracker.Services.MTGO.Collection;
-using Tracker.Services.MTGO.Events;
+using MTGOTracker.Controllers.Base;
+using MTGOTracker.Database;
+using MTGOTracker.Controllers.Models.Games;
+using MTGOTracker.Services.MTGO;
+using MTGOTracker.Services.MTGO.Collection;
+using MTGOTracker.Services.MTGO.Events;
 
-using static Tracker.Services.MTGO.Events.MatchHistorySerialization;
+using static MTGOTracker.Services.MTGO.Events.MatchHistorySerialization;
 
 
-namespace Tracker.Controllers;
+namespace MTGOTracker.Controllers;
 
 [ApiController]
 public sealed class GameStreamsController(

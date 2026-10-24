@@ -1,7 +1,7 @@
 using System.Windows.Forms;
 using System.Reflection;
 
-namespace Tracker.WebView.Components;
+namespace MTGOTracker.WebView.Components;
 
 internal static class ControlExtensions
 {

@@ -3,7 +3,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-namespace Tracker.Database.Models.Collection;
+namespace MTGOTracker.Database.Models.Collection;
 
 public sealed class DeckRevisionEnrichmentModel
 {

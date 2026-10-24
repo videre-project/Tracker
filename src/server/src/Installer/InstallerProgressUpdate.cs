@@ -4,7 +4,7 @@
 **/
 
 
-namespace Tracker.Installer;
+namespace MTGOTracker.Installer;
 
 /// <summary>
 /// Progress state displayed in the installer wizard.

@@ -4,7 +4,7 @@
 **/
 
 
-namespace Tracker.Controllers.Models.Collection;
+namespace MTGOTracker.Controllers.Models.Collection;
 
 public class CollectionPricePointDTO
 {

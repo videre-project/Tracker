@@ -4,7 +4,7 @@
 **/
 
 
-namespace Tracker.Controllers.Models.Decks;
+namespace MTGOTracker.Controllers.Models.Decks;
 
 public class DeckIdentifierDTO
 {

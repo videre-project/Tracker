@@ -10,7 +10,7 @@ using System.Threading;
 using System.Windows.Forms;
 
 
-namespace Tracker.WebView.Components;
+namespace MTGOTracker.WebView.Components;
 
 public class ErrorWindow : Form, IResizableForm
 {

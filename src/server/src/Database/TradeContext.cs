@@ -8,10 +8,10 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 
-using Tracker.Database.Models.Trades;
+using MTGOTracker.Database.Models.Trades;
 
 
-namespace Tracker.Database;
+namespace MTGOTracker.Database;
 
 public sealed class TradeContext(DbContextOptions<TradeContext> options)
     : DbContext(options)

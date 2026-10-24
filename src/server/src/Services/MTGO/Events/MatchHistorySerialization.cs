@@ -15,12 +15,12 @@ using MTGOSDK.API.Chat;
 using MTGOSDK.API.Play;
 using MTGOSDK.API.Play.Games;
 
-using Tracker.Database;
-using Tracker.Database.Models.Events;
-using Tracker.Controllers.Models.Games;
+using MTGOTracker.Database;
+using MTGOTracker.Database.Models.Events;
+using MTGOTracker.Controllers.Models.Games;
 
 
-namespace Tracker.Services.MTGO.Events;
+namespace MTGOTracker.Services.MTGO.Events;
 
 internal static class MatchHistorySerialization
 {

@@ -7,7 +7,7 @@ using MTGOSDK.API.Play;
 using MTGOSDK.API.Play.Leagues;
 
 
-namespace Tracker.Database.Extensions;
+namespace MTGOTracker.Database.Extensions;
 
 public static class EventExtensions
 {

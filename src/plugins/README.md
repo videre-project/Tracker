@@ -1,8 +1,9 @@
-# Tracker.Plugins
+# MTGOTracker.Plugins
 
 Build backend extensions for Videre Tracker using its existing MTGO session.
 The host supplies service registration, configuration, storage, and initialized
 MTGOSDK games. UI extensions and hot reload are not supported in this preview.
+The package, public namespace, and assembly are named `MTGOTracker.Plugins`.
 
 ## Requirements and compatibility
 
@@ -10,11 +11,14 @@ MTGOSDK games. UI extensions and hot reload are not supported in this preview.
 | --- | --- |
 | Tracker application | 0.3.0 |
 | .NET SDK / target | .NET 10 / `net10.0-windows7.0` |
-| Tracker.Plugins package | `0.1.0-preview.1` |
+| MTGOTracker.Plugins package | `0.1.0-preview.1` |
 | Manifest `apiVersion` | `1` |
 | API assembly version | `1.0.0.0` |
 | MTGOSDK package | `1.8.0.20261018` |
 | Runtime | Windows x64; the installed Tracker host supplies the runtime |
+
+Local plugins built against the earlier, unpublished `Tracker.Plugins` assembly
+must be rebuilt against `MTGOTracker.Plugins`.
 
 API generation 1 keeps assembly version `1.0.0.0` across compatible package
 releases. A newer host in that generation supports plugins built with earlier

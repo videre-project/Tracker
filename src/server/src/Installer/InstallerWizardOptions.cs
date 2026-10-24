@@ -4,7 +4,7 @@
 **/
 
 
-namespace Tracker.Installer;
+namespace MTGOTracker.Installer;
 
 /// <summary>
 /// User-selected options from the installer wizard.

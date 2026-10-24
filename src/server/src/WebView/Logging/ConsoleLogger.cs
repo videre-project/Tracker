@@ -11,10 +11,10 @@ using Microsoft.Extensions.Logging;
 
 using MTGOSDK.Core.Logging;
 
-using Tracker.Services;
+using MTGOTracker.Services;
 
 
-namespace Tracker.WebView.Logging;
+namespace MTGOTracker.WebView.Logging;
 
 public class ConsoleLogger(string name, HostForm hostForm)
     : ConsoleFormatter, ILogger

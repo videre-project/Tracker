@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 
 
-namespace Tracker.Services.Base;
+namespace MTGOTracker.Services.Base;
 
 /// <summary>
 /// Base class for implementing a long running <see cref="IHostedService"/>.

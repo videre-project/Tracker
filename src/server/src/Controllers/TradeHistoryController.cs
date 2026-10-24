@@ -18,14 +18,14 @@ using MTGOSDK.API.Trade.Enums;
 using MTGOSDK.API.Users;
 using MTGOSDK.Core.Logging;
 
-using Tracker.Controllers.Base;
-using Tracker.Database;
-using Tracker.Database.Models.Trades;
-using Tracker.Services.MTGO;
-using Tracker.Services.Videre;
+using MTGOTracker.Controllers.Base;
+using MTGOTracker.Database;
+using MTGOTracker.Database.Models.Trades;
+using MTGOTracker.Services.MTGO;
+using MTGOTracker.Services.Videre;
 
 
-namespace Tracker.Controllers;
+namespace MTGOTracker.Controllers;
 
 /// <summary>
 /// Read-only history of player and non-player trade escrows.

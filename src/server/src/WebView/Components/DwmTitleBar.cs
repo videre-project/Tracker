@@ -11,7 +11,7 @@ using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 
-namespace Tracker.WebView.Components;
+namespace MTGOTracker.WebView.Components;
 
 public class DwmTitleBar
 {

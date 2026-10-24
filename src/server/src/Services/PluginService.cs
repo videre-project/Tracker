@@ -23,10 +23,10 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
-using Tracker.Plugins;
+using MTGOTracker.Plugins;
 
 
-namespace Tracker.Services;
+namespace MTGOTracker.Services;
 
 /// <summary>
 /// Registers installed backend plugins with Tracker's host.

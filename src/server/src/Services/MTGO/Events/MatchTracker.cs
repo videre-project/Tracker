@@ -16,10 +16,10 @@ using MTGOSDK.API.Play.Games;
 using MTGOSDK.Core.Logging;
 using static MTGOSDK.Core.Reflection.DLRWrapper;
 
-using Tracker.Database.Models;
+using MTGOTracker.Database.Models;
 
 
-namespace Tracker.Services.MTGO.Events;
+namespace MTGOTracker.Services.MTGO.Events;
 
 public class MatchTracker: IDisposable
 {

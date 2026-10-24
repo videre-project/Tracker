@@ -13,7 +13,7 @@ using System.Windows.Forms;
 using Microsoft.Extensions.Logging;
 
 
-namespace Tracker.WebView;
+namespace MTGOTracker.WebView;
 
 public class SplashForm : Form
 {
@@ -372,7 +372,7 @@ public class SplashForm : Form
     
     e.Graphics.DrawString("Videre Tracker", titleFont, titleBrush, 90, titleY);
     
-    var versionText = $"v{Tracker.ProductInfo.Version}";
+    var versionText = $"v{MTGOTracker.ProductInfo.Version}";
     e.Graphics.DrawString(versionText, versionFont, versionBrush, 100, titleY + titleSize.Height - 10);
   }
 

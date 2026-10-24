@@ -10,7 +10,7 @@ using System.Collections.Generic;
 using MTGOSDK.API.Play.Games;
 
 
-namespace Tracker.Database.Models.Events;
+namespace MTGOTracker.Database.Models.Events;
 
 public class GameModel
 {

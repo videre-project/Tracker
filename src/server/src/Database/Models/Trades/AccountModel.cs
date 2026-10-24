@@ -6,7 +6,7 @@
 using System.Collections.Generic;
 
 
-namespace Tracker.Database.Models.Trades;
+namespace MTGOTracker.Database.Models.Trades;
 
 public sealed class AccountModel
 {

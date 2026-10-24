@@ -15,7 +15,7 @@ using MTGOSDK.API.Play.Games;
 using MTGOSDK.Core.Reflection.Serialization;
 
 
-namespace Tracker.Services.MTGO.Events;
+namespace MTGOTracker.Services.MTGO.Events;
 
 /// <summary>
 /// A captured prompt option with typed action identity and local control fields.

@@ -23,10 +23,10 @@ using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Reflection.Serialization;
 using static MTGOSDK.Core.Reflection.DLRWrapper;
 
-using Tracker.Database.Models.Events;
+using MTGOTracker.Database.Models.Events;
 
 
-namespace Tracker.Services.MTGO.Events;
+namespace MTGOTracker.Services.MTGO.Events;
 
 /// <summary>
 /// Tracks game events via GameProcessor and writes structured data to the

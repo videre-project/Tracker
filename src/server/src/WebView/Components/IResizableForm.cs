@@ -6,7 +6,7 @@
 using System.Drawing;
 
 
-namespace Tracker.WebView.Components;
+namespace MTGOTracker.WebView.Components;
 
 public interface IResizableForm
 {

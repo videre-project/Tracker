@@ -8,10 +8,10 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 
-using Tracker.Database.Models.Collection;
+using MTGOTracker.Database.Models.Collection;
 
 
-namespace Tracker.Database;
+namespace MTGOTracker.Database;
 
 public sealed class CollectionContext(DbContextOptions<CollectionContext> options)
     : DbContext(options)

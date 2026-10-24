@@ -9,7 +9,7 @@ using System.Text.Json.Serialization;
 using MTGOSDK.API.Collection;
 
 
-namespace Tracker.Database.Models;
+namespace MTGOTracker.Database.Models;
 
 [method: JsonConstructor]
 public sealed record CardEntry(

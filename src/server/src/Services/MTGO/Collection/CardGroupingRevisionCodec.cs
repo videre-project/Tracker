@@ -9,10 +9,10 @@ using System.Linq;
 
 using MessagePack;
 
-using Tracker.Database.Models.Collection;
+using MTGOTracker.Database.Models.Collection;
 
 
-namespace Tracker.Services.MTGO.Collection;
+namespace MTGOTracker.Services.MTGO.Collection;
 
 public static class CardGroupingRevisionCodec
 {

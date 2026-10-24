@@ -5,10 +5,10 @@
 
 using System;
 
-using Tracker.Services.MTGO.Events;
+using MTGOTracker.Services.MTGO.Events;
 
 
-namespace Tracker.Controllers.Models.Games;
+namespace MTGOTracker.Controllers.Models.Games;
 
 public class GameLogDTO
 {

@@ -15,7 +15,7 @@ using MTGOSDK.Core.Logging;
 using MTGOSDK.Core.Remoting;
 
 
-namespace Tracker.Services.MTGO;
+namespace MTGOTracker.Services.MTGO;
 
 public class ClientAPIProvider : IClientAPIProvider
 {

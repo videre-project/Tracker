@@ -13,7 +13,7 @@ using System.Threading;
 using System.Windows.Forms;
 
 
-namespace Tracker.Installer;
+namespace MTGOTracker.Installer;
 
 /// <summary>
 /// Ensures the current version is installed under LocalAppData and relaunches from there when needed.
@@ -581,7 +581,7 @@ public static class InstallationBootstrapper
     try
     {
       var assembly = typeof(Program).Assembly;
-      using var eulaStream = assembly.GetManifestResourceStream("Tracker.EULA.md")
+      using var eulaStream = assembly.GetManifestResourceStream("MTGOTracker.EULA.md")
         ?? assembly.GetManifestResourceStream("EULA.md")
         ?? assembly.GetManifestResourceNames()
           .Where(name => name.EndsWith("EULA.md", StringComparison.OrdinalIgnoreCase))

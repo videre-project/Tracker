@@ -13,7 +13,7 @@ using System.Threading;
 using System.Threading.Tasks;
 
 
-namespace Tracker.Services.Videre;
+namespace MTGOTracker.Services.Videre;
 
 public interface IManafoldArchetypeClient
 {

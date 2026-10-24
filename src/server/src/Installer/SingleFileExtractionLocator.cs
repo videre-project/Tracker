@@ -11,7 +11,7 @@ using System.Linq;
 using System.Reflection;
 
 
-namespace Tracker.Installer;
+namespace MTGOTracker.Installer;
 
 /// <summary>
 /// Locates the active .NET single-file extraction folder for the current process.

@@ -12,7 +12,7 @@ using Microsoft.AspNetCore.Mvc;
 using MTGOSDK.Core.Logging;
 
 
-namespace Tracker.Services.MTGO;
+namespace MTGOTracker.Services.MTGO;
 
 /// <summary>
 /// Monitors MTGO client state and provides cancellation for client-dependent operations.

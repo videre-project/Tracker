@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore.ChangeTracking;
 using MTGOSDK.API.Play;
 
 
-namespace Tracker.Database.Extensions;
+namespace MTGOTracker.Database.Extensions;
 
 public static class PlayerResultComparerExtensions
 {

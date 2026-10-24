@@ -9,10 +9,10 @@ using System.Windows.Forms;
 
 using Microsoft.Web.WebView2.WinForms;
 
-using Tracker.WebView.Components;
+using MTGOTracker.WebView.Components;
 
 
-namespace Tracker.WebView;
+namespace MTGOTracker.WebView;
 
 partial class HostForm : IResizableForm
 {

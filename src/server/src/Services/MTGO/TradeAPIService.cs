@@ -19,14 +19,14 @@ using MTGOSDK.API.Trade;
 using MTGOSDK.API.Trade.Enums;
 using MTGOSDK.Core.Logging;
 
-using Tracker.Database;
-using Tracker.Database.Models.Trades;
-using Tracker.Services.MTGO.Collection;
-using Tracker.Services.MTGO.Trade;
-using static Tracker.Services.DatabaseService;
+using MTGOTracker.Database;
+using MTGOTracker.Database.Models.Trades;
+using MTGOTracker.Services.MTGO.Collection;
+using MTGOTracker.Services.MTGO.Trade;
+using static MTGOTracker.Services.DatabaseService;
 
 
-namespace Tracker.Services.MTGO;
+namespace MTGOTracker.Services.MTGO;
 
 public static class TradeAPIService
 {

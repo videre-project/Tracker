@@ -11,11 +11,11 @@ using System.Threading.Tasks;
 
 using Microsoft.EntityFrameworkCore;
 
-using Tracker.Database;
-using Tracker.Database.Models.Collection;
+using MTGOTracker.Database;
+using MTGOTracker.Database.Models.Collection;
 
 
-namespace Tracker.Services.MTGO.Collection;
+namespace MTGOTracker.Services.MTGO.Collection;
 
 public sealed class CollectionHistoryWriter
 {

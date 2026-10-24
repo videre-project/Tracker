@@ -10,10 +10,10 @@ using System.Linq;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 
 
-using Tracker.Database.Models;
+using MTGOTracker.Database.Models;
 
 
-namespace Tracker.Database.Extensions;
+namespace MTGOTracker.Database.Extensions;
 
 public static class CardEntryComparerExtensions
 {

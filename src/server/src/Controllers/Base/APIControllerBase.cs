@@ -20,7 +20,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
 
-namespace Tracker.Controllers.Base;
+namespace MTGOTracker.Controllers.Base;
 
 public abstract class APIController : ControllerBase
 {

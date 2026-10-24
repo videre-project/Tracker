@@ -10,7 +10,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 
 
-namespace Tracker;
+namespace MTGOTracker;
 
 public class ApplicationOptions(string[] args = null!)
 {

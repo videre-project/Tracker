@@ -7,7 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
 
-namespace Tracker.Plugins;
+namespace MTGOTracker.Plugins;
 
 /// <summary>
 /// Registers a plugin's dependencies before Tracker builds its service provider.

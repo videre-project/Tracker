@@ -4,7 +4,7 @@
 **/
 
 using Microsoft.Extensions.DependencyInjection;
-using Tracker.Plugins;
+using MTGOTracker.Plugins;
 
 namespace Example;
 

@@ -6,10 +6,10 @@
 using System;
 using System.Collections.Generic;
 
-using Tracker.Services.MTGO.Events;
+using MTGOTracker.Services.MTGO.Events;
 
 
-namespace Tracker.Controllers.Models.Replays;
+namespace MTGOTracker.Controllers.Models.Replays;
 
 public class ReplaySnapshotDTO
 {

@@ -8,7 +8,7 @@ using System.IO;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
-namespace Tracker.Services;
+namespace MTGOTracker.Services;
 
 /// <summary>Atomically persists plugin preferences while preserving other settings sections.</summary>
 internal sealed class PluginSettingsStore

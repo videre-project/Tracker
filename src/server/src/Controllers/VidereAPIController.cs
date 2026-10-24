@@ -10,13 +10,13 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
-using Tracker.Controllers.Base;
-using Tracker.Controllers.Models.Decks;
-using Tracker.Services.Videre;
-using Tracker.Services.MTGO.Collection;
+using MTGOTracker.Controllers.Base;
+using MTGOTracker.Controllers.Models.Decks;
+using MTGOTracker.Services.Videre;
+using MTGOTracker.Services.MTGO.Collection;
 
 
-namespace Tracker.Controllers;
+namespace MTGOTracker.Controllers;
 
 [ApiController]
 public sealed class VidereAPIController(

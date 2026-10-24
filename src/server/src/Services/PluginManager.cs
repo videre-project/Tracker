@@ -15,7 +15,7 @@ using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Configuration;
 
-namespace Tracker.Services;
+namespace MTGOTracker.Services;
 
 /// <summary>Stages plugin installations and preferences without modifying the running host.</summary>
 public sealed class PluginManager

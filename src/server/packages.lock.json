@@ -318,7 +318,7 @@
         "resolved": "1.0.2",
         "contentHash": "JGkzeqgBsiZwKJZ1IxPNsDFZDhUvuEdX8L8BDC8N3KOj+6zMcNU28CNN59TpZE/VJYy9cP+5M+sbxtWJx3/xtw=="
       },
-      "Tracker.Plugins": {
+      "MTGOTracker.Plugins": {
         "type": "Project",
         "dependencies": {
           "MTGOSDK": "[1.8.0.20261018, )"

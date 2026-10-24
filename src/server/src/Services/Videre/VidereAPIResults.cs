@@ -7,7 +7,7 @@ using System;
 using System.Collections.Generic;
 
 
-namespace Tracker.Services.Videre;
+namespace MTGOTracker.Services.Videre;
 
 public sealed record VidereProductResult(
   int Id,

@@ -6,10 +6,10 @@
 using System;
 using System.Collections.Generic;
 
-using Tracker.Database.Models;
+using MTGOTracker.Database.Models;
 
 
-namespace Tracker.Controllers.Models.Decks;
+namespace MTGOTracker.Controllers.Models.Decks;
 
 public class DeckDTO
 {

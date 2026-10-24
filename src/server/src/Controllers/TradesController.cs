@@ -19,12 +19,12 @@ using MTGOSDK.API.Trade;
 using MTGOSDK.API.Trade.Enums;
 using MTGOSDK.Core.Logging;
 
-using Tracker.Controllers.Base;
-using Tracker.Controllers.Models.Trades;
-using Tracker.Services.MTGO;
+using MTGOTracker.Controllers.Base;
+using MTGOTracker.Controllers.Models.Trades;
+using MTGOTracker.Services.MTGO;
 
 
-namespace Tracker.Controllers;
+namespace MTGOTracker.Controllers;
 
 /// <summary>
 /// Read-only trade API surface backed by the MTGO client.
