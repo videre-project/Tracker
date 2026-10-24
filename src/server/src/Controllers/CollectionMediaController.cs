@@ -252,8 +252,6 @@ public sealed class CollectionMediaController(
     }
   }
 
-  private static readonly ConcurrentDictionary<int, (int catalogId, string name)?> s_otherFaceCatalogIdCache = new();
-
   /// <summary>
   /// Get the source catalog ID for a double-faced card's back face by front catalog ID.
   /// </summary>
@@ -270,17 +268,7 @@ public sealed class CollectionMediaController(
       return BadRequest(new { error = "catalogId is required" });
     }
 
-    if (s_otherFaceCatalogIdCache.TryGetValue(catalogId, out var cached))
-    {
-      if (cached.HasValue)
-      {
-        return Ok(new { catalogId = cached.Value.catalogId, name = cached.Value.name });
-      }
-      return NotFound(new { error = $"Other face not found for catalog ID {catalogId}" });
-    }
-
     var resolved = await videreAPIClient.GetOtherFaceCatalogIdAsync(catalogId, cancellationToken);
-    s_otherFaceCatalogIdCache[catalogId] = resolved;
 
     if (resolved.HasValue)
     {

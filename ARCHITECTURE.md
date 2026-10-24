@@ -116,6 +116,25 @@ The WebAPI service hosts the Tracker’s backend HTTP API, acting as the primary
 
 Together, these core application components provide the backbone for Tracker’s runtime: maintaining a resilient live connection to MTGO, surfacing data to the frontend, handling user interactions, and ensuring that all dependent services operate reliably in the face of client disruptions.
 
+### 2.4 External catalog API
+
+The server build generates its Videre HTTP client and wire models with NSwag from
+the API's canonical `https://api.videreproject.com/openapi.json` document.
+The downloaded specification and generated C# stay under `obj/Videre` and are not
+edited by hand.
+
+The same preparation script generates ignored TypeScript contracts for public
+Videre requests. Client development and builds run it before compiling, so
+published deck previews consume the API's object arrays and nullable fields.
+
+`VidereAPIClient` applies Tracker's card presentation, catalog reconciliation,
+price conversion, and complete-card caching. Requests and response parsing use
+the generated client, with one error translation policy for existing controllers.
+Collection search uses the documented `CatalogSearchItem` shape for both cards
+and products. Its properties reuse the card and product schema definitions.
+The generated client's request hook selects the API's cacheable QUERY form for
+collection searches and bulk prices, advertised through its `x-query` extension.
+
 ----
 
 ## 3. Game Tracking and Data Pipeline

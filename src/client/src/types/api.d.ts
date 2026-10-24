@@ -220,6 +220,17 @@ export interface paths {
                         "text/json": CollectionPriceHistoryDTO;
                     };
                 };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": ProblemDetails;
+                        "application/json": ProblemDetails;
+                        "text/json": ProblemDetails;
+                    };
+                };
             };
         };
         put?: never;
@@ -3085,13 +3096,13 @@ export interface paths {
             requestBody?: {
                 content: {
                     "application/json": {
-                        [key: string]: JsonNode;
+                        [key: string]: unknown;
                     };
                     "text/json": {
-                        [key: string]: JsonNode;
+                        [key: string]: unknown;
                     };
                     "application/*+json": {
-                        [key: string]: JsonNode;
+                        [key: string]: unknown;
                     };
                 };
             };
@@ -3476,21 +3487,21 @@ export interface components {
             chatSession?: ChatSessionViewModel;
             /** Format: int32 */
             readonly id?: number;
-            readonly name?: string | null;
+            readonly name?: string;
             /** Format: int32 */
             readonly parentId?: number;
             readonly isJoined?: boolean;
             readonly isJoinedForGame?: boolean;
-            readonly messages?: Message[] | null;
+            readonly messages?: Message[];
             /** Format: int32 */
             readonly messageCount?: number;
             users?: string[];
             /** Format: int32 */
             readonly userCount?: number;
-            readonly subChannels?: Channel[] | null;
+            readonly subChannels?: Channel[];
             type?: ChannelType;
             readonly canSendMessage?: boolean;
-            readonly localFileName?: string | null;
+            readonly localFileName?: string;
         };
         /** @enum {string} */
         "MTGOSDK.API.Chat.ChannelType": "System" | "Private" | "UserCreated" | "GameChat" | "GameLog" | "Alert" | "PredefinedRoom" | "Clan";
@@ -3498,7 +3509,7 @@ export interface components {
             user?: string;
             /** Format: date-time */
             readonly timestamp?: string;
-            readonly text?: string | null;
+            readonly text?: string;
         };
         "MTGOSDK.API.Collection.Binder": {
             /** Format: int32 */
@@ -3506,7 +3517,7 @@ export interface components {
             /** Format: int32 */
             readonly netDeckId?: number;
             groupingType?: CardGroupingType;
-            readonly name?: string | null;
+            readonly name?: string;
             format?: string;
             /** Format: date-time */
             readonly timestamp?: string;
@@ -3514,10 +3525,10 @@ export interface components {
             readonly itemCount?: number;
             /** Format: int32 */
             readonly maxItems?: number;
-            readonly hash?: string | null;
-            readonly items?: CardQuantityPair[] | null;
-            readonly itemIds?: number[] | null;
-            readonly getFrozenCollection?: CardQuantityPair[] | null;
+            readonly hash?: string;
+            readonly items?: CardQuantityPair[];
+            readonly itemIds?: number[];
+            readonly getFrozenCollection?: CardQuantityPair[];
             readonly isLastUsedBinder?: boolean;
             readonly isWishList?: boolean;
             readonly isMegaBinder?: boolean;
@@ -3527,8 +3538,8 @@ export interface components {
             readonly id?: number;
             /** Format: int32 */
             readonly ctn?: number;
-            readonly name?: string | null;
-            readonly description?: string | null;
+            readonly name?: string;
+            readonly description?: string;
             readonly isOpenable?: boolean;
             readonly isSealedProduct?: boolean;
             readonly isDigitalObject?: boolean;
@@ -3537,34 +3548,34 @@ export interface components {
             readonly isTicket?: boolean;
             readonly isTradeable?: boolean;
             readonly hasPremiumOdds?: boolean;
-            readonly colors?: string | null;
-            readonly manaCost?: string | null;
+            readonly colors?: string;
+            readonly manaCost?: string;
             /** Format: int32 */
             readonly convertedManaCost?: number;
-            readonly rulesText?: string | null;
-            readonly types?: string[] | null;
-            readonly subtypes?: string[] | null;
-            readonly artist?: string | null;
+            readonly rulesText?: string;
+            readonly types?: string[];
+            readonly subtypes?: string[];
+            readonly artist?: string;
             /** Format: int32 */
             readonly artId?: number;
             set?: string;
-            readonly collectorInfo?: string | null;
+            readonly collectorInfo?: string;
             /** Format: int32 */
             readonly collectorNumber?: number;
-            readonly flavorText?: string | null;
-            readonly power?: string | null;
-            readonly toughness?: string | null;
-            readonly loyalty?: string | null;
-            readonly defense?: string | null;
+            readonly flavorText?: string;
+            readonly power?: string;
+            readonly toughness?: string;
+            readonly loyalty?: string;
+            readonly defense?: string;
             readonly isToken?: boolean;
-            readonly rarity?: string | null;
+            readonly rarity?: string;
         };
         /** @enum {string} */
         "MTGOSDK.API.Collection.CardGroupingType": "Invalid" | "Deck" | "Binder" | "Wishlist" | "MegaBinder";
         "MTGOSDK.API.Collection.CardQuantityPair": {
             /** Format: int32 */
             readonly id?: number;
-            readonly name?: string | null;
+            readonly name?: string;
             card?: string;
             /** Format: int32 */
             readonly annotation?: number;
@@ -3577,7 +3588,7 @@ export interface components {
             /** Format: int32 */
             readonly netDeckId?: number;
             groupingType?: CardGroupingType;
-            readonly name?: string | null;
+            readonly name?: string;
             format?: string;
             /** Format: date-time */
             readonly timestamp?: string;
@@ -3585,11 +3596,11 @@ export interface components {
             readonly itemCount?: number;
             /** Format: int32 */
             readonly maxItems?: number;
-            readonly hash?: string | null;
-            readonly items?: CardQuantityPair[] | null;
-            readonly itemIds?: number[] | null;
-            readonly getFrozenCollection?: CardQuantityPair[] | null;
-            readonly regions?: DeckRegion[] | null;
+            readonly hash?: string;
+            readonly items?: CardQuantityPair[];
+            readonly itemIds?: number[];
+            readonly getFrozenCollection?: CardQuantityPair[];
+            readonly regions?: DeckRegion[];
             /** Format: int32 */
             readonly deckId?: number;
             readonly isLegal?: boolean;
@@ -3599,12 +3610,12 @@ export interface components {
         "MTGOSDK.API.Collection.ItemCollection": {
             /** Format: int32 */
             readonly count?: number;
-            readonly collectionItems?: CardQuantityPair[] | null;
-            readonly openableItems?: CardQuantityPair[] | null;
+            readonly collectionItems?: CardQuantityPair[];
+            readonly openableItems?: CardQuantityPair[];
         };
         "MTGOSDK.API.Collection.Set": {
-            readonly code?: string | null;
-            readonly name?: string | null;
+            readonly code?: string;
+            readonly name?: string;
             /** Format: date-time */
             readonly releaseDate?: string;
             type?: SetType;
@@ -3622,7 +3633,7 @@ export interface components {
             index?: number;
         };
         "MTGOSDK.API.Interface.ViewModels.ChatSessionViewModel": {
-            readonly name?: string | null;
+            readonly name?: string;
             channel?: Channel;
             readonly isActive?: boolean;
         };
@@ -3632,7 +3643,7 @@ export interface components {
             /** Format: uuid */
             readonly token?: string;
             format?: string;
-            readonly description?: string | null;
+            readonly description?: string;
             /** Format: int32 */
             readonly totalPlayers?: number;
             players?: string[];
@@ -3656,8 +3667,8 @@ export interface components {
         /** @enum {string} */
         "MTGOSDK.API.Play.Games.InteractionMode": "None" | "SelectTargets" | "SelectAction" | "SelectPlayer" | "SelectFromList" | "OrderTargets" | "ChoosePile" | "WishCard" | "CardSelector" | "Distributing" | "Undefined";
         "MTGOSDK.API.Play.PlayFormat": {
-            readonly name?: string | null;
-            readonly code?: string | null;
+            readonly name?: string;
+            readonly code?: string;
             /** Format: int32 */
             readonly minDeckSize?: number;
             /** Format: int32 */
@@ -3696,36 +3707,36 @@ export interface components {
             tradedItems?: ItemCollection;
         };
         "MTGOSDK.API.Trade.TradePartner": {
-            readonly posterName?: string | null;
+            readonly posterName?: string;
             /** Format: date-time */
             readonly lastTradeTime?: string;
         };
         "MTGOSDK.API.Users.Avatar": {
             /** Format: int32 */
             readonly id?: number;
-            readonly name?: string | null;
+            readonly name?: string;
         };
         "MTGOSDK.API.Users.User": {
             /** Format: int32 */
             readonly id?: number;
-            readonly name?: string | null;
+            readonly name?: string;
             avatar?: Avatar;
             readonly isGuest?: boolean;
             readonly isBuddy?: boolean;
             readonly isBlocked?: boolean;
             readonly isLoggedIn?: boolean;
-            readonly lastLogin?: string | null;
+            readonly lastLogin?: string;
         };
         /** @description Request body for updating a deck or opponent archetype */
         "MTGOTracker.Controllers.DecksController.UpdateArchetypeRequest": {
-            archetype?: string | null;
+            archetype?: string;
         };
         "MTGOTracker.Controllers.Models.Client.IClientState": {
             readonly isConnected?: boolean;
             readonly isInitialized?: boolean;
             /** Format: int32 */
             readonly processId?: number | null;
-            readonly status?: string | null;
+            readonly status?: string;
             /** Format: int64 */
             readonly memoryUsage?: number | null;
             /** Format: int64 */
@@ -3736,7 +3747,7 @@ export interface components {
         "MTGOTracker.Controllers.Models.Collection.CollectionCardDTO": {
             /** Format: int32 */
             catalogId: number;
-            name: string | null;
+            name: string;
             /** Format: int32 */
             quantity: number;
             /** Format: double */
@@ -3747,21 +3758,21 @@ export interface components {
         "MTGOTracker.Controllers.Models.Collection.CollectionCardDetailDTO": {
             /** Format: int32 */
             catalogId: number;
-            name: string | null;
-            canonicalName: string | null;
+            name: string;
+            canonicalName: string;
             printedName?: string | null;
-            setCode: string | null;
+            setCode: string;
             setName?: string | null;
             collectorNumber?: string | null;
             rarity?: string | null;
             manaCost?: string | null;
             /** Format: double */
             manaValue?: number | null;
-            typeLine: string | null;
-            oracleText: string | null;
+            typeLine: string;
+            oracleText: string;
             flavorText?: string | null;
-            colors: string[] | null;
-            imageUrl: string | null;
+            colors: string[];
+            imageUrl: string;
             power?: string | null;
             toughness?: string | null;
             loyalty?: string | null;
@@ -3776,10 +3787,10 @@ export interface components {
             catalogId: number;
             /** Format: date-time */
             priceCacheExpiresAt: string;
-            prices: CollectionPricePointDTO[] | null;
+            prices: CollectionPricePointDTO[];
         };
         "MTGOTracker.Controllers.Models.Collection.CollectionPricePointDTO": {
-            date: string | null;
+            date: string;
             /** Format: double */
             price: number;
             source?: string | null;
@@ -3787,7 +3798,7 @@ export interface components {
         "MTGOTracker.Controllers.Models.Collection.CollectionProductDTO": {
             /** Format: int32 */
             catalogId: number;
-            name: string | null;
+            name: string;
             /** Format: int32 */
             quantity: number;
             description?: string | null;
@@ -3805,11 +3816,11 @@ export interface components {
             query?: string | null;
         };
         "MTGOTracker.Controllers.Models.Collection.CollectionSearchResultDTO": {
-            query: string | null;
-            catalogIds: number[] | null;
+            query: string;
+            catalogIds: number[];
         };
         "MTGOTracker.Controllers.Models.Collection.CollectionSnapshotDTO": {
-            hash: string | null;
+            hash: string;
             /** Format: int32 */
             itemCount: number;
             /** Format: int32 */
@@ -3822,12 +3833,12 @@ export interface components {
             priceCacheExpiresAt: string;
             /** Format: double */
             elapsedMilliseconds: number;
-            cards: CollectionCardDTO[] | null;
-            products: CollectionProductDTO[] | null;
+            cards: CollectionCardDTO[];
+            products: CollectionProductDTO[];
         };
         "MTGOTracker.Controllers.Models.Decks.AggregatedArchetypeDTO": {
-            archetype: string | null;
-            colors: string[] | null;
+            archetype: string;
+            colors: string[];
             /** Format: int32 */
             matches: number;
             /** Format: int32 */
@@ -3836,22 +3847,24 @@ export interface components {
             losses: number;
             /** Format: double */
             winrate: number;
-            topCard: string | null;
+            topCard: string;
         };
         "MTGOTracker.Controllers.Models.Decks.CardSearchResultDTO": {
-            id: string | null;
+            id: string;
             /** Format: int32 */
             mtgoId: number;
-            setCode: string | null;
-            name: string | null;
-            type: string | null;
-            types?: string[] | null;
-            text: string | null;
+            setCode: string;
+            /** Format: int32 */
+            otherFaceCatalogId?: number | null;
+            name: string;
+            type: string;
+            types?: string[];
+            text: string;
             /** Format: int32 */
             cmc?: number;
-            rarity?: string | null;
-            colors?: string[] | null;
-            imageUrl: string | null;
+            rarity?: string;
+            colors?: string[];
+            imageUrl: string;
             power?: string | null;
             toughness?: string | null;
             loyalty?: string | null;
@@ -3866,7 +3879,7 @@ export interface components {
         "MTGOTracker.Controllers.Models.Decks.DeckCardMoveRequest": {
             fromZone: DeckCardZone;
             toZone: DeckCardZone;
-            cards: DeckCardMoveItem[] | null;
+            cards: DeckCardMoveItem[];
         };
         "MTGOTracker.Controllers.Models.Decks.DeckCardMutationRequest": {
             /** Format: int32 */
@@ -3879,25 +3892,25 @@ export interface components {
             annotation?: number;
             /** Format: int32 */
             cmc?: number;
-            colors?: string[] | null;
-            types?: string[] | null;
-            rarity?: string | null;
+            colors?: string[];
+            types?: string[];
+            rarity?: string;
         };
         /** @enum {string} */
         "MTGOTracker.Controllers.Models.Decks.DeckCardZone": "Mainboard" | "Sideboard";
         "MTGOTracker.Controllers.Models.Decks.DeckColorsDTO": {
             /** Format: int64 */
             revisionId: number;
-            colors: string[] | null;
-            colorString: string | null;
+            colors: string[];
+            colorString: string;
         };
         "MTGOTracker.Controllers.Models.Decks.DeckDTO": {
             /** Format: int64 */
             revisionId: number;
             /** Format: int32 */
             netDeckId: number;
-            name: string | null;
-            format: string | null;
+            name: string;
+            format: string;
             /** Format: date-time */
             timestamp: string;
             /** Format: int32 */
@@ -3911,35 +3924,35 @@ export interface components {
             /** Format: int32 */
             ties: number;
             archetype?: string | null;
-            colors?: string[] | null;
-            featuredCards?: CardEntry[] | null;
+            colors?: string[];
+            featuredCards?: CardEntry[];
         };
         "MTGOTracker.Controllers.Models.Decks.DeckDetailDTO": {
             /** Format: int64 */
             revisionId: number;
             /** Format: int32 */
             netDeckId: number;
-            name: string | null;
-            format: string | null;
+            name: string;
+            format: string;
             /** Format: date-time */
             timestamp: string;
             archetype?: string | null;
             colors?: string[] | null;
-            mainboard: CardEntry[] | null;
-            sideboard: CardEntry[] | null;
+            mainboard: CardEntry[];
+            sideboard: CardEntry[];
         };
         "MTGOTracker.Controllers.Models.Decks.DeckHistoryChangeView": {
             /** Format: int32 */
             catalogId?: number;
-            name?: string | null;
+            name?: string;
             /** Format: int32 */
             quantityDelta?: number;
-            zone?: string | null;
+            zone?: string;
             /** Format: int32 */
             cmc?: number;
-            colors?: string[] | null;
-            types?: string[] | null;
-            rarity?: string | null;
+            colors?: string[];
+            types?: string[];
+            rarity?: string;
         };
         "MTGOTracker.Controllers.Models.Decks.DeckHistoryRevisionView": {
             /** Format: int64 */
@@ -3950,36 +3963,36 @@ export interface components {
             observedAt?: string;
             /** Format: date-time */
             timestamp?: string;
-            name?: string | null;
-            format?: string | null;
+            name?: string;
+            format?: string;
             /** Format: int32 */
             mainboardCount?: number;
             /** Format: int32 */
             sideboardCount?: number;
-            colors?: string[] | null;
+            colors?: string[];
             archetype?: string | null;
             featuredCard?: string | null;
-            mainboard?: CardEntry[] | null;
-            sideboard?: CardEntry[] | null;
-            changesFromPrevious?: DeckHistoryChangeView[] | null;
-            changesFromLatest?: DeckHistoryChangeView[] | null;
+            mainboard?: CardEntry[];
+            sideboard?: CardEntry[];
+            changesFromPrevious?: DeckHistoryChangeView[];
+            changesFromLatest?: DeckHistoryChangeView[];
         };
         "MTGOTracker.Controllers.Models.Decks.DeckHistoryView": {
             /** Format: int64 */
             currentRevisionId?: number;
             /** Format: int64 */
             cardGroupingId?: number;
-            name?: string | null;
-            format?: string | null;
-            revisions?: DeckHistoryRevisionView[] | null;
+            name?: string;
+            format?: string;
+            revisions?: DeckHistoryRevisionView[];
         };
         "MTGOTracker.Controllers.Models.Decks.DeckIdentifierDTO": {
             /** Format: int64 */
             revisionId: number;
             /** Format: int32 */
             netDeckId: number;
-            name: string | null;
-            format: string | null;
+            name: string;
+            format: string;
         };
         "MTGOTracker.Controllers.Models.Decks.DeckMutationResponse": {
             /** Format: int64 */
@@ -3991,21 +4004,21 @@ export interface components {
         "MTGOTracker.Controllers.Models.Decks.ImportDeckCardDTO": {
             /** Format: int32 */
             catalogId: number;
-            name: string | null;
+            name: string;
             /** Format: int32 */
             quantity: number;
             /** Format: int32 */
             cmc?: number;
-            colors?: string[] | null;
-            types?: string[] | null;
-            rarity?: string | null;
+            colors?: string[];
+            types?: string[];
+            rarity?: string;
         };
         "MTGOTracker.Controllers.Models.Decks.ImportDeckRequest": {
-            name: string | null;
-            format: string | null;
+            name: string;
+            format: string;
             archetype?: string | null;
-            mainboard?: ImportDeckCardDTO[] | null;
-            sideboard?: ImportDeckCardDTO[] | null;
+            mainboard?: ImportDeckCardDTO[];
+            sideboard?: ImportDeckCardDTO[];
         };
         "MTGOTracker.Controllers.Models.Decks.ImportDeckResponse": {
             /** Format: int64 */
@@ -4022,18 +4035,20 @@ export interface components {
             originalIndex?: number;
             /** Format: int32 */
             catalogId: number;
-            name: string | null;
+            /** Format: int32 */
+            otherFaceCatalogId?: number | null;
+            name: string;
             /** Format: int32 */
             quantity?: number;
             /** Format: int32 */
             cmc?: number;
-            colors?: string[] | null;
-            types?: string[] | null;
-            rarity: string | null;
-            zone?: string | null;
+            colors?: string[];
+            types?: string[];
+            rarity: string;
+            zone?: string;
         };
         "MTGOTracker.Controllers.Models.Events.IEventStructure": {
-            readonly name?: string | null;
+            readonly name?: string;
             readonly isConstructed?: boolean;
             readonly isLimited?: boolean;
             readonly isDraft?: boolean;
@@ -4047,16 +4062,16 @@ export interface components {
             readonly rank?: number;
             /** Format: int32 */
             readonly points?: number;
-            readonly record?: string | null;
-            readonly opponentMatchWinPercentage?: string | null;
-            readonly gameWinPercentage?: string | null;
-            readonly opponentGameWinPercentage?: string | null;
+            readonly record?: string;
+            readonly opponentMatchWinPercentage?: string;
+            readonly gameWinPercentage?: string;
+            readonly opponentGameWinPercentage?: string;
         };
         "MTGOTracker.Controllers.Models.Events.ITournament": {
             /** Format: int32 */
             readonly id?: number;
-            readonly description?: string | null;
-            readonly format?: string | null;
+            readonly description?: string;
+            readonly format?: string;
             /** Format: int32 */
             readonly minimumPlayers?: number;
             /** Format: int32 */
@@ -4098,8 +4113,8 @@ export interface components {
             /** Format: date-span */
             readonly totalRoundDuration?: string;
             readonly inPlayoffs?: boolean;
-            readonly activePlayerNames?: string[] | null;
-            readonly playerNamesWithMatchesInProgress?: string[] | null;
+            readonly activePlayerNames?: string[];
+            readonly playerNamesWithMatchesInProgress?: string[];
         };
         "MTGOTracker.Controllers.Models.Games.DashboardStatsDTO": {
             /** Format: double */
@@ -4120,20 +4135,20 @@ export interface components {
             drawWinrate?: number;
             /** Format: int32 */
             drawMatches?: number;
-            averageDuration?: string | null;
-            durationTwoGames?: string | null;
-            durationThreeGames?: string | null;
+            averageDuration?: string;
+            durationTwoGames?: string;
+            durationThreeGames?: string;
         };
         "MTGOTracker.Controllers.Models.Games.GameDetailsDTO": {
             /** Format: int32 */
             id?: number;
             /** Format: int32 */
             gameNumber?: number;
-            result: string | null;
-            duration: string | null;
-            playDraw: string | null;
-            sideboardChanges?: SideboardChangeDTO[] | null;
-            logs?: GameLogDTO[] | null;
+            result: string;
+            duration: string;
+            playDraw: string;
+            sideboardChanges?: SideboardChangeDTO[];
+            logs?: GameLogDTO[];
         };
         "MTGOTracker.Controllers.Models.Games.GameLogDTO": {
             /** Format: int32 */
@@ -4143,7 +4158,7 @@ export interface components {
             /** Format: date-time */
             timestamp?: string;
             gameLogType: GameLogType;
-            data: string | null;
+            data: string;
             /** Format: int32 */
             nonce?: number;
         };
@@ -4152,13 +4167,13 @@ export interface components {
             id?: number;
             /** Format: int32 */
             eventId?: number;
-            eventName: string | null;
-            format: string | null;
+            eventName: string;
+            format: string;
             /** Format: date-time */
             startTime?: string;
-            result: string | null;
-            record: string | null;
-            duration: string | null;
+            result: string;
+            record: string;
+            duration: string;
             /** Format: int64 */
             deckRevisionId?: number | null;
             deckName?: string | null;
@@ -4169,20 +4184,20 @@ export interface components {
             opponentDeckArchetype?: string | null;
             opponentDeckColors?: string[] | null;
             isActive?: boolean;
-            games?: GameDetailsDTO[] | null;
+            games?: GameDetailsDTO[];
         };
         "MTGOTracker.Controllers.Models.Games.MatchHistoryDTO": {
             /** Format: int32 */
             id?: number;
             /** Format: int32 */
             eventId?: number;
-            eventName: string | null;
-            format: string | null;
+            eventName: string;
+            format: string;
             /** Format: date-time */
             startTime?: string;
-            result: string | null;
-            record: string | null;
-            duration: string | null;
+            result: string;
+            record: string;
+            duration: string;
             /** Format: int64 */
             deckRevisionId?: number | null;
             deckName?: string | null;
@@ -4196,7 +4211,7 @@ export interface components {
             matches?: MatchHistoryDTO[] | null;
         };
         "MTGOTracker.Controllers.Models.Games.PaginatedMatchesDTO": {
-            items?: MatchHistoryDTO[] | null;
+            items?: MatchHistoryDTO[];
             /** Format: int32 */
             totalCount?: number;
             /** Format: int32 */
@@ -4207,7 +4222,7 @@ export interface components {
             totalPages?: number;
         };
         "MTGOTracker.Controllers.Models.Games.PerformanceTrendDTO": {
-            date: string | null;
+            date: string;
             /** Format: date-time */
             rawDate: string;
             /** Format: double */
@@ -4223,18 +4238,18 @@ export interface components {
         "MTGOTracker.Controllers.Models.Games.SideboardChangeDTO": {
             /** Format: int32 */
             catalogId?: number;
-            name: string | null;
+            name: string;
             /** Format: int32 */
             quantity?: number;
         };
         "MTGOTracker.Controllers.Models.Replays.ReplayActionDTO": {
-            actionType: string | null;
+            actionType: string;
             actionName?: string | null;
             /** Format: int32 */
             cardId?: number | null;
             cardName?: string | null;
             targets?: string | null;
-            data: string | null;
+            data: string;
             /** Format: date-time */
             clientTimestamp?: string;
             /** Format: int32 */
@@ -4243,12 +4258,12 @@ export interface components {
         "MTGOTracker.Controllers.Models.Replays.ReplayCardDTO": {
             /** Format: int32 */
             cardId?: number;
-            name: string | null;
+            name: string;
             rulesText?: string | null;
             manaCost?: string | null;
             /** Format: int32 */
             catalogId?: number | null;
-            initialZone: string | null;
+            initialZone: string;
             initialPower?: string | null;
             initialToughness?: string | null;
             initialCounters?: string | null;
@@ -4270,19 +4285,19 @@ export interface components {
             gameId?: number;
             /** Format: int32 */
             perspectivePlayerIndex?: number | null;
-            players?: ReplayPlayerDTO[] | null;
-            cards?: ReplayCardDTO[] | null;
-            snapshots?: ReplaySnapshotDTO[] | null;
+            players?: ReplayPlayerDTO[];
+            cards?: ReplayCardDTO[];
+            snapshots?: ReplaySnapshotDTO[];
         };
         "MTGOTracker.Controllers.Models.Replays.ReplayLogDTO": {
             /** Format: date-time */
             timestamp?: string;
-            data: string | null;
+            data: string;
         };
         "MTGOTracker.Controllers.Models.Replays.ReplayPlayerDTO": {
             /** Format: int32 */
             playerIndex?: number;
-            name: string | null;
+            name: string;
             playDraw?: string | null;
             /** Format: int32 */
             initialLife?: number;
@@ -4312,23 +4327,23 @@ export interface components {
             timestamp?: string;
             /** Format: int32 */
             turnNumber?: number;
-            currentPhase: string | null;
+            currentPhase: string;
             /** Format: int32 */
             promptedPlayer?: number;
-            promptText: string | null;
+            promptText: string;
             /** @description Captured native prompt actions and local prompt controls. */
             promptOptions?: PromptOptionData[] | null;
             interaction?: GameInteractionData;
-            zoneTransfers?: ZoneTransferData[] | null;
-            cardChanges?: CardChangeData[] | null;
-            playerChanges?: PlayerChangeData[] | null;
-            actions?: ReplayActionDTO[] | null;
-            logs?: ReplayLogDTO[] | null;
+            zoneTransfers?: ZoneTransferData[];
+            cardChanges?: CardChangeData[];
+            playerChanges?: PlayerChangeData[];
+            actions?: ReplayActionDTO[];
+            logs?: ReplayLogDTO[];
         };
         /** @description Whether this process allows installed plugins to run. */
         "MTGOTracker.Controllers.PluginHostStatus": {
             enabled?: boolean;
-            failures?: PluginFailure[] | null;
+            failures?: PluginFailure[];
         };
         "MTGOTracker.Controllers.PluginSettingsController.EnablePluginRequest": {
             enabled?: boolean;
@@ -4337,7 +4352,7 @@ export interface components {
             hostEnabled?: boolean;
             restartRequired?: boolean;
             settingsError?: string | null;
-            failures?: PluginFailure[] | null;
+            failures?: PluginFailure[];
         };
         "MTGOTracker.Controllers.SettingsController.HostInstance": {
             /** Format: int32 */
@@ -4349,10 +4364,10 @@ export interface components {
             token?: string;
             /** Format: int32 */
             accountId?: number;
-            items?: TradeHistoryItemDTO[] | null;
-            effects?: TradeHistoryEffectDTO[] | null;
-            messages?: TradeHistoryMessageDTO[] | null;
-            errors?: TradeHistoryErrorDTO[] | null;
+            items?: TradeHistoryItemDTO[];
+            effects?: TradeHistoryEffectDTO[];
+            messages?: TradeHistoryMessageDTO[];
+            errors?: TradeHistoryErrorDTO[];
         };
         "MTGOTracker.Controllers.TradeHistoryEffectDTO": {
             /** Format: int32 */
@@ -4389,10 +4404,10 @@ export interface components {
             /** Format: int32 */
             senderId?: number | null;
             senderName?: string | null;
-            text?: string | null;
+            text?: string;
         };
         "MTGOTracker.Controllers.TradeHistoryPageDTO": {
-            items?: TradeHistorySummaryDTO[] | null;
+            items?: TradeHistorySummaryDTO[];
             /** Format: int64 */
             nextBeforeId?: number | null;
         };
@@ -4428,7 +4443,7 @@ export interface components {
         "MTGOTracker.Controllers.TradePartnerAvatarDTO": {
             /** Format: int32 */
             productCatalogId?: number;
-            productName?: string | null;
+            productName?: string;
             productImageUrl?: string | null;
         };
         "MTGOTracker.Controllers.TradesController.TradeMarketplaceUpdateDTO": {
@@ -4436,11 +4451,11 @@ export interface components {
             timestamp: string;
         };
         "MTGOTracker.Controllers.TradesController.TradePostDTO": {
-            posterName: string | null;
+            posterName: string;
             format: TradePostFormat;
-            message: string | null;
-            wanted: CardQuantityPair[] | null;
-            offered: CardQuantityPair[] | null;
+            message: string;
+            wanted: CardQuantityPair[];
+            offered: CardQuantityPair[];
         };
         "MTGOTracker.Controllers.TradesController.TradePostsPageDTO": {
             /** Format: int32 */
@@ -4453,24 +4468,26 @@ export interface components {
             totalPages: number;
             hasNextPage: boolean;
             hasPreviousPage: boolean;
-            posts?: TradePostDTO[] | null;
+            posts?: TradePostDTO[];
         };
         "MTGOTracker.Controllers.TradesController.TradeSnapshotDTO": {
             myPost?: TradePostDTO;
-            tradePartners?: TradePartner[] | null;
+            tradePartners?: TradePartner[];
             currentTrade?: TradeEscrow;
         };
         "MTGOTracker.Database.Models.CardEntry": {
             /** Format: int32 */
             catalogId?: number;
-            name?: string | null;
+            name?: string;
             /** Format: int32 */
             quantity?: number;
             /** Format: int32 */
             cmc?: number;
             colors?: string[] | null;
             types?: string[] | null;
-            rarity?: string | null;
+            rarity?: string;
+            /** Format: int32 */
+            otherFaceCatalogId?: number | null;
         };
         /** @enum {string} */
         "MTGOTracker.Database.Models.Trades.TradeAttributionStatus": "NotApplicable" | "Pending" | "Inferred" | "InferredAmbiguous" | "Unavailable";
@@ -4482,7 +4499,7 @@ export interface components {
         "MTGOTracker.Database.Models.Trades.TradeEscrowResult": "InProgress" | "Completed" | "Cancelled" | "Failed" | "ClosedUnknown" | "Interrupted";
         /** @description Display identity and visual flags for an ability awaiting placement on the stack. */
         "MTGOTracker.Services.MTGO.Events.AbilityInteractionData": {
-            logicalAddress?: string | null;
+            logicalAddress?: string;
             zone?: CardZone;
             name?: string | null;
             rulesText?: string | null;
@@ -4501,8 +4518,8 @@ export interface components {
         "MTGOTracker.Services.MTGO.Events.CardChangeData": {
             /** Format: int32 */
             cardId?: number;
-            cardName: string | null;
-            property: string | null;
+            cardName: string;
+            property: string;
             oldValue?: string | null;
             newValue?: string | null;
         };
@@ -4513,13 +4530,13 @@ export interface components {
         "MTGOTracker.Services.MTGO.Events.GameInteractionData": {
             mode?: InteractionMode;
             promptText?: string | null;
-            selectable?: number[] | null;
-            targetable?: number[] | null;
-            targeted?: number[] | null;
-            casting?: number[] | null;
-            dimmed?: number[] | null;
-            abilities?: AbilityInteractionData[] | null;
-            players?: PlayerInteractionData[] | null;
+            selectable?: number[];
+            targetable?: number[];
+            targeted?: number[];
+            casting?: number[];
+            dimmed?: number[];
+            abilities?: AbilityInteractionData[];
+            players?: PlayerInteractionData[];
         };
         /** @enum {string} */
         "MTGOTracker.Services.MTGO.Events.GameLogType": "GameState" | "GameAction" | "ZoneChange" | "CardChange" | "PlayerChange" | "LogMessage" | "DamageAssignment" | "Reveal" | "Interaction";
@@ -4530,7 +4547,7 @@ export interface components {
         "MTGOTracker.Services.MTGO.Events.GameStateData": {
             /** Format: int32 */
             turn?: number;
-            phase: string | null;
+            phase: string;
             /** Format: int32 */
             previousTurn?: number;
             previousPhase?: string | null;
@@ -4542,8 +4559,8 @@ export interface components {
         "MTGOTracker.Services.MTGO.Events.PlayerChangeData": {
             /** Format: int32 */
             playerIndex?: number;
-            playerName: string | null;
-            property: string | null;
+            playerName: string;
+            property: string;
             oldValue?: string | null;
             newValue?: string | null;
         };
@@ -4582,34 +4599,34 @@ export interface components {
         "MTGOTracker.Services.MTGO.Events.ZoneTransferData": {
             /** Format: int32 */
             cardId?: number;
-            cardName: string | null;
+            cardName: string;
             fromZone?: string | null;
             toZone?: string | null;
             /** Format: int32 */
             sourceId?: number | null;
-            type: string | null;
+            type: string;
         };
         "MTGOTracker.Services.PluginManager.ConfigurationField": {
-            key?: string | null;
-            label?: string | null;
+            key?: string;
+            label?: string;
             description?: string | null;
-            type?: string | null;
+            type?: string;
             required?: boolean;
             secret?: boolean;
-            default?: JsonNode;
-            choices?: JsonNode[] | null;
+            default?: unknown;
+            choices?: unknown[] | null;
         };
         "MTGOTracker.Services.PluginManager.PluginConfiguration": {
             values?: {
-                [key: string]: JsonNode;
-            } | null;
-            fields?: ConfigurationField[] | null;
+                [key: string]: unknown;
+            };
+            fields?: ConfigurationField[];
         };
         "MTGOTracker.Services.PluginManager.PluginInfo": {
-            id?: string | null;
-            name?: string | null;
+            id?: string;
+            name?: string;
             description?: string | null;
-            version?: string | null;
+            version?: string;
             enabled?: boolean;
             loaded?: boolean;
             pendingUpdate?: boolean;
@@ -4619,8 +4636,8 @@ export interface components {
         };
         /** @description Identifies a failed installation and its actionable error. */
         "MTGOTracker.Services.PluginService.PluginFailure": {
-            path?: string | null;
-            message?: string | null;
+            path?: string;
+            message?: string;
         };
         "Microsoft.AspNetCore.Mvc.ProblemDetails": {
             type?: string | null;
@@ -4631,14 +4648,6 @@ export interface components {
             instance?: string | null;
         } & {
             [key: string]: unknown;
-        };
-        "System.Text.Json.Nodes.JsonNode": {
-            options?: JsonNodeOptions;
-            parent?: JsonNode;
-            root?: JsonNode;
-        };
-        "System.Text.Json.Nodes.JsonNodeOptions": {
-            propertyNameCaseInsensitive?: boolean;
         };
     };
     responses: never;
@@ -4758,8 +4767,6 @@ export type MtgoTrackerServicesPluginManagerPluginConfiguration = PluginConfigur
 export type MtgoTrackerServicesPluginManagerPluginInfo = PluginInfo;
 export type MtgoTrackerServicesPluginServicePluginFailure = PluginFailure;
 export type MicrosoftAspNetCoreMvcProblemDetails = ProblemDetails;
-export type SystemTextJsonNodesJsonNode = JsonNode;
-export type SystemTextJsonNodesJsonNodeOptions = JsonNodeOptions;
 export type $defs = Record<string, never>;
 export type operations = Record<string, never>;
 
@@ -4875,5 +4882,3 @@ export type PluginConfiguration = components['schemas']['MTGOTracker.Services.Pl
 export type PluginInfo = components['schemas']['MTGOTracker.Services.PluginManager.PluginInfo'];
 export type PluginFailure = components['schemas']['MTGOTracker.Services.PluginService.PluginFailure'];
 export type ProblemDetails = components['schemas']['Microsoft.AspNetCore.Mvc.ProblemDetails'];
-export type JsonNode = components['schemas']['System.Text.Json.Nodes.JsonNode'];
-export type JsonNodeOptions = components['schemas']['System.Text.Json.Nodes.JsonNodeOptions'];

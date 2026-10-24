@@ -22,10 +22,12 @@ using MTGOTracker.Services.MTGO;
 using MTGOTracker.Services.Videre;
 
 
+using CatalogSearchItem = MTGOTracker.Services.Videre.Generated.CatalogSearchItem;
+
 namespace MTGOTracker.Controllers;
 
 /// <summary>
-/// Collection management API for rendering and streaming card images
+/// Collection holdings and catalog search.
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
@@ -188,25 +190,12 @@ public class CollectionController(
         });
       }
 
-      const int maxInlineCollectionIds = 10_000;
-      var catalogIdSet = new HashSet<int>();
-      foreach (var chunk in collectionIds.Chunk(maxInlineCollectionIds))
-      {
-        var chunkCatalogIds = await FetchCollectionSearchIdsAsync(
-          chunk,
-          query,
-          cancellationToken);
-
-        foreach (var catalogId in chunkCatalogIds)
-        {
-          catalogIdSet.Add(catalogId);
-        }
-      }
+      var results = await videreAPIClient.SearchCollectionAsync(collectionIds, query, cancellationToken);
 
       return Ok(new CollectionSearchResultDTO
       {
         Query = query,
-        CatalogIds = catalogIdSet
+        CatalogIds = results.Keys
           .OrderBy(id => id)
           .ToArray()
       });
@@ -247,6 +236,7 @@ public class CollectionController(
       if (productsById.TryGetValue(item.Id, out var product))
       {
         pricesById.TryGetValue(item.Id, out var productPrice);
+        string? imageUrl = product.Image_url?.ToString();
         products.Add(new CollectionProductDTO
         {
           CatalogId = item.Id,
@@ -255,13 +245,13 @@ public class CollectionController(
             : product.Name,
           Quantity = item.Quantity,
           Description = product.Description,
-          SetCode = product.SetCode,
-          SetName = product.SetName,
-          ObjectType = product.ObjectType,
-          ImageUrl = string.IsNullOrWhiteSpace(product.ImageUrl)
+          SetCode = product.Set_code,
+          SetName = product.Set_name,
+          ObjectType = product.Object_type,
+          ImageUrl = string.IsNullOrWhiteSpace(imageUrl)
             ? $"https://r2.videreproject.com/products/{item.Id}-300px.png"
-            : product.ImageUrl,
-          IsTradable = product.IsTradable,
+            : imageUrl,
+          IsTradable = product.Is_tradable,
           Price = productPrice?.SellPrice,
           PriceDate = productPrice?.PriceDate,
           PriceSource = productPrice?.Source
@@ -365,72 +355,29 @@ public class CollectionController(
         .Select(item => $"{item.Id}:{item.Quantity}"));
   }
 
-  private async Task<IReadOnlyDictionary<int, VidereProductResult>> GetCollectionProductsAsync(
+  private async Task<IReadOnlyDictionary<int, CatalogSearchItem>> GetCollectionProductsAsync(
     IReadOnlyCollection<CardQuantityPair> collectionItems,
     CancellationToken cancellationToken)
   {
-    const int maxInlineCollectionIds = 10_000;
-    var collectionIds = collectionItems
-      .Select(item => item.Id)
-      .Where(id => id > 0)
-      .Distinct()
-      .ToArray();
-
-    if (collectionIds.Length == 0)
-    {
-      return new Dictionary<int, VidereProductResult>();
-    }
-
     try
     {
-      var products = new Dictionary<int, VidereProductResult>();
-      foreach (var chunk in collectionIds.Chunk(maxInlineCollectionIds))
-      {
-        var chunkProducts = await FetchCollectionProductsAsync(chunk, cancellationToken);
-        foreach (var product in chunkProducts)
-        {
-          products[product.Key] = product.Value;
-        }
-      }
-
-      return products;
+      return await videreAPIClient.SearchCollectionAsync(
+        collectionItems.Select(item => item.Id).ToArray(), "is:product", cancellationToken);
     }
     catch (VidereAPIException ex)
     {
       Log.Warning(ex, "Failed to classify collection products with Videre cards search");
-      return new Dictionary<int, VidereProductResult>();
+      return new Dictionary<int, CatalogSearchItem>();
     }
   }
 
-  private async Task<IReadOnlyDictionary<int, VidereProductResult>> FetchCollectionProductsAsync(
-    int[] collectionIds,
-    CancellationToken cancellationToken)
-  {
-    return await videreAPIClient.GetCollectionProductsAsync(collectionIds, cancellationToken);
-  }
-
-  private async Task<int[]> FetchCollectionSearchIdsAsync(
-    int[] collectionIds,
-    string query,
-    CancellationToken cancellationToken)
-  {
-    var matchingIds = await videreAPIClient.SearchCollectionAsync(
-      collectionIds,
-      query,
-      cancellationToken);
-    return matchingIds
-      .OrderBy(id => id)
-      .ToArray();
-  }
-
   /// <summary>
-  /// Get daily price history for one MTGO catalog ID.
+  /// Get cached daily prices for the collection's catalog IDs.
   /// </summary>
   private async Task<IReadOnlyDictionary<int, ViderePriceResult>> GetCollectionPricesAsync(
     IReadOnlyCollection<CardQuantityPair> collectionItems,
     CancellationToken cancellationToken)
   {
-    const int maxInlineCollectionIds = 10_000;
     var collectionIds = collectionItems
       .Select(item => item.Id)
       .Where(id => id > 0)
@@ -472,22 +419,7 @@ public class CollectionController(
 
     try
     {
-      var fetchedPrices = new Dictionary<int, ViderePriceResult>();
-      var missingIds = new HashSet<int>();
-
-      foreach (var chunk in idsToFetch.Chunk(maxInlineCollectionIds))
-      {
-        var chunkPrices = await FetchCollectionPricesAsync(chunk, cancellationToken);
-        foreach (var price in chunkPrices.Prices)
-        {
-          fetchedPrices[price.Key] = price.Value;
-        }
-
-        foreach (var missingId in chunkPrices.MissingIds)
-        {
-          missingIds.Add(missingId);
-        }
-      }
+      var fetched = await videreAPIClient.GetLatestPricesAsync(idsToFetch, cancellationToken);
 
       lock (s_collectionPriceCacheSync)
       {
@@ -498,18 +430,18 @@ public class CollectionController(
           s_collectionPriceCacheExpiresAtUtc = VidereAPIClient.GetPriceCacheExpiration(DateTimeOffset.UtcNow);
         }
 
-        foreach (var price in fetchedPrices)
+        foreach (var price in fetched.Prices)
         {
           s_collectionPriceCache[price.Key] = price.Value;
         }
 
-        foreach (var missingId in missingIds)
+        foreach (var missingId in fetched.MissingIds)
         {
           s_collectionPriceMissingCache.Add(missingId);
         }
       }
 
-      foreach (var price in fetchedPrices)
+      foreach (var price in fetched.Prices)
       {
         cachedPrices[price.Key] = price.Value;
       }
@@ -521,15 +453,6 @@ public class CollectionController(
       Log.Warning(ex, "Failed to fetch collection prices with Videre prices API");
       return cachedPrices;
     }
-  }
-
-  private async Task<(IReadOnlyDictionary<int, ViderePriceResult> Prices, IReadOnlyCollection<int> MissingIds)>
-    FetchCollectionPricesAsync(
-      int[] collectionIds,
-      CancellationToken cancellationToken)
-  {
-    var result = await videreAPIClient.GetLatestPricesAsync(collectionIds, cancellationToken);
-    return (result.Prices, result.MissingIds);
   }
 
   private static string GetItemName(int catalogId, string? name) =>

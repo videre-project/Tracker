@@ -108,11 +108,8 @@ public static class WebAPIService
     builder.Services.AddHttpClient();
     builder.Services.AddHttpClient<IManafoldArchetypeClient, ManafoldArchetypeClient>();
     builder.Services.AddHttpClient<VidereOpenAPIClient>(ConfigureVidereAPIClient);
-    builder.Services.AddHttpClient("VidereAPI", ConfigureVidereAPIClient);
     builder.Services.AddTransient(services => new VidereAPIClient(
-      services.GetRequiredService<VidereOpenAPIClient>(),
-      services.GetRequiredService<System.Net.Http.IHttpClientFactory>().CreateClient("VidereAPI"),
-      services.GetRequiredService<ApplicationOptions>()));
+      services.GetRequiredService<VidereOpenAPIClient>()));
 
     // Enable CORS for frontend development
     builder.Services.AddCors(options =>
@@ -130,6 +127,7 @@ public static class WebAPIService
     builder.Services.AddEndpointsApiExplorer();
     builder.Services.AddSwaggerGen(options =>
     {
+      options.SupportNonNullableReferenceTypes();
       options.SwaggerDoc("v1", new OpenApiInfo
       {
         Title = "Videre Tracker API",
@@ -157,6 +155,18 @@ public static class WebAPIService
       {
         Type = JsonSchemaType.Array,
         Items = new OpenApiSchema { Type = JsonSchemaType.Object }
+      });
+      options.MapType<System.Text.Json.Nodes.JsonNode>(() => new OpenApiSchema());
+      options.MapType<System.Text.Json.Nodes.JsonObject>(() => new OpenApiSchema
+      {
+        Type = JsonSchemaType.Object,
+        AdditionalPropertiesAllowed = true,
+        AdditionalProperties = new OpenApiSchema()
+      });
+      options.MapType<System.Text.Json.Nodes.JsonArray>(() => new OpenApiSchema
+      {
+        Type = JsonSchemaType.Array,
+        Items = new OpenApiSchema()
       });
 
       // Match MTGOSDK's runtime JSON converter behavior: properties marked

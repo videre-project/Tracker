@@ -12,29 +12,16 @@ namespace MTGOTracker.Services.Videre;
 
 public static class VidereCardColors
 {
-  private static readonly IReadOnlyList<string> s_colors =
-    Enum.GetValues<Generated.Colors>()
-      .Select(color => VidereAPIClient.GetEnumWireValue(color))
-      .ToArray();
+  // Display order is a Magic convention, independent of generated enum values.
+  private const string ColorOrder = "WUBRG";
 
-  private static readonly IReadOnlyDictionary<string, int> s_displayRanks =
-    s_colors
-      .Select((color, index) => (color, index))
-      .ToDictionary(entry => entry.color, entry => entry.index, StringComparer.Ordinal);
+  public static bool IsCanonical(char color) => ColorOrder.Contains(color);
 
-  public static bool IsCanonical(char color) =>
-    s_displayRanks.ContainsKey(color.ToString());
-
-  public static IEnumerable<string> Normalize(IEnumerable<char> colors) => colors
-    .Select(color => color.ToString())
-    .Where(s_displayRanks.ContainsKey)
-    .Distinct(StringComparer.Ordinal)
-    .OrderBy(GetDisplayRank);
+  public static IEnumerable<string> Normalize(IEnumerable<char> colors) =>
+    Normalize(colors.Select(color => color.ToString()));
 
   public static IEnumerable<string> Normalize(IEnumerable<string> colors) => colors
-    .Where(s_displayRanks.ContainsKey)
+    .Where(color => color.Length == 1 && IsCanonical(color[0]))
     .Distinct(StringComparer.Ordinal)
-    .OrderBy(GetDisplayRank);
-
-  private static int GetDisplayRank(string color) => s_displayRanks[color];
+    .OrderBy(color => ColorOrder.IndexOf(color[0]));
 }

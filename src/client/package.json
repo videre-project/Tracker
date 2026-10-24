@@ -2,8 +2,9 @@
   "name": "client",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
+    "generate:videre": "node ../server/scripts/prepareVidereOpenAPI.cjs ../server/obj/Videre/openapi.json",
+    "dev": "pnpm run generate:videre && vite",
+    "build": "pnpm run generate:videre && tsc -b && vite build",
     "inspect:mtgo-cdn": "node scripts/inspectMtgoCdnManifest.cjs",
     "lint": "eslint .",
     "preview": "vite preview",

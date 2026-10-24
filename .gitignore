@@ -369,3 +369,6 @@ MigrationBackup/
 
 # mac-created file to track user view preferences for a directory
 .DS_Store
+
+# Generated from the public Videre OpenAPI document.
+src/client/src/types/videre.g.d.ts

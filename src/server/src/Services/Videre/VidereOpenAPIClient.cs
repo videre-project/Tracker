@@ -5,6 +5,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Net.Http;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -13,20 +14,27 @@ namespace MTGOTracker.Services.Videre.Generated;
 
 internal partial class VidereOpenAPIClient
 {
+  // Retain response bodies in generated exceptions for Tracker diagnostics.
+  partial void Initialize() => ReadResponseAsString = true;
+
   static partial void UpdateJsonSerializerSettings(JsonSerializerOptions settings)
   {
     settings.PropertyNameCaseInsensitive = true;
     settings.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
-    settings.Converters.Add(new ColorCollectionConverter<Colors>());
-    settings.Converters.Add(new ColorCollectionConverter<Colors2>());
-    settings.Converters.Add(new ColorCollectionConverter<Color_identity>());
+    settings.Converters.Add(new ColorCollectionConverter());
     settings.Converters.Add(new JsonStringEnumConverter());
   }
 
-  private sealed class ColorCollectionConverter<TColor> : JsonConverter<ICollection<TColor>>
-    where TColor : struct, Enum
+  partial void PrepareRequest(HttpClient client, HttpRequestMessage request, string url)
   {
-    public override ICollection<TColor> Read(
+    // The API advertises QUERY as x-query; NSwag generates the compatible POST operation.
+    if (request.Method == HttpMethod.Post && (url == "prices" || url.StartsWith("cards/search?", StringComparison.Ordinal)))
+      request.Method = new HttpMethod("QUERY");
+  }
+
+  private sealed class ColorCollectionConverter : JsonConverter<ICollection<CardColor>>
+  {
+    public override ICollection<CardColor> Read(
       ref Utf8JsonReader reader,
       Type typeToConvert,
       JsonSerializerOptions options)
@@ -36,7 +44,7 @@ internal partial class VidereOpenAPIClient
         throw new JsonException("Expected a Videre color array.");
       }
 
-      var colors = new List<TColor>();
+      var colors = new List<CardColor>();
       while (reader.Read() && reader.TokenType != JsonTokenType.EndArray)
       {
         if (reader.TokenType != JsonTokenType.String)
@@ -45,8 +53,9 @@ internal partial class VidereOpenAPIClient
         }
 
         var value = reader.GetString();
+        // Older catalog responses represent colorless as C instead of an empty array.
         if (value == "C") continue;
-        if (!Enum.TryParse<TColor>(value, out var color))
+        if (!Enum.TryParse<CardColor>(value, out var color))
         {
           throw new JsonException($"Unknown Videre color '{value}'.");
         }
@@ -62,7 +71,7 @@ internal partial class VidereOpenAPIClient
 
     public override void Write(
       Utf8JsonWriter writer,
-      ICollection<TColor> value,
+      ICollection<CardColor> value,
       JsonSerializerOptions options)
     {
       writer.WriteStartArray();

@@ -19,7 +19,8 @@ public sealed record CardEntry(
   int cmc = 0,
   List<string>? colors = null,
   List<string>? types = null,
-  string rarity = "common")
+  string rarity = "common",
+  [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] int? otherFaceCatalogId = null)
 {
   public CardEntry(int catalogId, int quantity)
     : this(catalogId, ResolveName(catalogId), quantity)

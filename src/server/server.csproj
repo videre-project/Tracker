@@ -154,13 +154,14 @@
           Condition="'$(SkipOpenApiGeneration)' != 'true' And '$(TRACKER_SKIP_OPENAPI_GEN)' != 'true'">
     <Exec Command="dotnet tool restore"
           WorkingDirectory="$(ProjectDir)" />
+    <!-- Generate the host contract without loading or applying installed plugins. -->
     <Exec Command="/opt/wine/bin/wine /home/wine/tracker-tools/swagger.exe tofile --output &quot;$(OutputPath)openapi.json&quot; &quot;$(OutputPath)$(AssemblyName).dll&quot; v1"
           WorkingDirectory="$(ProjectDir)"
-          EnvironmentVariables="TRACKER_DISABLE_INSTALLER=1;DOTNET_ROOT=Z:\home\wine\windows-dotnet;WINEPATH=Z:\home\wine\windows-dotnet"
+          EnvironmentVariables="TRACKER_DISABLE_INSTALLER=1;Plugins__Enabled=false;DOTNET_ROOT=Z:\home\wine\windows-dotnet;WINEPATH=Z:\home\wine\windows-dotnet"
           Condition="'$(TRACKER_DEV_CONTAINER)' == 'true'" />
     <Exec Command="dotnet swagger tofile --output &quot;$(OutputPath)openapi.json&quot; &quot;$(OutputPath)$(AssemblyName).dll&quot; v1"
           WorkingDirectory="$(ProjectDir)"
-          EnvironmentVariables="TRACKER_DISABLE_INSTALLER=1"
+          EnvironmentVariables="TRACKER_DISABLE_INSTALLER=1;Plugins__Enabled=false"
           Condition="'$(TRACKER_DEV_CONTAINER)' != 'true'" />
 
     <PropertyGroup>

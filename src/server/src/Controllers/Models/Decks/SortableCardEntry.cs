@@ -4,6 +4,7 @@
 **/
 
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 
 namespace MTGOTracker.Controllers.Models.Decks;
@@ -16,6 +17,8 @@ public class SortableCardEntry
   public int Index { get; set; }
   public int OriginalIndex { get; set; }
   public required int CatalogId { get; set; }
+  [JsonIgnore(Condition = JsonIgnoreCondition.Never)]
+  public int? OtherFaceCatalogId { get; set; }
   public required string Name { get; set; }
   public int Quantity { get; set; }
   public int Cmc { get; set; }

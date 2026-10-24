@@ -4,6 +4,7 @@
 **/
 
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 
 namespace MTGOTracker.Controllers.Models.Decks;
@@ -13,6 +14,8 @@ public class CardSearchResultDTO
   public required string Id { get; set; }
   public required int MtgoId { get; set; }
   public required string SetCode { get; set; }
+  [JsonIgnore(Condition = JsonIgnoreCondition.Never)]
+  public int? OtherFaceCatalogId { get; set; }
   public required string Name { get; set; }
   public required string Type { get; set; }
   public List<string> Types { get; set; } = new();

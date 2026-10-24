@@ -4,7 +4,6 @@
 **/
 
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -13,7 +12,6 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
-using MTGOSDK.API.Collection;
 using MTGOSDK.Core.Logging;
 
 using MTGOTracker.Controllers.Base;
@@ -31,13 +29,14 @@ public sealed class CollectionMarketController(
   private static readonly object s_collectionPriceHistoryCacheSync = new();
   private static readonly Dictionary<string, CollectionPriceHistoryDTO> s_collectionPriceHistoryCache = new();
   private static DateTimeOffset s_collectionPriceHistoryCacheExpiresAtUtc;
-  private static readonly ConcurrentDictionary<int, CollectionCardDetailDTO> s_collectionCardDetailCache = new();
+
   [HttpGet("prices/{id:int}/history")]
   [ProducesResponseType(typeof(CollectionPriceHistoryDTO), StatusCodes.Status200OK)]
+  [ProducesResponseType(StatusCodes.Status400BadRequest)]
   public async Task<ActionResult<CollectionPriceHistoryDTO>> GetCollectionPriceHistory(
     int id,
-    [FromQuery] string? from,
-    [FromQuery] string? to,
+    [FromQuery] DateTimeOffset? from,
+    [FromQuery] DateTimeOffset? to,
     [FromQuery] int? limit,
     [FromQuery] int? offset,
     CancellationToken cancellationToken)
@@ -49,7 +48,7 @@ public sealed class CollectionMarketController(
 
     var boundedLimit = Math.Clamp(limit ?? 120, 1, 365);
     var boundedOffset = Math.Max(0, offset ?? 0);
-    var cacheKey = $"{id}|{from}|{to}|{boundedLimit}|{boundedOffset}";
+    var cacheKey = $"{id}|{from:yyyy-MM-dd}|{to:yyyy-MM-dd}|{boundedLimit}|{boundedOffset}";
     var cached = GetCachedCollectionPriceHistory(cacheKey);
     if (cached is not null)
     {
@@ -94,11 +93,6 @@ public sealed class CollectionMarketController(
       return BadRequest(new { error = "Catalog ID must be positive." });
     }
 
-    if (s_collectionCardDetailCache.TryGetValue(id, out var cached))
-    {
-      return Ok(cached);
-    }
-
     try
     {
       var detail = await FetchCollectionCardDetailAsync(id, cancellationToken);
@@ -107,7 +101,6 @@ public sealed class CollectionMarketController(
         return NotFound(new { error = $"Card metadata for catalog ID {id} was not found." });
       }
 
-      s_collectionCardDetailCache[id] = detail;
       return Ok(detail);
     }
     catch (VidereAPIException ex)
@@ -123,8 +116,8 @@ public sealed class CollectionMarketController(
 
   private async Task<CollectionPriceHistoryDTO> FetchCollectionPriceHistoryAsync(
     int catalogId,
-    string? from,
-    string? to,
+    DateTimeOffset? from,
+    DateTimeOffset? to,
     int limit,
     int offset,
     CancellationToken cancellationToken)
@@ -158,51 +151,35 @@ public sealed class CollectionMarketController(
     CancellationToken cancellationToken)
   {
     var card = await videreAPIClient.GetCardDetailsAsync(catalogId, cancellationToken);
-    if (card is null)
-    {
-      var nonFoilCatalogId = await videreAPIClient.FindNonFoilCatalogIdAsync(catalogId, cancellationToken);
-      if (nonFoilCatalogId is not null && nonFoilCatalogId > 0)
-      {
-        card = await videreAPIClient.GetCardDetailsAsync(nonFoilCatalogId.Value, cancellationToken);
-      }
-    }
-
-    if (card is null)
-    {
-      return null;
-    }
-
-    var otherFace = await videreAPIClient.GetOtherFaceCatalogIdAsync(catalogId, cancellationToken);
-    int? otherFaceCatalogId = otherFace?.catalogId;
+    if (card is null) return null;
+    var canonicalName = card.Name ?? card.Display_name ?? "";
+    var otherFace = card.Faces?.FirstOrDefault(face =>
+      face.Source_catalog_id is > 0 && face.Source_catalog_id != card.Id);
 
     return new CollectionCardDetailDTO
     {
       CatalogId = card.Id,
-      Name = string.IsNullOrWhiteSpace(card.DisplayName)
-        ? card.Name
-        : card.DisplayName,
-      CanonicalName = card.Name,
-      PrintedName = card.PrintedName,
-      SetCode = card.SetCode ?? "",
-      SetName = card.SetName,
-      CollectorNumber = card.CollectorNumber,
-      Rarity = card.Rarity,
-      ManaCost = card.ManaCost,
-      ManaValue = card.ManaValue,
-      TypeLine = card.TypeLine ?? "Card",
-      OracleText = card.OracleText ?? "",
-      FlavorText = card.FlavorText,
-      Colors = card.Colors?.ToList() ?? [],
-      ImageUrl = string.IsNullOrWhiteSpace(card.ImageUrl)
-        ? $"https://r2.videreproject.com/cards/{card.Id}-300px.png"
-        : card.ImageUrl,
-      Power = card.Power,
-      Toughness = card.Toughness,
-      Loyalty = card.Loyalty,
-      Defense = card.Defense,
-      Artist = card.Artist,
-      PromoLabel = card.PromoLabel,
-      OtherFaceCatalogId = otherFaceCatalogId
+      Name = string.IsNullOrWhiteSpace(card.Display_name) ? canonicalName : card.Display_name,
+      CanonicalName = canonicalName,
+      PrintedName = card.Printed_name,
+      SetCode = card.Set_code?.Trim().ToUpperInvariant() ?? "",
+      SetName = card.Set_name,
+      CollectorNumber = card.Collector_number,
+      Rarity = card.Rarity.HasValue ? VidereAPIClient.GetEnumWireValue(card.Rarity.Value) : null,
+      ManaCost = VidereAPIClient.NormalizeOptionalText(card.Mana_cost),
+      ManaValue = card.Mana_value,
+      TypeLine = VidereAPIClient.NormalizeOptionalText(card.Type_line) ?? "Card",
+      OracleText = VidereAPIClient.NormalizeCardText(card.Oracle_text ?? card.Flavor_text),
+      FlavorText = VidereAPIClient.NormalizeCardText(card.Flavor_text),
+      Colors = VidereAPIClient.NormalizeColors(card.Colors),
+      ImageUrl = card.Image_url?.ToString() ?? $"https://r2.videreproject.com/cards/{card.Id}-300px.png",
+      Power = VidereAPIClient.NormalizeOptionalText(card.Power),
+      Toughness = VidereAPIClient.NormalizeOptionalText(card.Toughness),
+      Loyalty = VidereAPIClient.NormalizeOptionalText(card.Loyalty),
+      Defense = VidereAPIClient.NormalizeOptionalText(card.Defense),
+      Artist = VidereAPIClient.NormalizeOptionalText(card.Artist),
+      PromoLabel = VidereAPIClient.NormalizeOptionalText(card.Promo_label),
+      OtherFaceCatalogId = otherFace?.Source_catalog_id
     };
   }
 
@@ -240,5 +217,4 @@ public sealed class CollectionMarketController(
       s_collectionPriceHistoryCache[cacheKey] = history;
     }
   }
-
 }

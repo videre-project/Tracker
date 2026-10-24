@@ -9,17 +9,9 @@ using System.Collections.Generic;
 
 namespace MTGOTracker.Services.Videre;
 
-public sealed record VidereProductResult(
-  int Id,
-  string? SetCode,
-  string? SetName,
-  string? Name,
-  string? Description,
-  string? ObjectType,
-  string? ImageUrl,
-  bool? IsTradable
-);
-
+/// <summary>
+/// Card and product metadata reconciled for deck synchronization and trade history.
+/// </summary>
 public sealed record VidereCatalogMetadataResult(
   int Id,
   string Name,
@@ -29,9 +21,13 @@ public sealed record VidereCatalogMetadataResult(
   string? ImageUrl,
   double? ManaValue = null,
   IReadOnlyList<string>? Colors = null,
-  string? TypeLine = null
+  string? TypeLine = null,
+  bool? HasSeparateFace = null
 );
 
+/// <summary>
+/// Local price values use decimal amounts and ISO dates.
+/// </summary>
 public sealed record ViderePriceResult(
   int Id,
   string? PriceDate,
@@ -39,33 +35,12 @@ public sealed record ViderePriceResult(
   string? Source
 );
 
+/// <summary>
+/// Latest prices indexed by catalog ID, including IDs with no available price.
+/// </summary>
 public sealed record ViderePricesResult(
   IReadOnlyDictionary<int, ViderePriceResult> Prices,
   IReadOnlyCollection<int> MissingIds
-);
-
-public sealed record VidereCardDetailResult(
-  int Id,
-  string Name,
-  string? PrintedName,
-  string? DisplayName,
-  string? SetCode,
-  string? SetName,
-  string? CollectorNumber,
-  string? Rarity,
-  string? ManaCost,
-  double? ManaValue,
-  string? TypeLine,
-  string? OracleText,
-  string? FlavorText,
-  IReadOnlyList<string>? Colors,
-  string? ImageUrl,
-  string? Power,
-  string? Toughness,
-  string? Loyalty,
-  string? Defense,
-  string? Artist,
-  string? PromoLabel
 );
 
 public sealed class VidereAPIException(
