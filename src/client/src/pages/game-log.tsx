@@ -26,6 +26,7 @@ export default function GameLog() {
   const parsedGameId = gameIdParam == null ? null : Number.parseInt(gameIdParam, 10)
   const selectedGameId =
     parsedGameId != null && Number.isFinite(parsedGameId) ? parsedGameId : null
+  const parentPath = `/history/${matchId}${selectedGameId != null ? `?gameId=${selectedGameId}` : ""}`
 
   const { isReady: clientReady } = useClientState()
 
@@ -160,13 +161,14 @@ export default function GameLog() {
 
   return (
     <GameLogLayout
+      className="mx-0 max-w-none"
       entries={entries}
       title={logTitle}
       matchId={parsedMatchId}
       connected={connected}
       liveEventCount={eventCount}
       loading={historyLoading}
-      onBack={() => navigate(-1)}
+      onBack={() => navigate(parentPath)}
     />
   )
 }

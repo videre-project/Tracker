@@ -13,36 +13,31 @@ import {
   GAME_LOG_TYPE_ORDER as TYPE_ORDER,
 } from "@videreproject/ui"
 import { ArrowLeft } from "lucide-react"
-import { useNavigate, useParams } from "react-router-dom"
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom"
 
 import { useCardArtContext } from "@/hooks/use-card-art"
 import { Button } from "@videreproject/ui"
 import { Skeleton } from "@videreproject/ui"
 import { useClientState } from "@/hooks/use-client-state"
 import { useDeckDetail, type DeckDetail } from "@/hooks/use-decks"
-import { useMatchDetails, updateOpponentArchetype } from "@/hooks/use-match-details"
+import { useMatchDetails, loadOpponentArchetypeContext, updateOpponentArchetypes } from "@/hooks/use-match-details"
+import { OpponentClassificationNotice } from "@/components/opponent-classification-notice"
 import { useNDJSONStream } from "@/hooks/use-ndjson-stream"
 import type {
   GameDetailsDTO,
   GameLogDTO,
   MatchDetailsDTO,
-  SideboardChangeDTO,
+  OpponentArchetypeUpdate,
 } from "@/types/api"
 import { getApiUrl } from "@/utils/api-config"
 import { readReplayData } from "@/utils/replay-data"
+import { getSideboardingDiff } from "@/utils/sideboarding"
 import {
   getCatalogIdByCardId,
   getOpeningHandCards,
 } from "@/utils/opening-hand"
 
 // -- Match DTO -> shared layout helpers --
-
-type SideboardingCard = {
-  key: string
-  name: string
-  quantity: number
-  catalogId?: number | null
-}
 
 function getGameKey(game: GameDetailsDTO) {
   return game.id ?? game.gameNumber ?? 0
@@ -88,41 +83,6 @@ function getDeckPreviewCards(detail?: DeckDetail | null) {
     }))
 }
 
-function getSideboardingDiff(changes?: SideboardChangeDTO[] | null) {
-  const added = new Map<number, SideboardingCard>()
-  const removed = new Map<number, SideboardingCard>()
-
-  for (const change of changes ?? []) {
-    const quantity = change.quantity ?? 0
-    const catalogId = change.catalogId ?? 0
-    if (quantity === 0 || catalogId <= 0) continue
-
-    const cards = quantity > 0 ? added : removed
-    const direction = quantity > 0 ? "in" : "out"
-    const amount = Math.abs(quantity)
-    const existing = cards.get(catalogId)
-    if (existing) {
-      existing.quantity += amount
-      continue
-    }
-
-    cards.set(catalogId, {
-      key: `${direction}:${catalogId}`,
-      name: change.name?.trim() || `Card ID #${catalogId}`,
-      quantity: amount,
-      catalogId,
-    })
-  }
-
-  const byName = (a: SideboardingCard, b: SideboardingCard) =>
-    a.name.localeCompare(b.name) || (a.catalogId ?? 0) - (b.catalogId ?? 0)
-
-  return {
-    in: Array.from(added.values()).sort(byName),
-    out: Array.from(removed.values()).sort(byName),
-  }
-}
-
 function toSharedMatchDetails({
   match,
   deckDetail,
@@ -136,10 +96,13 @@ function toSharedMatchDetails({
   selectedGameReplay?: ReplayData | null
   deckBackgroundArtUrl?: string | null
 }): MatchDetailsData {
-  const catalogIdByCardId = getCatalogIdByCardId(selectedGameReplay)
+  const catalogIdByCardId = getCatalogIdByCardId(
+    selectedGameReplay?.gameId === selectedGameKey ? selectedGameReplay : null,
+  )
+  const eventName = match.eventName || "Match"
 
   return {
-    eventName: match.eventName || "Match",
+    eventName: match.matchNumber ? `${eventName} - Match ${match.matchNumber}` : eventName,
     result: match.result,
     isActive: match.isActive,
     record: match.record || "",
@@ -193,19 +156,34 @@ function toSharedMatchDetails({
 // -- Page --
 
 export default function MatchDetails() {
+  const location = useLocation()
+  const [searchParams] = useSearchParams()
   const { matchId } = useParams<{ matchId: string }>()
   const navigate = useNavigate()
   const parsedMatchId = matchId ? parseInt(matchId, 10) : null
-  const { data: fetchedData, loading, error } = useMatchDetails(parsedMatchId)
+  const { data: fetchedData, loading, error } = useMatchDetails(
+    parsedMatchId, (location.state as { match?: MatchDetailsDTO } | null)?.match,
+  )
   const { isReady: clientReady } = useClientState()
   const { getArtUrl, prefetchCards, isReady: cardArtReady } = useCardArtContext()
 
-  const [data, setData] = useState<MatchDetailsDTO | null>(null)
+  const [data, setData] = useState<MatchDetailsDTO | null>(fetchedData)
   const [liveLogCount, setLiveLogCount] = useState(0)
-  const [selectedGameKey, setSelectedGameKey] = useState<number | null>(null)
+  const [selectedGameKey, setSelectedGameKey] = useState<number | null>(() => {
+    const gameId = Number(searchParams.get("gameId"))
+    return Number.isSafeInteger(gameId) && gameId > 0 ? gameId : null
+  })
   const [selectedGameReplay, setSelectedGameReplay] = useState<ReplayData | null>(null)
   const [archetypePending, setArchetypePending] = useState(false)
   const [archetypeError, setArchetypeError] = useState<string | null>(null)
+  const [archetypeUndo, setArchetypeUndo] = useState<OpponentArchetypeUpdate[] | null>(null)
+  const archetypeMatchId = useRef(parsedMatchId)
+  useEffect(() => {
+    archetypeMatchId.current = parsedMatchId
+    setArchetypeUndo(null); setArchetypeError(null); setArchetypePending(false)
+  }, [parsedMatchId])
+  const loadOpponentContext = useCallback((signal: AbortSignal) =>
+    loadOpponentArchetypeContext(parsedMatchId == null ? [] : [parsedMatchId], data?.format ? [data.format] : [], signal), [parsedMatchId, data?.format])
 
   useEffect(() => {
     if (!fetchedData) return
@@ -214,7 +192,8 @@ export default function MatchDetails() {
   }, [fetchedData])
 
   useEffect(() => {
-    const games = data?.games ?? []
+    if (!data) return
+    const games = data.games ?? []
     if (games.length === 0) {
       setSelectedGameKey(current => current === null ? current : null)
       return
@@ -224,7 +203,7 @@ export default function MatchDetails() {
     if (selectedGameKey === null || !gameKeys.has(selectedGameKey)) {
       setSelectedGameKey(getGameKey(games[0]))
     }
-  }, [data?.games, selectedGameKey])
+  }, [data, selectedGameKey])
 
   useEffect(() => {
     if (!clientReady || parsedMatchId == null || selectedGameKey == null) {
@@ -239,9 +218,9 @@ export default function MatchDetails() {
         return response.json()
       })
       .then(readReplayData)
-      .then(setSelectedGameReplay)
+      .then(replay => { if (!controller.signal.aborted) setSelectedGameReplay(replay) })
       .catch(requestError => {
-        if (requestError instanceof Error && requestError.name === "AbortError") return
+        if (controller.signal.aborted || requestError instanceof Error && requestError.name === "AbortError") return
         setSelectedGameReplay(null)
       })
 
@@ -328,7 +307,7 @@ export default function MatchDetails() {
 
   if (error) {
     return (
-      <div className="mx-auto w-full max-w-7xl space-y-4 px-4 pb-4 pt-1">
+      <div className="w-full space-y-4 px-4 pb-4 pt-1">
         <Button variant="ghost" onClick={() => navigate("/history")} className="-ml-3 h-8">
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back
@@ -342,7 +321,7 @@ export default function MatchDetails() {
 
   if (loading || !data || !sharedMatch) {
     return (
-      <div className="mx-auto w-full max-w-7xl space-y-4 px-4 pb-4 pt-1">
+      <div className="w-full space-y-4 px-4 pb-4 pt-1">
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-start gap-3">
             <Skeleton className="h-8 w-8 shrink-0" />
@@ -362,7 +341,7 @@ export default function MatchDetails() {
             </div>
           ))}
         </div>
-        <div className="grid gap-3 lg:grid-cols-[18rem_minmax(0,1fr)]">
+        <div className="grid gap-3 xl:grid-cols-[23.5rem_minmax(0,1fr)]">
           <div className="space-y-2">
             <Skeleton className="h-5 w-24" />
             <Skeleton className="h-20 w-full" />
@@ -400,7 +379,7 @@ export default function MatchDetails() {
         headerEndHost,
       ) : null}
       <MatchDetailsLayout
-        className="h-[calc(100vh-2.5rem)]"
+        className="flex-1"
         match={sharedMatch}
         initialGameId={selectedGameKey == null ? undefined : String(selectedGameKey)}
         liveUpdateCount={liveLogCount}
@@ -427,24 +406,39 @@ export default function MatchDetails() {
         onReplay={navigateToReplay}
         opponentArchetypePending={archetypePending}
         opponentArchetypeError={archetypeError}
-        onOpponentArchetypeChange={parsedMatchId == null ? undefined : async archetype => {
+        loadOpponentArchetypeContext={loadOpponentContext}
+        onOpponentArchetypeChange={parsedMatchId == null ? undefined : async (archetype, colors) => {
           setArchetypePending(true)
           setArchetypeError(null)
           try {
-            const updated = await updateOpponentArchetype(parsedMatchId, archetype)
+            const nextColors = colors ?? data?.opponentDeckColors ?? null
+            const previous = await updateOpponentArchetypes([{ matchId: parsedMatchId, archetype, colors: nextColors }])
+            if (archetypeMatchId.current !== parsedMatchId) return
+            setArchetypeUndo(previous)
             setData(previous => previous ? {
               ...previous,
-              opponentDeckArchetype: updated.opponentDeckArchetype,
-              opponentDeckColors: updated.opponentDeckColors,
+              opponentDeckArchetype: archetype || null,
+              opponentDeckColors: nextColors,
             } : previous)
           } catch (requestError) {
-            setArchetypeError(requestError instanceof Error ? requestError.message : String(requestError))
+            if (archetypeMatchId.current === parsedMatchId) setArchetypeError(requestError instanceof Error ? requestError.message : String(requestError))
             throw requestError
           } finally {
-            setArchetypePending(false)
+            if (archetypeMatchId.current === parsedMatchId) setArchetypePending(false)
           }
         }}
       />
+      {archetypeUndo && <OpponentClassificationNotice count={archetypeUndo.length} pending={archetypePending} error={archetypeError}
+        onDismiss={() => setArchetypeUndo(null)} onUndo={() => {
+          setArchetypePending(true); setArchetypeError(null)
+          void updateOpponentArchetypes(archetypeUndo).then(() => {
+            if (archetypeMatchId.current !== parsedMatchId) return
+            const previous = archetypeUndo[0]
+            setData(data => data ? { ...data, opponentDeckArchetype: previous.archetype, opponentDeckColors: previous.colors } : data)
+            setArchetypeUndo(null)
+          }).catch(error => { if (archetypeMatchId.current === parsedMatchId) setArchetypeError(error instanceof Error ? error.message : "Could not undo classification.") })
+            .finally(() => { if (archetypeMatchId.current === parsedMatchId) setArchetypePending(false) })
+        }} />}
     </>
   )
 }

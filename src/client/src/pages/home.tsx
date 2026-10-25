@@ -14,7 +14,7 @@ import {
   isLimitedFormat,
   type DashboardGameType,
 } from "@videreproject/ui"
-import { useGames } from "@/hooks/use-games"
+import { useGameFormats, useGames } from "@/hooks/use-games"
 import { useAggregatedArchetypes } from "@/hooks/use-decks"
 import { useCardArtContext } from "@/hooks/use-card-art"
 import {
@@ -40,7 +40,8 @@ export default function Home() {
   const [selectedFormat, setSelectedFormat] = useState<string>("")
   const [gameType, setGameType] = useState<DashboardGameType>("Constructed")
 
-  const { formats, stats, trend: trendData, loading } = useGames(effectiveRange, selectedFormat)
+  const { formats } = useGameFormats(gameType)
+  const { stats, trend: trendData, loading } = useGames(effectiveRange, selectedFormat, gameType)
 
   const filteredFormats = useMemo(() => {
     let result = [...new Set([...ACTIVE_FORMATS, ...formats])]

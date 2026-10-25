@@ -10,6 +10,8 @@ import {
   type StandingEntry,
   type TournamentEvent,
 } from "@videreproject/ui"
+import { TournamentDeckPreview } from "@/components/tournament-deck-preview"
+import { useArchivedTournament, useTournamentPlayer } from "@/hooks/use-tournament-player"
 import type { ActiveGame } from "@/hooks/use-events"
 import { useEvents } from "@/hooks/events-context"
 import { useClientState } from "@/hooks/use-client-state"
@@ -215,6 +217,7 @@ export default function EventDetails() {
   const navigate = useNavigate()
   const { activeGames, upcomingGames, completedGames, loading: eventsLoading } = useEvents()
   const { isReady: clientReady } = useClientState()
+  const [previewOpen, setPreviewOpen] = useState(false)
   const [liveEvent, setLiveEvent] = useState<ActiveGame | null>(null)
   const [standingsRefreshRevision, setStandingsRefreshRevision] = useState(0)
   const lastPendingStandingsRefreshKeyRef = useRef<string | null>(null)
@@ -302,7 +305,8 @@ export default function EventDetails() {
     setStandingsRefreshRevision(0)
   }, [eventId, event?.roundNumber])
 
-  const displayEvent = liveEvent ?? event
+  const archivedTournament = useArchivedTournament(eventId ?? null, !eventsLoading && !event)
+  const displayEvent = (liveEvent?.id === eventId ? liveEvent : null) ?? event ?? archivedTournament.event
   const phase = displayEvent ? getPhase(displayEvent) : "pre"
   const hasCountdown = hasRoundCountdown(displayEvent?.state)
   const roundCountdown = useCountdown(hasCountdown ? displayEvent?.roundEndTime : undefined)
@@ -410,22 +414,40 @@ export default function EventDetails() {
     lastUpdatedAt,
   } = useStandings(
     phase !== "pre" ? (eventId ?? null) : null,
-    phase !== "pre",
+    phase !== "pre" && !!event,
     phase === "active",
     standingsRefreshRevision,
   )
 
+  const { details: playerDetails, selectPlayer, enrichStandings, hasPublishedStandings } = useTournamentPlayer({
+    eventId: eventId ?? null,
+    completed: displayEvent?.state === "Finished",
+    recordedHistory: archivedTournament.history,
+    enabled: phase !== "pre",
+    clientReady: clientReady && !!event,
+    revision: `${lastUpdatedAt?.getTime() ?? ""}|${displayEvent?.state ?? ""}|${displayEvent?.roundNumber ?? ""}`,
+  })
+
   return (
-    <EventDetailsLayout
-      event={(displayEvent as TournamentEvent | null) ?? null}
-      standings={standings}
-      eventsLoading={eventsLoading}
-      standingsLoading={standingsLoading}
-      standingsError={standingsError}
-      lastStandingsUpdatedAt={lastUpdatedAt}
-      timerText={timerText ?? null}
-      playerNamesWithMatchesInProgress={displayEvent?.playerNamesWithMatchesInProgress}
-      onBack={() => navigate("/events")}
-    />
+    <>
+      <EventDetailsLayout
+        className="mx-0 w-full max-w-none"
+        event={(displayEvent as TournamentEvent | null) ?? null}
+        standings={enrichStandings(standings)}
+        playerDetails={playerDetails}
+        onPlayerSelect={selectPlayer}
+        onPreviewDeck={() => setPreviewOpen(true)}
+        onMatchClick={id => navigate(`/history/${id}`)}
+        eventsLoading={eventsLoading || archivedTournament.loading}
+        standingsLoading={standingsLoading && !hasPublishedStandings}
+        standingsError={hasPublishedStandings ? null : standingsError}
+        lastStandingsUpdatedAt={lastUpdatedAt}
+        timerText={timerText ?? null}
+        playerNamesWithMatchesInProgress={displayEvent?.playerNamesWithMatchesInProgress}
+        onBack={() => navigate("/events")}
+      />
+      <TournamentDeckPreview deck={previewOpen ? playerDetails.deck : null} format={displayEvent?.format ?? ""}
+        onClose={() => setPreviewOpen(false)} />
+    </>
   )
 }

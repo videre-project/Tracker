@@ -3,6 +3,7 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+import { useApplicationSettings } from "@/hooks/use-application-settings"
 import { useState, useEffect, useCallback, useRef } from "react"
 import { createPortal } from "react-dom"
 import { useParams, useNavigate, useLocation } from "react-router-dom"
@@ -29,6 +30,7 @@ interface ReplayRouteState {
 }
 
 export default function GameReplay() {
+  const { preferences } = useApplicationSettings()
   const { matchId, gameId: gameIdParam } = useParams<{
     matchId: string
     gameId: string
@@ -39,6 +41,7 @@ export default function GameReplay() {
 
   const parsedMatchId = matchId ? parseInt(matchId, 10) : null
   const gameId = gameIdParam ? parseInt(gameIdParam, 10) : null
+  const parentPath = `/history/${matchId}${gameId != null ? `?gameId=${gameId}` : ""}`
   const routeState = location.state as ReplayRouteState | null
   const initialEventId = typeof routeState?.eventId === "number" ? routeState.eventId : null
   const initialGameNumber = typeof routeState?.gameNumber === "number" ? routeState.gameNumber : null
@@ -63,13 +66,9 @@ export default function GameReplay() {
   const wasAtLatestRef = useRef(true)
   const refreshScheduledRef = useRef(false)
 
-  const navigateBackToMatch = useCallback(() => {
-    if (window.history.length > 1) {
-      navigate(-1)
-      return
-    }
-    navigate(`/history/${matchId}`)
-  }, [matchId, navigate])
+  const navigateToParent = useCallback(() => {
+    navigate(parentPath)
+  }, [parentPath, navigate])
 
   const queueRefresh = useCallback(() => {
     if (refreshScheduledRef.current) return
@@ -145,7 +144,7 @@ export default function GameReplay() {
         engine.current = eng
 
         let targetIndex = 0
-        if (isRefresh && wasAtLatestRef.current) {
+        if (isRefresh && preferences.replayFollowLive && wasAtLatestRef.current) {
           targetIndex = data.snapshots.length - 1
         } else if (isRefresh) {
           targetIndex = Math.min(currentIndexRef.current, data.snapshots.length - 1)
@@ -174,7 +173,7 @@ export default function GameReplay() {
       })
 
     return () => controller.abort()
-  }, [engine, gameId, refreshKey])
+  }, [engine, gameId, refreshKey, preferences.replayFollowLive])
 
   const handleStepTo = useCallback((index: number) => {
     if (!engine.current) return
@@ -191,7 +190,10 @@ export default function GameReplay() {
   // Keyboard shortcuts
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (!engine.current) return
+      const target = e.target
+      if (!preferences.replayKeyboardShortcuts || !engine.current ||
+        e.altKey || e.ctrlKey || e.metaKey ||
+        (target instanceof HTMLElement && (target.isContentEditable || target.closest("input, textarea, select, [role=combobox]")))) return
       if (e.key === "ArrowRight" || e.key === "l") {
         e.preventDefault()
         handleStepTo(currentIndex + 1)
@@ -208,7 +210,7 @@ export default function GameReplay() {
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
-  }, [currentIndex, engine, replayData, handleStepTo])
+  }, [currentIndex, engine, replayData, handleStepTo, preferences.replayKeyboardShortcuts])
 
   const snapshot =
     replayData && currentIndex >= 0 && currentIndex < replayData.snapshots.length
@@ -221,8 +223,8 @@ export default function GameReplay() {
         variant="ghost"
         size="icon"
         className="h-8 w-8 shrink-0 -translate-y-[0.5px]"
-        onClick={navigateBackToMatch}
-        aria-label="Back"
+        onClick={navigateToParent}
+        aria-label="Back to match"
       >
         <ArrowLeft className="h-5 w-5" />
       </Button>
@@ -260,8 +262,8 @@ export default function GameReplay() {
             <span className="text-destructive text-sm">
               Failed to load replay: {error}
             </span>
-            <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
-              <ArrowLeft className="mr-2 h-4 w-4" /> Back
+            <Button variant="ghost" size="sm" onClick={navigateToParent}>
+              <ArrowLeft className="mr-2 h-4 w-4" /> Back to match
             </Button>
           </div>
           <div className="shrink-0 h-[68px] border-t border-sidebar-border/60 bg-card/50" />
@@ -282,6 +284,7 @@ export default function GameReplay() {
 
     return (
       <ReplayLayout
+        disableTopZoneHoverExpansion={!preferences.replayExpandOpponentZones}
         board={board}
         transition={transition}
         snapshots={replayData.snapshots}

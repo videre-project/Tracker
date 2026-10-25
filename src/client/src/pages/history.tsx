@@ -3,17 +3,22 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
-import { useState, useMemo, useCallback } from "react"
+import { useApplicationSettings } from "@/hooks/use-application-settings"
+import { initialDateRange } from "@/lib/application-preferences"
+import { useState, useMemo, useCallback, useEffect, type ReactNode } from "react"
 import { useGamesHistory } from "@/hooks/use-games"
-import { useGames } from "@/hooks/use-games"
+import { useGameFormats } from "@/hooks/use-games"
 import { useClientState } from "@/hooks/use-client-state"
 import { useNDJSONStream } from "@/hooks/use-ndjson-stream"
-import { getApiUrl } from "@/utils/api-config"
-import { useNavigate } from "react-router-dom"
+import { dateRangeParams, getApiUrl } from "@/utils/api-config"
+import { useNavigate, useSearchParams } from "react-router-dom"
+import { loadOpponentArchetypeContext, updateOpponentArchetypes } from "@/hooks/use-match-details"
+import { OpponentClassificationNotice } from "@/components/opponent-classification-notice"
+import type { OpponentArchetypeUpdate } from "@/types/api"
 import {
   HistoryLayout,
+  OpponentArchetypePicker,
   compareFormats,
-  isLimitedFormat,
   type GameType,
   type MatchHistoryItem,
 } from "@videreproject/ui"
@@ -25,35 +30,44 @@ function getHistoryRowHref(match: MatchHistoryItem): string | null {
 }
 
 export default function History() {
+  const { preferences } = useApplicationSettings()
   const navigate = useNavigate()
-  const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
-    const to = new Date()
-    const from = new Date()
-    from.setDate(to.getDate() - 30)
-    return { from, to }
-  })
-
-  const [selectedFormat, setSelectedFormat] = useState<string>("")
+  const [params, setParams] = useSearchParams()
+  const defaultRange = useMemo(() => initialDateRange(preferences.historyRangeDays), [preferences.historyRangeDays])
+  const minDate = params.get("minDate"), maxDate = params.get("maxDate"), allTime = params.get("allTime") === "true"
+  const dateRange = useMemo<DateRange | undefined>(() => allTime ? undefined
+    : minDate && Number.isFinite(Date.parse(minDate)) ? { from: new Date(minDate), to: maxDate && Number.isFinite(Date.parse(maxDate)) ? new Date(maxDate) : undefined }
+      : defaultRange, [allTime, minDate, maxDate, defaultRange])
+  const selectedFormat = params.get("format") ?? ""
   const [gameType, setGameType] = useState<GameType>("All")
   const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(50)
+  const [pageSize, setPageSize] = useState(preferences.historyPageSize)
+  const [pending, setPending] = useState(false)
+  const [undo, setUndo] = useState<OpponentArchetypeUpdate[] | null>(null)
+  const [undoError, setUndoError] = useState<string | null>(null)
+  const review = params.get("review") === "classify"
+  const filters = new URLSearchParams()
+  filters.set("gameType", gameType)
+  for (const key of ["deckId", "deckRevisionId", "archetype", "opponent"]) if (params.has(key)) filters.set(key, params.get(key)!)
+  if (review) { filters.set("groupEvents", "false"); filters.set("includeOpponentCards", "true"); filters.set("completedOnly", "true") }
+  const scope = filters.toString()
 
   // The format list is shared with the dashboard and deck filters.
-  const { formats } = useGames("ALL", "")
+  const { formats, loading: formatsLoading, error: formatsError } = useGameFormats(gameType)
 
   const filteredFormats = useMemo(() => {
-    let result = formats
-    if (gameType === "Limited") {
-      result = formats.filter(isLimitedFormat)
-    } else if (gameType === "Constructed") {
-      result = formats.filter(format => !isLimitedFormat(format))
-    }
+    return [...formats].sort(compareFormats)
+  }, [formats])
 
-    return [...result].sort(compareFormats)
-  }, [formats, gameType])
+  useEffect(() => {
+    if (selectedFormat && !formatsLoading && !formatsError && !filteredFormats.includes(selectedFormat)) {
+      setParams(current => { const next = new URLSearchParams(current); next.delete("format"); return next })
+      setPage(1)
+    }
+  }, [selectedFormat, formatsLoading, formatsError, filteredFormats, setParams])
 
   const effectiveRange = dateRange || "ALL"
-  const { data, loading, error, refresh } = useGamesHistory(page, pageSize, effectiveRange, selectedFormat)
+  const { data, loading, error, refresh } = useGamesHistory(page, pageSize, effectiveRange, selectedFormat, undefined, scope)
   const { isReady: clientReady } = useClientState()
 
   // Subscribe to event/match creation/completion SSE stream
@@ -70,27 +84,45 @@ export default function History() {
   })
 
   const mergedItems = data?.items ?? []
+  const classify = useCallback(async (match: MatchHistoryItem, archetype: string, colors: string[] | null) => {
+    setPending(true); setUndoError(null)
+    try {
+      const previous = await updateOpponentArchetypes([{ matchId: match.id, archetype,
+        colors: colors ?? match.opponentDeckColors ?? null }])
+      setUndo(previous); if (review) setPage(1); refresh()
+    } finally { setPending(false) }
+  }, [refresh, review])
+  const renderOpponentArchetype = useCallback((match: MatchHistoryItem, trigger: ReactNode) => (
+    <OpponentArchetypePicker value={match.opponentDeckArchetype ?? null} colors={match.opponentDeckColors}
+      loadContext={signal => loadOpponentArchetypeContext([match.id], [match.format], signal)}
+      onChange={(archetype, colors) => classify(match, archetype, colors)}>{trigger}</OpponentArchetypePicker>
+  ), [classify])
+  const undoClassification = async () => {
+    if (!undo) return
+    setPending(true); setUndoError(null)
+    try { await updateOpponentArchetypes(undo); setUndo(null); refresh() }
+    catch (error) { setUndoError(error instanceof Error ? error.message : "Could not undo classification.") }
+    finally { setPending(false) }
+  }
 
   const handleFormatSelect = (f: string) => {
-    setSelectedFormat(f)
+    setParams(current => { const next = new URLSearchParams(current); if (f) next.set("format", f); else next.delete("format"); return next })
     setPage(1)
   }
 
   const handleGameTypeSelect = (value: GameType) => {
     setGameType(value)
-    if (
-      selectedFormat &&
-      value !== "All" &&
-      (value === "Limited") !== isLimitedFormat(selectedFormat)
-    ) {
-      handleFormatSelect("")
-    } else {
-      setPage(1)
-    }
+    setPage(1)
   }
 
   const handleDateChange = (range: DateRange | undefined) => {
-    setDateRange(range)
+    setParams(current => {
+      const next = new URLSearchParams(current)
+      next.delete("minDate"); next.delete("maxDate"); next.delete("allTime")
+      if (range) for (const [key, value] of dateRangeParams(range)) next.set(key, value)
+      else next.set("allTime", "true")
+      return next
+    })
     setPage(1)
   }
 
@@ -103,6 +135,7 @@ export default function History() {
   )
 
   return (
+    <>
     <HistoryLayout
       items={mergedItems}
       loading={loading}
@@ -115,20 +148,29 @@ export default function History() {
       dateRange={dateRange}
       onDateRangeChange={handleDateChange}
       onRowClick={handleRowClick}
+      renderOpponentArchetype={renderOpponentArchetype}
+      reviewLabel={review ? `${params.get("deckName") ? `${params.get("deckName")}: ` : ""}${params.get("opponent") || "Unclassified opponents"}` : undefined}
+      onClearReview={() => {
+        setParams(current => { const next = new URLSearchParams(current); for (const key of ["deckId", "deckRevisionId", "deckName", "archetype", "opponent", "review"]) next.delete(key); return next })
+        setPage(1)
+      }}
       pagination={
         data
           ? {
-              pageIndex: page - 1,
-              pageSize,
-              pageCount: data.totalPages ?? null,
-              hasPreviousPage: page > 1,
-              hasNextPage: page < (data.totalPages ?? page),
+              pageIndex: data.page - 1,
+              pageSize: data.pageSize,
+              pageCount: Math.max(1, data.totalPages),
+              totalCount: data.totalCount,
+              hasPreviousPage: data.page > 1,
+              hasNextPage: data.page < data.totalPages,
               onPageIndexChange: index => setPage(index + 1),
               onPageSizeChange: size => { setPageSize(size); setPage(1) },
-              totalCount: data.totalCount,
             }
           : null
       }
     />
+    {undo && <OpponentClassificationNotice count={undo.length} pending={pending} error={undoError}
+      onUndo={() => void undoClassification()} onDismiss={() => setUndo(null)} />}
+    </>
   )
 }
