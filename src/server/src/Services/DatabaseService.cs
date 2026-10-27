@@ -105,6 +105,7 @@ public static class DatabaseService
 
           if (typeof(T).Name == "EventContext")
           {
+            await EnsureColumnExistsAsync(context, "Events", "FormatType", "INTEGER", cancellationToken);
             await EnsureColumnExistsAsync(context, "Games", "StartTime", "TEXT", cancellationToken);
             await EnsureColumnExistsAsync(context, "GameStates", "ServerNonce", "INTEGER", cancellationToken);
             await EnsureColumnExistsAsync(context, "GameStates", "Interaction", "TEXT", cancellationToken);
@@ -131,6 +132,7 @@ public static class DatabaseService
               "SyncError",
               "TEXT",
               cancellationToken);
+            await MigrateSideboardGuidesAsync(context, directory, cancellationToken);
           }
         }
 
@@ -140,6 +142,78 @@ public static class DatabaseService
       {
         readiness.SetException(ex);
         throw;
+      }
+    }
+
+    /// <summary>
+    /// Moves guides into collection history once. Keep the old file as a backup;
+    /// the marker prevents later startups from restoring guides the user has deleted.
+    /// </summary>
+    private static async Task MigrateSideboardGuidesAsync(DbContext context, string directory, CancellationToken token)
+    {
+      var db = context.Database;
+      string legacy = Path.Combine(directory, "Performance.db");
+      bool attached = false;
+      await db.OpenConnectionAsync(token);
+      try
+      {
+        if (File.Exists(legacy))
+        {
+          await db.ExecuteSqlInterpolatedAsync($"ATTACH DATABASE {legacy} AS guide_backup", token);
+          attached = true;
+        }
+        await using var transaction = await db.BeginTransactionAsync(token);
+        await db.ExecuteSqlRawAsync("""
+          CREATE TABLE IF NOT EXISTS SideboardGuides (
+            Id INTEGER PRIMARY KEY AUTOINCREMENT, AccountId INTEGER NOT NULL, DeckRevisionId INTEGER NOT NULL,
+            OpponentArchetype TEXT COLLATE NOCASE NOT NULL, Notes TEXT NOT NULL, UpdatedAt TEXT NOT NULL);
+          CREATE UNIQUE INDEX IF NOT EXISTS IX_SideboardGuides_AccountId_DeckRevisionId_OpponentArchetype
+            ON SideboardGuides (AccountId, DeckRevisionId, OpponentArchetype);
+          CREATE TABLE IF NOT EXISTS SideboardGuideCards (
+            Id INTEGER PRIMARY KEY AUTOINCREMENT, SideboardGuideId INTEGER NOT NULL REFERENCES SideboardGuides(Id) ON DELETE CASCADE,
+            CatalogId INTEGER NOT NULL, Quantity INTEGER NOT NULL, BringIn INTEGER NOT NULL);
+          CREATE UNIQUE INDEX IF NOT EXISTS IX_SideboardGuideCards_SideboardGuideId_CatalogId_BringIn
+            ON SideboardGuideCards (SideboardGuideId, CatalogId, BringIn);
+          CREATE TABLE IF NOT EXISTS __TrackerMigrations (Id TEXT PRIMARY KEY NOT NULL);
+          """, token);
+        bool migrated = await db.SqlQueryRaw<int>("""
+          SELECT COUNT(*) AS Value FROM __TrackerMigrations WHERE Id = 'collection-sideboard-guides'
+          """).SingleAsync(token) > 0;
+        if (!migrated && attached)
+        {
+          var tables = await db.SqlQueryRaw<string>("""
+            SELECT name AS Value FROM guide_backup.sqlite_master WHERE type = 'table'
+              AND name IN ('SideboardGuides', 'SideboardGuideCardModel')
+            """).ToListAsync(token);
+          if (tables.Contains("SideboardGuides"))
+          {
+            // Preserve IDs where possible, then import any guides whose IDs collided with existing rows.
+            await db.ExecuteSqlRawAsync("""
+              INSERT OR IGNORE INTO SideboardGuides (Id, AccountId, DeckRevisionId, OpponentArchetype, Notes, UpdatedAt)
+                SELECT Id, AccountId, DeckRevisionId, OpponentArchetype, Notes, UpdatedAt FROM guide_backup.SideboardGuides;
+              INSERT INTO SideboardGuides (AccountId, DeckRevisionId, OpponentArchetype, Notes, UpdatedAt)
+                SELECT old.AccountId, old.DeckRevisionId, old.OpponentArchetype, old.Notes, old.UpdatedAt
+                FROM guide_backup.SideboardGuides old WHERE NOT EXISTS (SELECT 1 FROM SideboardGuides current
+                  WHERE current.AccountId = old.AccountId AND current.DeckRevisionId = old.DeckRevisionId
+                    AND current.OpponentArchetype = old.OpponentArchetype);
+              """, token);
+            if (tables.Contains("SideboardGuideCardModel")) await db.ExecuteSqlRawAsync("""
+              INSERT OR IGNORE INTO SideboardGuideCards (SideboardGuideId, CatalogId, Quantity, BringIn)
+                SELECT current.Id, card.CatalogId, card.Quantity, card.BringIn
+                FROM guide_backup.SideboardGuideCardModel card
+                JOIN guide_backup.SideboardGuides old ON old.Id = card.SideboardGuideId
+                JOIN SideboardGuides current ON current.AccountId = old.AccountId
+                  AND current.DeckRevisionId = old.DeckRevisionId AND current.OpponentArchetype = old.OpponentArchetype;
+              """, token);
+          }
+        }
+        await db.ExecuteSqlRawAsync("INSERT OR IGNORE INTO __TrackerMigrations VALUES ('collection-sideboard-guides')", token);
+        await transaction.CommitAsync(token);
+      }
+      finally
+      {
+        if (attached) await db.ExecuteSqlRawAsync("DETACH DATABASE guide_backup", CancellationToken.None);
+        await db.CloseConnectionAsync();
       }
     }
 

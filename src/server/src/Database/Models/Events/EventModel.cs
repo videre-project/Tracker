@@ -5,6 +5,7 @@
 
 using System;
 using System.Collections.Generic;
+using MTGOSDK.API.Play;
 
 
 namespace MTGOTracker.Database.Models.Events;
@@ -23,6 +24,12 @@ public class EventModel
 
   public required string Format { get; set; }
 
+  /// <summary>
+  /// MTGO's format category, when it was available while recording the event.
+  /// Older recordings may only have a format name.
+  /// </summary>
+  public PlayFormatType? FormatType { get; set; }
+
   public required EventType Type { get; set; }
 
   public required string Description { get; set; }
@@ -33,7 +40,7 @@ public class EventModel
   /// Reference to Collection.db/CardGroupingRevisions.Id.
   /// </summary>
   /// <remarks>
-  /// This is a logical referencea as SQLite cannot enforce a foreign key
+  /// This is a logical reference as SQLite cannot enforce a foreign key
   /// across the two database files.
   /// </remarks>
   public long? DeckRevisionId { get; set; }

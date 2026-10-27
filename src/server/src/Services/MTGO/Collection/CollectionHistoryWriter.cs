@@ -65,8 +65,10 @@ public sealed class CollectionHistoryWriter
     state = state.Normalize();
     ValidateState(state);
 
-    await using var transaction =
-      await context.Database.BeginTransactionAsync(cancellationToken);
+    // An import may include the revision, sync marker, and enrichment in one transaction.
+    await using var transaction = context.Database.CurrentTransaction == null
+      ? await context.Database.BeginTransactionAsync(cancellationToken)
+      : null;
 
     var grouping = await context.CardGroupings
       .SingleOrDefaultAsync(candidate =>
@@ -85,7 +87,7 @@ public sealed class CollectionHistoryWriter
       if (grouping == null || intervening.Any(revision => !CardGroupingRevisionCodec.IsMetadataOnly(revision)))
         throw new InvalidOperationException(
           "The deck changed after this revision was loaded. Reload it and try again.");
-      // Preserve acknowledgements such as MTGO's canonical format code while
+      // Preserve native metadata such as MTGO's canonical format code while
       // applying the card edit against its original content revision.
       DateTime? editedAt = state.Timestamp;
       foreach (var revision in intervening)
@@ -114,7 +116,7 @@ public sealed class CollectionHistoryWriter
         Payload = CardGroupingRevisionCodec.SerializeSnapshot(state),
       });
       await context.SaveChangesAsync(cancellationToken);
-      await transaction.CommitAsync(cancellationToken);
+      if (transaction != null) await transaction.CommitAsync(cancellationToken);
       return true;
     }
 
@@ -124,7 +126,7 @@ public sealed class CollectionHistoryWriter
     if (!isLocal && !allowPendingWrite &&
         grouping.PendingOperation != DeckSyncOperation.None)
     {
-      await transaction.RollbackAsync(cancellationToken);
+      if (transaction != null) await transaction.RollbackAsync(cancellationToken);
       return false;
     }
 
@@ -153,7 +155,7 @@ public sealed class CollectionHistoryWriter
     if (!grouping.IsDeleted && previous != null &&
         CardGroupingRevisionCodec.StateEquals(previous, state))
     {
-      await transaction.RollbackAsync(cancellationToken);
+      if (transaction != null) await transaction.RollbackAsync(cancellationToken);
       return false;
     }
 
@@ -192,7 +194,7 @@ public sealed class CollectionHistoryWriter
       Payload = payload,
     });
     await context.SaveChangesAsync(cancellationToken);
-    await transaction.CommitAsync(cancellationToken);
+    if (transaction != null) await transaction.CommitAsync(cancellationToken);
     return true;
   }
 
@@ -230,6 +232,143 @@ public sealed class CollectionHistoryWriter
         revision.CardGroupingId == groupingId &&
         revision.RevisionType != CardGroupingRevisionType.Deleted)
       .MaxAsync(revision => revision.Id, cancellationToken);
+  }
+
+  /// <summary>
+  /// Links a local deck to its imported MTGO deck, merging any observed history
+  /// without changing existing revision identities or losing newer local edits.
+  /// </summary>
+  public async Task LinkImportedDeckAsync(
+    CollectionContext context,
+    long groupingId,
+    long revisionId,
+    CardGroupingState imported,
+    CancellationToken cancellationToken)
+  {
+    await using var transaction = await context.Database.BeginTransactionAsync(
+      cancellationToken);
+    CardGroupingModel? grouping = await context.CardGroupings
+      .SingleOrDefaultAsync(candidate => candidate.Id == groupingId, cancellationToken);
+    if (grouping == null || !grouping.IsLocal)
+      return;
+    if (imported.NetDeckId <= 0)
+      throw new InvalidOperationException("MTGO returned an invalid imported deck ID.");
+
+    long latestLocalRevision = await context.CardGroupingRevisions
+      .Where(revision => revision.CardGroupingId == grouping.Id)
+      .MaxAsync(revision => revision.Id, cancellationToken);
+    bool hasNewerEdit = latestLocalRevision != revisionId;
+    CardGroupingModel? duplicate = await context.CardGroupings.SingleOrDefaultAsync(
+      candidate =>
+        candidate.AccountId == grouping.AccountId &&
+        candidate.Kind == CardGroupingKind.Deck &&
+        candidate.NetDeckId == imported.NetDeckId &&
+        candidate.Id != grouping.Id,
+      cancellationToken);
+    if (duplicate != null)
+    {
+      var revisions = await context.CardGroupingRevisions
+        .Where(revision => revision.CardGroupingId == grouping.Id || revision.CardGroupingId == duplicate.Id)
+        .OrderBy(revision => revision.Id)
+        .ToListAsync(cancellationToken);
+      var localRevisions = revisions.Where(revision => revision.CardGroupingId == grouping.Id).ToList();
+      var observedRevisions = revisions.Where(revision => revision.CardGroupingId == duplicate.Id).ToList();
+      CardGroupingState? desired = hasNewerEdit && grouping.PendingOperation == DeckSyncOperation.Upsert
+        ? Replay(grouping, localRevisions)
+        : null;
+
+      // Each history has its own delta chain. Checkpoint at each switch between
+      // them so existing revision IDs still resolve to the same deck contents.
+      var checkpoints = new HashSet<long>();
+      for (int i = 1; i < revisions.Count; i++)
+        if (revisions[i - 1].CardGroupingId != revisions[i].CardGroupingId)
+          checkpoints.Add(revisions[i].Id);
+      CheckpointRevisions(grouping, localRevisions, checkpoints);
+      CheckpointRevisions(duplicate, observedRevisions, checkpoints);
+      foreach (var revision in observedRevisions) revision.CardGrouping = grouping;
+      await context.SaveChangesAsync(cancellationToken);
+
+      if (desired != null && observedRevisions.Any(revision => revision.Id > latestLocalRevision))
+      {
+        var enrichment = await context.DeckRevisionEnrichments.AsNoTracking()
+          .SingleOrDefaultAsync(item => item.CardGroupingRevisionId == latestLocalRevision, cancellationToken);
+        context.CardGroupingRevisions.Add(new CardGroupingRevisionModel
+        {
+          CardGroupingId = grouping.Id,
+          ObservedAt = DateTime.UtcNow,
+          RevisionType = CardGroupingRevisionType.Snapshot,
+          Payload = CardGroupingRevisionCodec.SerializeSnapshot(desired),
+          DeckEnrichment = enrichment == null ? null : new DeckRevisionEnrichmentModel
+          {
+            Archetype = enrichment.Archetype,
+            FeaturedCard = enrichment.FeaturedCard,
+          },
+        });
+      }
+      context.CardGroupings.Remove(duplicate);
+      await context.SaveChangesAsync(cancellationToken);
+    }
+
+    grouping.NetDeckId = imported.NetDeckId;
+    if (!hasNewerEdit) ApplyMetadata(grouping, imported);
+    grouping.IsLocal = false;
+    grouping.SyncError = null;
+    if (grouping.PendingOperation == DeckSyncOperation.Upsert)
+    {
+      grouping.PendingOperation = hasNewerEdit ? DeckSyncOperation.Upsert : DeckSyncOperation.None;
+    }
+    await context.SaveChangesAsync(cancellationToken);
+    await transaction.CommitAsync(cancellationToken);
+  }
+
+  private static void CheckpointRevisions(
+    CardGroupingModel grouping,
+    IReadOnlyList<CardGroupingRevisionModel> revisions,
+    IReadOnlySet<long> checkpoints)
+  {
+    var segment = new List<CardGroupingRevisionModel>();
+    foreach (var revision in revisions)
+    {
+      if (revision.RevisionType is CardGroupingRevisionType.Snapshot or CardGroupingRevisionType.Deleted)
+        segment.Clear();
+      segment.Add(revision);
+      if (revision.RevisionType != CardGroupingRevisionType.Delta || !checkpoints.Contains(revision.Id))
+        continue;
+
+      var state = Replay(grouping, segment)
+        ?? throw new InvalidOperationException($"Revision {revision.Id} has no replayable snapshot.");
+      revision.RevisionType = CardGroupingRevisionType.Snapshot;
+      revision.Payload = CardGroupingRevisionCodec.SerializeSnapshot(state);
+      segment.Clear();
+      segment.Add(revision);
+    }
+    if (segment.Count > 0 && segment[^1].RevisionType != CardGroupingRevisionType.Deleted)
+      _ = Replay(grouping, segment)
+        ?? throw new InvalidOperationException($"Revision {segment[^1].Id} has no replayable snapshot.");
+  }
+
+  /// <summary>
+  /// Clears an applied deletion or a card edit whose source revision is still current.
+  /// </summary>
+  public async Task CompleteDeckSyncAsync(
+    CollectionContext context,
+    long groupingId,
+    DeckSyncOperation operation,
+    long revisionId,
+    CancellationToken cancellationToken)
+  {
+    await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+    var grouping = await context.CardGroupings.SingleOrDefaultAsync(
+      candidate => candidate.Id == groupingId, cancellationToken);
+    if (grouping == null || grouping.PendingOperation != operation) return;
+
+    grouping.SyncError = null;
+    if (operation == DeckSyncOperation.Delete ||
+        await context.CardGroupingRevisions.Where(revision => revision.CardGroupingId == groupingId)
+          .MaxAsync(revision => revision.Id, cancellationToken) == revisionId)
+      grouping.PendingOperation = DeckSyncOperation.None;
+    await context.SaveChangesAsync(cancellationToken);
+    await transaction.CommitAsync(cancellationToken);
   }
 
   public async Task<int> MarkMissingDeletedAsync(

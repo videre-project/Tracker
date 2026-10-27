@@ -19,6 +19,7 @@ using MTGOSDK.Core.Logging;
 using MTGOTracker.Controllers.Base;
 using MTGOTracker.Controllers.Models.Collection;
 using MTGOTracker.Services.MTGO;
+using MTGOTracker.Services.MTGO.Collection;
 using MTGOTracker.Services.Videre;
 
 
@@ -27,13 +28,15 @@ using CatalogSearchItem = MTGOTracker.Services.Videre.Generated.CatalogSearchIte
 namespace MTGOTracker.Controllers;
 
 /// <summary>
-/// Collection holdings and catalog search.
+/// Collection holdings, binders, and catalog search.
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
 public class CollectionController(
   IClientAPIProvider clientProvider,
-  VidereAPIClient videreAPIClient) : APIController
+  VidereAPIClient videreAPIClient,
+  CollectionStateFeed stateFeed,
+  ClientStateMonitor clientMonitor) : APIController
 {
   private static readonly object s_collectionSnapshotCacheSync = new();
   private static readonly SemaphoreSlim s_collectionSnapshotCacheLock = new(1, 1);
@@ -132,6 +135,82 @@ public class CollectionController(
       return StatusCode(StatusCodes.Status500InternalServerError, new { error = ex.Message });
     }
   }
+
+  /// <summary>
+  /// Streams holdings versions to invalidate collection snapshots independently
+  /// of price expiry.
+  /// </summary>
+  [HttpGet("watch")]
+  [Produces("application/x-ndjson")]
+  public async Task<IActionResult> Watch()
+  {
+    if (!clientProvider.IsReady || clientProvider.CurrentUser is not { } user)
+      return StatusCode(StatusCodes.Status503ServiceUnavailable);
+    using var cancellation = BeginNDJSONStream(clientMonitor.Token);
+    long version = 0;
+    try
+    {
+      while (!cancellation.IsCancellationRequested)
+      {
+        version = await stateFeed.WaitForChangeAsync(user.Id, version, cancellation.Token);
+        await StreamResponse(new[] { version }, cancellation.Token);
+      }
+    }
+    catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+    return new EmptyResult();
+  }
+
+  /// <summary>
+  /// List the user's binders and wish list.
+  /// </summary>
+  [HttpGet("binders")]
+  [ProducesResponseType(typeof(CollectionBinderDTO[]), StatusCodes.Status200OK)]
+  [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+  public ActionResult<CollectionBinderDTO[]> GetBinders()
+  {
+    if (!clientProvider.IsReady)
+      return StatusCode(StatusCodes.Status503ServiceUnavailable,
+        new { error = "Connect MTGO to view your binders." });
+
+    return Ok(ReadBinders().Select(binder => new CollectionBinderDTO
+    {
+      Id = binder.NetDeckId,
+      Name = binder.Name,
+      IsWishList = binder.IsWishList,
+    }).OrderBy(binder => binder.IsWishList).ThenBy(binder => binder.Name).ToArray());
+  }
+
+  /// <summary>
+  /// Read the cards and quantities in an existing binder.
+  /// </summary>
+  [HttpGet("binders/{id:int}/cards")]
+  [ProducesResponseType(typeof(CollectionCardDTO[]), StatusCodes.Status200OK)]
+  [ProducesResponseType(StatusCodes.Status404NotFound)]
+  [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+  public ActionResult<CollectionCardDTO[]> GetBinderCards(int id)
+  {
+    if (!clientProvider.IsReady)
+      return StatusCode(StatusCodes.Status503ServiceUnavailable,
+        new { error = "Connect MTGO to view your binders." });
+
+    Binder? binder = ReadBinders().FirstOrDefault(binder => binder.NetDeckId == id);
+    if (binder == null) return NotFound(new { error = "Binder not found." });
+
+    return Ok(binder.GetFrozenCollection
+      .Where(card => card.Id > 0 && card.Quantity > 0)
+      .GroupBy(card => card.Id)
+      .Select(cards => new CollectionCardDTO
+      {
+        CatalogId = cards.Key,
+        Name = cards.First().Name,
+        Quantity = cards.Sum(card => card.Quantity),
+      }).OrderBy(card => card.Name).ToArray());
+  }
+
+  private static IEnumerable<Binder> ReadBinders() => CollectionManager.Binders
+    .Append(CollectionManager.WishList)
+    .Where(binder => !binder.IsMegaBinder && binder.NetDeckId > 0)
+    .DistinctBy(binder => binder.NetDeckId);
 
   /// <summary>
   /// Search the user's MTGO collection with Videre card query syntax.

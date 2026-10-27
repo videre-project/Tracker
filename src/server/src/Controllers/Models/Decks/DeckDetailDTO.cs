@@ -14,6 +14,10 @@ namespace MTGOTracker.Controllers.Models.Decks;
 public class DeckDetailDTO
 {
   public required long RevisionId { get; set; }
+  /// <summary>
+  /// The latest revision, used to prevent edits to an older immutable snapshot.
+  /// </summary>
+  public required long CurrentRevisionId { get; set; }
   public required int NetDeckId { get; set; }
   public required string Name { get; set; }
   public required string Format { get; set; }

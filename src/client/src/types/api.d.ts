@@ -128,6 +128,146 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/Collection/watch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Streams holdings versions to invalidate collection snapshots independently
+         *     of price expiry.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/Collection/binders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the user's binders and wish list. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": CollectionBinderDTO[];
+                        "application/json": CollectionBinderDTO[];
+                        "text/json": CollectionBinderDTO[];
+                    };
+                };
+                /** @description Service Unavailable */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    [path: `/api/Collection/binders/${number}/cards`]: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the cards and quantities in an existing binder. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": CollectionCardDTO[];
+                        "application/json": CollectionCardDTO[];
+                        "text/json": CollectionCardDTO[];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": ProblemDetails;
+                        "application/json": ProblemDetails;
+                        "text/json": ProblemDetails;
+                    };
+                };
+                /** @description Service Unavailable */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/Collection/cards/search": {
         parameters: {
             query?: never;
@@ -1330,13 +1470,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Render a deck as a streaming NDJSON sequence of framed card images.
-         *
-         *     Line 1: `{"type":"meta", columns, cardWidth, cardHeight, total}`
-         *       â€” emitted immediately so the client can pre-size its canvas.
-         *     Remaining lines: `{"type":"cards", startIndex, cards: string[]}`
-         *       â€” emitted in two phases so the first visible row arrives before the
-         *       full deck finishes rendering.
+         * Streams framed card images as NDJSON. The first line describes the sheet;
+         *     subsequent lines contain each rendered row and its starting slot index.
          */
         get: {
             parameters: {
@@ -1387,16 +1522,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Get sortable card metadata for a deck.
-         *     Uses replayed collection-history revisions for IDs and live MTGO serialization for names.
-         */
+        /** Reads sortable card metadata from a saved revision or a live deck name. */
         get: {
             parameters: {
                 query?: {
                     /** @description Deck name (looks up from MTGO client) */
                     name?: string;
-                    /** @description Deck revision ID (looks up from Collection.db and caches) */
+                    /** @description Saved deck revision ID; takes precedence over name. */
                     id?: string;
                 };
                 header?: never;
@@ -1608,6 +1740,8 @@ export interface paths {
                     maxDate?: string;
                     /** @description Format filter */
                     format?: string;
+                    /** @description All, constructed, or limited games. */
+                    gameType?: string;
                 };
                 header?: never;
                 path?: never;
@@ -4081,7 +4215,7 @@ export interface components {
             recordTrades?: boolean;
             synchronizeDecks?: boolean;
         };
-        /** @description Request body for updating a deck or opponent archetype */
+        /** @description Request body for updating a deck archetype. */
         "MTGOTracker.Controllers.DecksController.UpdateArchetypeRequest": {
             archetype?: string;
         };
@@ -4097,6 +4231,12 @@ export interface components {
             readonly workingSet?: number | null;
             /** Format: int64 */
             readonly virtualMemory?: number | null;
+        };
+        "MTGOTracker.Controllers.Models.Collection.CollectionBinderDTO": {
+            /** Format: int32 */
+            id: number;
+            name: string;
+            isWishList: boolean;
         };
         "MTGOTracker.Controllers.Models.Collection.CollectionCardDTO": {
             /** Format: int32 */
@@ -4284,6 +4424,11 @@ export interface components {
         "MTGOTracker.Controllers.Models.Decks.DeckDetailDTO": {
             /** Format: int64 */
             revisionId: number;
+            /**
+             * Format: int64
+             * @description The latest revision, used to prevent edits to an older immutable snapshot.
+             */
+            currentRevisionId: number;
             /** Format: int32 */
             netDeckId: number;
             name: string;
@@ -5077,6 +5222,7 @@ export type MtgosdkApiUsersUser = User;
 export type MtgoTrackerApplicationSettings = ApplicationSettings;
 export type MtgoTrackerControllersDecksControllerUpdateArchetypeRequest = UpdateArchetypeRequest;
 export type MtgoTrackerControllersModelsClientIClientState = IClientState;
+export type MtgoTrackerControllersModelsCollectionCollectionBinderDto = CollectionBinderDTO;
 export type MtgoTrackerControllersModelsCollectionCollectionCardDto = CollectionCardDTO;
 export type MtgoTrackerControllersModelsCollectionCollectionCardDetailDto = CollectionCardDetailDTO;
 export type MtgoTrackerControllersModelsCollectionCollectionPriceHistoryDto = CollectionPriceHistoryDTO;
@@ -5197,6 +5343,7 @@ export type User = components['schemas']['MTGOSDK.API.Users.User'];
 export type ApplicationSettings = components['schemas']['MTGOTracker.ApplicationSettings'];
 export type UpdateArchetypeRequest = components['schemas']['MTGOTracker.Controllers.DecksController.UpdateArchetypeRequest'];
 export type IClientState = components['schemas']['MTGOTracker.Controllers.Models.Client.IClientState'];
+export type CollectionBinderDTO = components['schemas']['MTGOTracker.Controllers.Models.Collection.CollectionBinderDTO'];
 export type CollectionCardDTO = components['schemas']['MTGOTracker.Controllers.Models.Collection.CollectionCardDTO'];
 export type CollectionCardDetailDTO = components['schemas']['MTGOTracker.Controllers.Models.Collection.CollectionCardDetailDTO'];
 export type CollectionPriceHistoryDTO = components['schemas']['MTGOTracker.Controllers.Models.Collection.CollectionPriceHistoryDTO'];

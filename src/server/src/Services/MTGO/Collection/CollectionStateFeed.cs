@@ -133,6 +133,28 @@ public sealed class CollectionStateFeed : ICollectionStateFeed
     }
   }
 
+  /// <summary>
+  /// Waits for a newer holdings snapshot, including changes published before
+  /// the wait began.
+  /// </summary>
+  public async Task<long> WaitForChangeAsync(
+    int accountId,
+    long afterVersion,
+    CancellationToken cancellationToken)
+  {
+    while (true)
+    {
+      Task changed;
+      lock (_gate)
+      {
+        if (_current?.AccountId == accountId && _current.Version > afterVersion)
+          return _current.Version;
+        changed = _changed.Task;
+      }
+      await changed.WaitAsync(cancellationToken);
+    }
+  }
+
   public async Task<CollectionStateSnapshot?> WaitForEscrowStateAsync(
     Guid escrowToken,
     long afterVersion,

@@ -40,7 +40,15 @@ public sealed record DeckRevisionView(
   List<CardEntry> Sideboard,
   List<string> Colors,
   string? Archetype,
-  string? FeaturedCard);
+  string? FeaturedCard)
+{
+  // Keep the chosen artwork first; use nonland cards when no artwork was chosen.
+  public IReadOnlyList<CardEntry> FeaturedCards => Mainboard
+    .OrderByDescending(card => string.Equals(card.name, FeaturedCard, StringComparison.OrdinalIgnoreCase))
+    .ThenBy(card => card.types?.Contains("Land") == true)
+    .ThenByDescending(card => card.quantity)
+    .ThenBy(card => card.catalogId).Take(5).ToArray();
+}
 
 public sealed class CollectionDeckService(
   IServiceScopeFactory scopeFactory,
@@ -55,7 +63,9 @@ public sealed class CollectionDeckService(
     int Cmc,
     string? Colors,
     List<string> Types,
-    string Rarity);
+    string Rarity,
+    int? OtherFaceCatalogId = null,
+    bool? HasSeparateFace = null);
 
   private static readonly TimeSpan s_initialReconciliationTimeout =
     TimeSpan.FromSeconds(30);
@@ -124,21 +134,35 @@ public sealed class CollectionDeckService(
         "Cannot import a local deck without an authoritative user identity.");
 
     format = DeckFormatResolver.Resolve(format).Code;
+    // Choose the MTGO name once; retries use this persisted registration identity.
+    name = CollectionManager.GetUniqueDeckName(name);
 
     await using var scope = scopeFactory.CreateAsyncScope();
     var context = scope.ServiceProvider.GetRequiredService<CollectionContext>();
     await historyWriter.UpsertAccountAsync(context, identity, cancellationToken);
+    await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
 
-    CardGroupingModel? existing = await context.CardGroupings
+    var queued = await context.CardGroupings
       .Where(grouping =>
         grouping.AccountId == identity.Id &&
         grouping.Kind == CardGroupingKind.Deck &&
         grouping.IsLocal &&
-        !grouping.IsDeleted &&
-        grouping.Name == name &&
-        grouping.FormatCode == format)
+        (!grouping.IsDeleted || grouping.PendingOperation != DeckSyncOperation.None))
       .OrderByDescending(grouping => grouping.Timestamp)
-      .FirstOrDefaultAsync(cancellationToken);
+      .ToListAsync(cancellationToken);
+    CardGroupingModel? existing = queued.FirstOrDefault(grouping => !grouping.IsDeleted &&
+      string.Equals(grouping.Name, name, StringComparison.OrdinalIgnoreCase) && grouping.FormatCode == format);
+    // Queued imports also reserve names before they appear in MTGO's collection.
+    string baseName = name;
+    for (int copy = 2; existing == null && queued.Any(grouping =>
+      string.Equals(grouping.Name, name, StringComparison.OrdinalIgnoreCase)); copy++)
+    {
+      string suffix = copy.ToString(CultureInfo.InvariantCulture);
+      name = CollectionManager.GetUniqueDeckName(
+        baseName[..Math.Min(baseName.Length, CollectionManager.MaxDeckNameLength - suffix.Length)] + suffix);
+      existing = queued.FirstOrDefault(grouping => !grouping.IsDeleted &&
+        string.Equals(grouping.Name, name, StringComparison.OrdinalIgnoreCase) && grouping.FormatCode == format);
+    }
 
     bool created = existing == null;
     int netDeckId = existing?.NetDeckId
@@ -162,7 +186,7 @@ public sealed class CollectionDeckService(
     var state = new CardGroupingState(
       CardGroupingKind.Deck,
       netDeckId,
-      null,
+      observedAt,
       name,
       format,
       items);
@@ -206,19 +230,14 @@ public sealed class CollectionDeckService(
       enrichment.FeaturedCard = request.Mainboard.FirstOrDefault()?.Name;
     }
 
+    await context.SaveChangesAsync(cancellationToken);
+    await transaction.CommitAsync(cancellationToken);
+
     foreach (ImportDeckCardDTO card in cards)
     {
-      s_catalog[card.CatalogId] = new CatalogData(
-        string.IsNullOrWhiteSpace(card.Name)
-          ? card.CatalogId.ToString(CultureInfo.InvariantCulture)
-          : card.Name.Trim(),
-        Math.Max(0, card.Cmc),
-        string.Join(',', card.Colors),
-        ResolveCardTypes(card.CatalogId, card.Types.SelectMany(ParseTypeLine)),
-        string.IsNullOrWhiteSpace(card.Rarity) ? "common" : card.Rarity);
+      CacheCatalogData(
+        card.CatalogId, card.Name, card.Cmc, card.Colors, card.Types, card.Rarity);
     }
-    await context.SaveChangesAsync(cancellationToken);
-
     return new ImportDeckResponse
     {
       RevisionId = revisionId,
@@ -431,7 +450,8 @@ public sealed class CollectionDeckService(
       Timestamp = DateTime.UtcNow,
       Items = items.Values.ToArray(),
     };
-    CacheCatalogData(request);
+    CacheCatalogData(
+      request.CatalogId, request.Name, request.Cmc, request.Colors, request.Types, request.Rarity);
     return await SaveMutationAsync(context, mutable, desired, identity.Id, cancellationToken);
   }
 
@@ -541,18 +561,24 @@ public sealed class CollectionDeckService(
     });
   }
 
-  private void CacheCatalogData(DeckCardMutationRequest card)
+  private void CacheCatalogData(
+    int catalogId,
+    string? name,
+    int cmc,
+    IEnumerable<string> colors,
+    IEnumerable<string> types,
+    string rarity)
   {
     var incoming = new CatalogData(
-      string.IsNullOrWhiteSpace(card.Name)
-        ? card.CatalogId.ToString(CultureInfo.InvariantCulture)
-        : card.Name.Trim(),
-      Math.Max(0, card.Cmc),
-      string.Join(',', card.Colors),
-      ResolveCardTypes(card.CatalogId, card.Types.SelectMany(ParseTypeLine)),
-      string.IsNullOrWhiteSpace(card.Rarity) ? "common" : card.Rarity);
+      string.IsNullOrWhiteSpace(name)
+        ? catalogId.ToString(CultureInfo.InvariantCulture)
+        : name.Trim(),
+      Math.Max(0, cmc),
+      string.Join(',', colors),
+      ResolveCardTypes(catalogId, types.SelectMany(ParseTypeLine)),
+      string.IsNullOrWhiteSpace(rarity) ? "common" : rarity);
     s_catalog.AddOrUpdate(
-      card.CatalogId,
+      catalogId,
       incoming,
       (_, existing) => MergeCatalogData(existing, incoming));
   }
@@ -597,7 +623,9 @@ public sealed class CollectionDeckService(
       string.Equals(incoming.Rarity, "common", StringComparison.OrdinalIgnoreCase) &&
       !string.Equals(existing.Rarity, "common", StringComparison.OrdinalIgnoreCase)
         ? existing.Rarity
-        : incoming.Rarity);
+        : incoming.Rarity,
+      incoming.OtherFaceCatalogId ?? existing.OtherFaceCatalogId,
+      incoming.HasSeparateFace ?? existing.HasSeparateFace);
   }
 
   private static bool IsPlaceholderName(string name) =>
@@ -742,10 +770,8 @@ public sealed class CollectionDeckService(
     long revisionId,
     CancellationToken cancellationToken = default)
   {
-    await databaseReadiness.WaitAsync(cancellationToken);
-    await using var scope = scopeFactory.CreateAsyncScope();
-    var context = scope.ServiceProvider.GetRequiredService<CollectionContext>();
-    return await LoadRevisionAsync(context, revisionId, cancellationToken);
+    var revisions = await GetRevisionsAsync([revisionId], cancellationToken);
+    return revisions.GetValueOrDefault(revisionId);
   }
 
   public Task EnsureCatalogAsync(
@@ -763,7 +789,8 @@ public sealed class CollectionDeckService(
       data.Cmc,
       SplitStoredColors(data.Colors),
       data.Types,
-      data.Rarity);
+      data.Rarity,
+      data.OtherFaceCatalogId);
   }
 
   public async Task<DeckHistoryView?> GetDeckHistoryAsync(
@@ -956,17 +983,63 @@ public sealed class CollectionDeckService(
     IEnumerable<long> revisionIds,
     CancellationToken cancellationToken = default)
   {
+    cancellationToken.ThrowIfCancellationRequested();
+    long[] ids = revisionIds.Distinct().ToArray();
+    if (ids.Length == 0) return new Dictionary<long, DeckRevisionView>();
     await databaseReadiness.WaitAsync(cancellationToken);
     await using var scope = scopeFactory.CreateAsyncScope();
     var context = scope.ServiceProvider.GetRequiredService<CollectionContext>();
-    var result = new Dictionary<long, DeckRevisionView>();
-    foreach (long revisionId in revisionIds.Distinct())
+    var targets = await context.CardGroupingRevisions.AsNoTracking()
+      .Include(revision => revision.CardGrouping)
+      .Include(revision => revision.DeckEnrichment)
+      .Where(revision => ids.Contains(revision.Id) &&
+        revision.RevisionType != CardGroupingRevisionType.Deleted &&
+        revision.CardGrouping.Kind == CardGroupingKind.Deck)
+      .ToListAsync(cancellationToken);
+    if (targets.Count == 0) return new Dictionary<long, DeckRevisionView>();
+
+    long[] groupingIds = targets.Select(target => target.CardGroupingId).Distinct().ToArray();
+    long[] firstTargetIds = targets.GroupBy(target => target.CardGroupingId)
+      .Select(group => group.Min(target => target.Id)).ToArray();
+    long lastRevisionId = targets.Max(target => target.Id);
+    // Start at the snapshot needed by each group's oldest requested revision.
+    // A later snapshot may still make newer requests usable if that one is missing.
+    var firstSnapshots = await context.CardGroupingRevisions.AsNoTracking()
+      .Where(target => firstTargetIds.Contains(target.Id))
+      .Select(target => context.CardGroupingRevisions
+        .Where(revision => revision.CardGroupingId == target.CardGroupingId &&
+          revision.Id <= target.Id && revision.RevisionType == CardGroupingRevisionType.Snapshot)
+        .Select(revision => (long?)revision.Id).Max()
+        ?? context.CardGroupingRevisions
+          .Where(revision => revision.CardGroupingId == target.CardGroupingId &&
+            revision.Id <= lastRevisionId && revision.RevisionType == CardGroupingRevisionType.Snapshot)
+          .Select(revision => (long?)revision.Id).Min())
+      .ToListAsync(cancellationToken);
+    long? firstSnapshotId = firstSnapshots.Min();
+    if (!firstSnapshotId.HasValue) return new Dictionary<long, DeckRevisionView>();
+    var history = await context.CardGroupingRevisions.AsNoTracking()
+      .Where(revision => groupingIds.Contains(revision.CardGroupingId) &&
+        revision.Id >= firstSnapshotId.Value && revision.Id <= lastRevisionId)
+      .OrderBy(revision => revision.Id).ToListAsync(cancellationToken);
+    var byGrouping = history.GroupBy(revision => revision.CardGroupingId)
+      .ToDictionary(group => group.Key, group => group.ToList());
+    var replay = new List<(CardGroupingRevisionModel Target, List<CardGroupingRevisionModel> Revisions)>();
+    var catalogIds = new HashSet<int>();
+    foreach (var target in targets)
     {
-      DeckRevisionView? revision =
-        await LoadRevisionAsync(context, revisionId, cancellationToken);
-      if (revision != null)
-        result[revisionId] = revision;
+      if (!byGrouping.TryGetValue(target.CardGroupingId, out var revisions)) continue;
+      int snapshot = revisions.FindLastIndex(revision => revision.Id <= target.Id &&
+        revision.RevisionType == CardGroupingRevisionType.Snapshot);
+      if (snapshot < 0) continue;
+      var segment = revisions.Skip(snapshot).TakeWhile(revision => revision.Id <= target.Id).ToList();
+      replay.Add((target, segment));
+      catalogIds.UnionWith(CollectCatalogIds(target.CardGrouping, segment));
     }
+    await HydrateCatalogFromVidereAsync(catalogIds, cancellationToken);
+    var result = new Dictionary<long, DeckRevisionView>();
+    foreach (var (target, revisions) in replay)
+      if (MaterializeRevision(target.CardGrouping, revisions, target.DeckEnrichment) is { } deck)
+        result[target.Id] = deck;
     return result;
   }
 
@@ -1045,52 +1118,6 @@ public sealed class CollectionDeckService(
     enrichment.Archetype = archetype;
     enrichment.FeaturedCard = featuredCard;
     await context.SaveChangesAsync(cancellationToken);
-  }
-
-  private async Task<DeckRevisionView?> LoadRevisionAsync(
-    CollectionContext context,
-    long revisionId,
-    CancellationToken cancellationToken)
-  {
-    var target = await context.CardGroupingRevisions
-      .AsNoTracking()
-      .Include(revision => revision.CardGrouping)
-      .Include(revision => revision.DeckEnrichment)
-      .SingleOrDefaultAsync(
-        revision => revision.Id == revisionId,
-        cancellationToken);
-    if (target == null ||
-        target.RevisionType == CardGroupingRevisionType.Deleted ||
-        target.CardGrouping.Kind != CardGroupingKind.Deck)
-    {
-      return null;
-    }
-
-    long? snapshotId = await context.CardGroupingRevisions
-      .Where(revision =>
-        revision.CardGroupingId == target.CardGroupingId &&
-        revision.Id <= revisionId &&
-        revision.RevisionType == CardGroupingRevisionType.Snapshot)
-      .Select(revision => (long?)revision.Id)
-      .MaxAsync(cancellationToken);
-    if (!snapshotId.HasValue)
-      return null;
-
-    var revisions = await context.CardGroupingRevisions
-      .AsNoTracking()
-      .Where(revision =>
-        revision.CardGroupingId == target.CardGroupingId &&
-        revision.Id >= snapshotId.Value &&
-        revision.Id <= revisionId)
-      .OrderBy(revision => revision.Id)
-      .ToListAsync(cancellationToken);
-    await HydrateCatalogFromVidereAsync(
-      CollectCatalogIds(target.CardGrouping, revisions),
-      cancellationToken);
-    return MaterializeRevision(
-      target.CardGrouping,
-      revisions,
-      target.DeckEnrichment);
   }
 
   private static DeckRevisionView? MaterializeRevision(
@@ -1187,12 +1214,15 @@ public sealed class CollectionDeckService(
           catalogData.Cmc,
           SplitStoredColors(catalogData.Colors),
           catalogData.Types,
-          catalogData.Rarity);
+          catalogData.Rarity,
+          catalogData.OtherFaceCatalogId);
       })
       .ToList();
 
   private static bool HasCompleteCatalogData(CatalogData data) =>
-    data.Types.Count > 0 || data.Cmc > 0;
+    data.HasSeparateFace.HasValue &&
+    (data.HasSeparateFace == false || data.OtherFaceCatalogId.HasValue) &&
+    (data.Types.Count > 0 || data.Cmc > 0);
 
   private static CatalogData PlaceholderCatalogData(int catalogId) =>
     new(
@@ -1244,7 +1274,8 @@ public sealed class CollectionDeckService(
       Math.Max(0, (int)Math.Floor(card.ManaValue ?? 0)),
       colors.Count == 0 ? null : string.Join(',', colors),
       ParseTypeLine(card.TypeLine),
-      string.IsNullOrWhiteSpace(card.Rarity) ? "common" : card.Rarity);
+      string.IsNullOrWhiteSpace(card.Rarity) ? "common" : card.Rarity,
+      HasSeparateFace: card.HasSeparateFace);
   }
 
   private static IEnumerable<int> CollectCatalogIds(
@@ -1287,16 +1318,18 @@ public sealed class CollectionDeckService(
         var videreAPIClient = scope.ServiceProvider.GetRequiredService<VidereAPIClient>();
         IReadOnlyDictionary<int, VidereCatalogMetadataResult> metadata =
           await videreAPIClient.GetCatalogMetadataAsync(missing, cancellationToken);
-        foreach (VidereCatalogMetadataResult card in metadata.Values)
-        {
-          if (card.Id <= 0)
-            continue;
+        await Task.WhenAll(metadata.Values.Where(card => card.Id > 0).Select(async card => {
           CatalogData incoming = CatalogDataFromVidere(card);
+          if (card.HasSeparateFace == true)
+          {
+            var face = await videreAPIClient.GetOtherFaceCatalogIdAsync(card.Id, cancellationToken);
+            incoming = incoming with { OtherFaceCatalogId = face?.catalogId };
+          }
           s_catalog.AddOrUpdate(
             card.Id,
             incoming,
             (_, existing) => MergeCatalogData(existing, incoming));
-        }
+        }));
       }
       catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
       {

@@ -29,7 +29,9 @@ public sealed class DeckSyncService(
   IServiceScopeFactory scopeFactory,
   DatabaseReadiness<CollectionContext> databaseReadiness,
   IClientAPIProvider clientProvider,
-  IClientCommandGateway commandGateway) : BackgroundService
+  IClientCommandGateway commandGateway,
+  SettingsService settings,
+  CollectionHistoryWriter historyWriter) : BackgroundService
 {
   private static readonly TimeSpan s_idleDelay = TimeSpan.FromMilliseconds(500);
   private static readonly TimeSpan s_retryDelay = TimeSpan.FromSeconds(2);
@@ -37,6 +39,7 @@ public sealed class DeckSyncService(
 
   protected override async Task ExecuteAsync(CancellationToken stoppingToken)
   {
+    if (!settings.Startup.SynchronizeDecks) return;
     await databaseReadiness.WaitAsync(stoppingToken);
 
     while (!stoppingToken.IsCancellationRequested)
@@ -59,15 +62,15 @@ public sealed class DeckSyncService(
         try
         {
           await ReconcileAsync(pending, stoppingToken);
-          _retryAfter.Remove(pending.GroupingId);
+          _retryAfter.Remove(pending.Grouping.Id);
         }
         catch (Exception exception) when (
           exception is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
         {
           // Defer this deck while allowing other queued decks to proceed.
-          _retryAfter[pending.GroupingId] = DateTime.UtcNow + s_retryDelay;
+          _retryAfter[pending.Grouping.Id] = DateTime.UtcNow + s_retryDelay;
           Log.Error(exception, "Deck {GroupingId} synchronization failed: {Message}",
-            pending.GroupingId, exception.Message);
+            pending.Grouping.Id, exception.Message);
         }
       }
       catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -118,150 +121,70 @@ public sealed class DeckSyncService(
     if (grouping == null)
       return null;
 
+    if (!grouping.IsLocal && grouping.PendingOperation == DeckSyncOperation.Delete)
+      return new PendingDeck(grouping, 0, []);
+
     List<CardGroupingRevisionModel> revisions = await context.CardGroupingRevisions
       .AsNoTracking()
       .Where(revision => revision.CardGroupingId == grouping.Id)
       .OrderBy(revision => revision.Id)
       .ToListAsync(cancellationToken);
     long revisionId = revisions.LastOrDefault()?.Id ?? 0;
-    CardGroupingState? state = grouping.PendingOperation == DeckSyncOperation.Upsert
-      ? CollectionHistoryWriter.Replay(grouping, revisions)
-      : null;
-    if (grouping.PendingOperation == DeckSyncOperation.Upsert && state == null)
-      throw new InvalidOperationException(
-        $"Pending deck grouping {grouping.Id} has no replayable state.");
-
-    return new PendingDeck(
-      grouping.Id,
-      grouping.AccountId,
-      grouping.NetDeckId,
-      grouping.IsLocal,
-      grouping.PendingOperation,
-      revisionId,
-      state);
+    return new PendingDeck(grouping, revisionId, revisions);
   }
 
   private async Task ReconcileAsync(
     PendingDeck pending,
     CancellationToken cancellationToken)
   {
+    await using var scope = scopeFactory.CreateAsyncScope();
+    var context = scope.ServiceProvider.GetRequiredService<CollectionContext>();
     try
     {
-      if (pending.Operation == DeckSyncOperation.Delete)
+      // Register the original list first. Later edits use its recovered MTGO ID,
+      // so an edit made before linking cannot turn a retry into a second import.
+      var registrationRevision = pending.Grouping.IsLocal ? pending.Revisions.FirstOrDefault(revision =>
+        revision.RevisionType == CardGroupingRevisionType.Snapshot) : null;
+      var registration = registrationRevision == null ? null : CardGroupingRevisionCodec.DeserializeSnapshot(
+        pending.Grouping.Kind, pending.Grouping.NetDeckId, registrationRevision.Payload!);
+
+      if (pending.Grouping.PendingOperation == DeckSyncOperation.Delete)
       {
-        if (!pending.IsLocal)
-          await commandGateway.DeleteDeckAsync(pending.NetDeckId, cancellationToken);
-        await CompleteDeleteAsync(pending, cancellationToken);
+        var imported = registration == null ? null : commandGateway.FindDeck(registration);
+        if (imported != null)
+          await historyWriter.LinkImportedDeckAsync(context, pending.Grouping.Id,
+            registrationRevision!.Id, imported, cancellationToken);
+        int? netDeckId = pending.Grouping.IsLocal ? imported?.NetDeckId : pending.Grouping.NetDeckId;
+        if (netDeckId.HasValue)
+          await commandGateway.DeleteDeckAsync(netDeckId.Value, cancellationToken);
+        await historyWriter.CompleteDeckSyncAsync(context, pending.Grouping.Id,
+          pending.Grouping.PendingOperation, pending.RevisionId, cancellationToken);
         return;
       }
 
-      DeckSyncState desired = ToSyncState(pending.State!);
-      if (pending.IsLocal)
+      if (pending.Grouping.IsLocal)
       {
-        DeckSyncResult imported = await commandGateway.ImportDeckAsync(
-          desired,
-          cancellationToken);
-        await CompleteImportAsync(pending, imported, cancellationToken);
+        if (registration == null)
+          throw new InvalidOperationException($"Pending deck grouping {pending.Grouping.Id} has no replayable state.");
+        var imported = await commandGateway.ImportDeckAsync(registration, cancellationToken);
+        await historyWriter.LinkImportedDeckAsync(context, pending.Grouping.Id,
+          registrationRevision!.Id, imported, cancellationToken);
       }
       else
       {
-        await commandGateway.UpdateDeckAsync(desired, cancellationToken);
-        await CompleteUpdateAsync(pending, cancellationToken);
+        var state = CollectionHistoryWriter.Replay(pending.Grouping, pending.Revisions)
+          ?? throw new InvalidOperationException($"Pending deck grouping {pending.Grouping.Id} has no replayable state.");
+        await commandGateway.UpdateDeckAsync(state, cancellationToken);
+        await historyWriter.CompleteDeckSyncAsync(context, pending.Grouping.Id,
+          pending.Grouping.PendingOperation, pending.RevisionId, cancellationToken);
       }
     }
     catch (Exception exception) when (
       exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
     {
-      await RecordErrorAsync(pending.GroupingId, exception.Message, cancellationToken);
+      await RecordErrorAsync(pending.Grouping.Id, exception.Message, cancellationToken);
       throw;
     }
-  }
-
-  private async Task CompleteImportAsync(
-    PendingDeck pending,
-    DeckSyncResult imported,
-    CancellationToken cancellationToken)
-  {
-    if (imported.NetDeckId <= 0)
-      throw new InvalidOperationException("MTGO returned an invalid imported deck ID.");
-
-    await using var scope = scopeFactory.CreateAsyncScope();
-    var context = scope.ServiceProvider.GetRequiredService<CollectionContext>();
-    await using var transaction = await context.Database.BeginTransactionAsync(
-      cancellationToken);
-    CardGroupingModel? grouping = await context.CardGroupings
-      .SingleOrDefaultAsync(candidate => candidate.Id == pending.GroupingId, cancellationToken);
-    if (grouping == null || !grouping.IsLocal)
-      return;
-
-    CardGroupingModel? duplicate = await context.CardGroupings.SingleOrDefaultAsync(
-      candidate =>
-        candidate.AccountId == pending.AccountId &&
-        candidate.Kind == CardGroupingKind.Deck &&
-        candidate.NetDeckId == imported.NetDeckId &&
-        candidate.Id != grouping.Id,
-      cancellationToken);
-    if (duplicate != null)
-    {
-      context.CardGroupings.Remove(duplicate);
-      await context.SaveChangesAsync(cancellationToken);
-    }
-
-    grouping.NetDeckId = imported.NetDeckId;
-    grouping.Name = imported.Name;
-    grouping.IsLocal = false;
-    grouping.SyncError = null;
-    if (grouping.PendingOperation == DeckSyncOperation.Upsert)
-    {
-      grouping.PendingOperation = await LatestRevisionIdAsync(
-        context,
-        grouping.Id,
-        cancellationToken) == pending.RevisionId
-          ? DeckSyncOperation.None
-          : DeckSyncOperation.Upsert;
-    }
-    await context.SaveChangesAsync(cancellationToken);
-    await transaction.CommitAsync(cancellationToken);
-  }
-
-  private async Task CompleteUpdateAsync(
-    PendingDeck pending,
-    CancellationToken cancellationToken)
-  {
-    await using var scope = scopeFactory.CreateAsyncScope();
-    var context = scope.ServiceProvider.GetRequiredService<CollectionContext>();
-    // Keep the revision check and queue acknowledgement under one write
-    // transaction so an edit arriving during sync cannot lose its marker.
-    await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
-    CardGroupingModel? grouping = await context.CardGroupings
-      .SingleOrDefaultAsync(candidate => candidate.Id == pending.GroupingId, cancellationToken);
-    if (grouping == null || grouping.PendingOperation != DeckSyncOperation.Upsert)
-      return;
-
-    grouping.SyncError = null;
-    if (await LatestRevisionIdAsync(context, grouping.Id, cancellationToken) ==
-        pending.RevisionId)
-    {
-      grouping.PendingOperation = DeckSyncOperation.None;
-    }
-    await context.SaveChangesAsync(cancellationToken);
-    await transaction.CommitAsync(cancellationToken);
-  }
-
-  private async Task CompleteDeleteAsync(
-    PendingDeck pending,
-    CancellationToken cancellationToken)
-  {
-    await using var scope = scopeFactory.CreateAsyncScope();
-    var context = scope.ServiceProvider.GetRequiredService<CollectionContext>();
-    CardGroupingModel? grouping = await context.CardGroupings
-      .SingleOrDefaultAsync(candidate => candidate.Id == pending.GroupingId, cancellationToken);
-    if (grouping == null || grouping.PendingOperation != DeckSyncOperation.Delete)
-      return;
-
-    grouping.PendingOperation = DeckSyncOperation.None;
-    grouping.SyncError = null;
-    await context.SaveChangesAsync(cancellationToken);
   }
 
   private async Task RecordErrorAsync(
@@ -281,31 +204,8 @@ public sealed class DeckSyncService(
     await context.SaveChangesAsync(cancellationToken);
   }
 
-  private static Task<long> LatestRevisionIdAsync(
-    CollectionContext context,
-    long groupingId,
-    CancellationToken cancellationToken) =>
-    context.CardGroupingRevisions
-      .Where(revision => revision.CardGroupingId == groupingId)
-      .MaxAsync(revision => revision.Id, cancellationToken);
-
-  private static DeckSyncState ToSyncState(CardGroupingState state) =>
-    new(
-      state.NetDeckId,
-      state.Name ?? throw new InvalidOperationException("A deck name is required."),
-      state.FormatCode,
-      state.Items.Select(item => new DeckSyncCard(
-        item.CatalogId,
-        item.Region,
-        item.Annotation,
-        item.Quantity)).ToArray());
-
   private sealed record PendingDeck(
-    long GroupingId,
-    int AccountId,
-    int NetDeckId,
-    bool IsLocal,
-    DeckSyncOperation Operation,
+    CardGroupingModel Grouping,
     long RevisionId,
-    CardGroupingState? State);
+    IReadOnlyList<CardGroupingRevisionModel> Revisions);
 }

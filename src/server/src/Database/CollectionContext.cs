@@ -8,6 +8,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 
+using MTGOTracker.Database.Models;
 using MTGOTracker.Database.Models.Collection;
 
 
@@ -22,6 +23,8 @@ public sealed class CollectionContext(DbContextOptions<CollectionContext> option
     Set<CardGroupingRevisionModel>();
   public DbSet<DeckRevisionEnrichmentModel> DeckRevisionEnrichments =>
     Set<DeckRevisionEnrichmentModel>();
+
+  public DbSet<SideboardGuideModel> SideboardGuides => Set<SideboardGuideModel>();
 
   protected override void OnModelCreating(ModelBuilder modelBuilder)
   {
@@ -132,5 +135,24 @@ public sealed class CollectionContext(DbContextOptions<CollectionContext> option
           enrichment => enrichment.CardGroupingRevisionId)
         .OnDelete(DeleteBehavior.Cascade);
     });
+
+    modelBuilder.Entity<SideboardGuideModel>(entity =>
+    {
+      entity.Property(guide => guide.OpponentArchetype).UseCollation("NOCASE");
+      entity.HasIndex(guide => new
+      {
+        guide.AccountId,
+        guide.DeckRevisionId,
+        guide.OpponentArchetype
+      }).IsUnique();
+      entity.HasMany(guide => guide.Cards).WithOne()
+        .HasForeignKey(card => card.SideboardGuideId)
+        .OnDelete(DeleteBehavior.Cascade);
+    });
+
+    modelBuilder.Entity<SideboardGuideCardModel>().ToTable("SideboardGuideCards");
+    modelBuilder.Entity<SideboardGuideCardModel>()
+      .HasIndex(card => new { card.SideboardGuideId, card.CatalogId, card.BringIn })
+      .IsUnique();
   }
 }

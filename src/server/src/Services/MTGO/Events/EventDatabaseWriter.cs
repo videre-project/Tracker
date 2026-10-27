@@ -92,10 +92,23 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
           return false;
         }
 
+        PlayFormatType? formatType = null;
+        try
+        {
+          var category = eventObj.Format.Type;
+          if (category != PlayFormatType.Null) formatType = category;
+        }
+        catch (Exception exception)
+        {
+          // Event recording must continue if MTGO hasn't exposed format metadata yet.
+          Log.Debug(exception, "Could not read format type for event {EventId}", eventId);
+        }
+
         eventModel = new EventModel
         {
           Id = eventId,
           Format = eventObj.Format,
+          FormatType = formatType,
           Description = description,
           Type = type,
           LeagueEventId = leagueEventId,

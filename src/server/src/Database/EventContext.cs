@@ -3,7 +3,9 @@
   SPDX-License-Identifier: Apache-2.0
 **/
 
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -24,6 +26,36 @@ namespace MTGOTracker.Database;
 public class EventContext(DbContextOptions<EventContext> options)
     : DbContext(options)
 {
+  /// <summary>
+  /// Queries recorded matches, including older recordings that identify players only in game rows.
+  /// Completion filtering uses the recorded match result, never the presence of replay states.
+  /// </summary>
+  public IQueryable<MatchModel> MatchesForPlayer(string username,
+    DateTime? minDate = null, DateTime? maxDate = null, string? format = null, bool completedOnly = false,
+    PlayFormatType? formatType = null, string[]? legacyFormats = null)
+  {
+    var query = Matches.FromSqlInterpolated($"""
+      SELECT m.* FROM Matches m
+      WHERE EXISTS (SELECT 1 FROM json_each(m.PlayerResults)
+        WHERE json_extract(value, '$.player') = {username} COLLATE NOCASE
+          AND ({completedOnly} = 0 OR json_extract(value, '$.result') COLLATE NOCASE IN ('Win', 'Loss', 'Draw', {(int)MatchResult.Win}, {(int)MatchResult.Loss}, {(int)MatchResult.Draw})))
+        OR ({completedOnly} = 0 AND EXISTS (
+          SELECT 1 FROM Games g JOIN GamePlayers p ON p.GameId = g.Id
+          WHERE g.MatchId = m.Id AND p.Name = {username} COLLATE NOCASE))
+      """).AsNoTracking().Include(match => match.Event).AsQueryable();
+    if (minDate.HasValue) query = query.Where(match => match.Event.StartTime >= minDate.Value);
+    if (maxDate.HasValue) query = query.Where(match => match.Event.StartTime <= maxDate.Value);
+    if (!string.IsNullOrWhiteSpace(format)) query = query.Where(match => match.Event.Format == format);
+    if (formatType is { } type)
+    {
+      legacyFormats ??= [];
+      query = query.Where(match => match.Event.FormatType.HasValue
+        ? (match.Event.FormatType.Value & type) != 0
+        : legacyFormats.Contains(EF.Functions.Collate(match.Event.Format, "NOCASE")));
+    }
+    return query;
+  }
+
   public DbSet<EventModel> Events { get; set; }
   public DbSet<MatchModel> Matches { get; set; }
   public DbSet<GameModel> Games { get; set; }
@@ -59,7 +91,7 @@ public class EventContext(DbContextOptions<EventContext> options)
     JsonSerializer.Deserialize<T>(json, s_gameStateJsonOptions)!;
 
   // JSON values are compared and copied by content so collection changes are tracked.
-  private static ValueComparer<T> GameStateComparer<T>() where T : class => new(
+  private static ValueComparer<T> JsonValueComparer<T>() where T : class => new(
     (left, right) => SerializeGameState(left) == SerializeGameState(right),
     value => SerializeGameState(value).GetHashCode(),
     value => DeserializeGameState<T>(SerializeGameState(value)));
@@ -162,14 +194,14 @@ public class EventContext(DbContextOptions<EventContext> options)
       .HasConversion(
         value => SerializeGameState(value),
         json => DeserializeGameState<IReadOnlyList<PromptOptionData>>(json))
-      .Metadata.SetValueComparer(GameStateComparer<IReadOnlyList<PromptOptionData>>());
+      .Metadata.SetValueComparer(JsonValueComparer<IReadOnlyList<PromptOptionData>>());
 
     modelBuilder.Entity<GameStateModel>()
       .Property(state => state.Interaction)
       .HasConversion(
         value => SerializeGameState(value),
         json => GameInteractionData.Deserialize(json, s_gameStateJsonOptions))
-      .Metadata.SetValueComparer(GameStateComparer<GameInteractionData>());
+      .Metadata.SetValueComparer(JsonValueComparer<GameInteractionData>());
 
     //
     // Match relationships
@@ -195,7 +227,8 @@ public class EventContext(DbContextOptions<EventContext> options)
       .Property(m => m.OpponentDeckColors)
       .HasConversion(
           e => e != null ? JsonSerializer.Serialize(e, s_databaseJsonOptions) : null,
-          e => e != null ? JsonSerializer.Deserialize<List<string>>(e, s_databaseJsonOptions) : null);
+          e => e != null ? JsonSerializer.Deserialize<List<string>>(e, s_databaseJsonOptions) : null)
+      .Metadata.SetValueComparer(JsonValueComparer<List<string>>());
 
     //
     // Game relationships

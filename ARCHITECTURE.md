@@ -494,6 +494,20 @@ The comprehensive data collection enables a wide range of analytics:
 
 These analytics can be used to improve deck construction, gameplay decisions, and overall strategy.
 
+### 5.3 Deck synchronization
+
+`Collection.db` holds the desired deck revisions and pending operations.
+`DeckSyncService` schedules commands through `ClientCommandGateway`, which owns
+the MTGO mutation boundary. `CollectionHistoryWriter` links imported decks and
+completes pending operations, preserving revision IDs referenced by matches
+and saved plans.
+
+A queued import stores its available MTGO name and original deck snapshot before
+registration. Retries resolve that name, format, and card composition to the same
+native deck, including when linking was interrupted. MTGO's reserved names prevent
+another creation while a server ID is pending. Later edits and deletions use the
+resolved native ID; their revision history remains attached to the original deck.
+
 ----
 
 ## 6. Extensibility
