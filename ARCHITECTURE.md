@@ -476,10 +476,29 @@ eliminated, spectated, and replayed participation is excluded.
 The stream publishes complete snapshots when personal activity changes, checking
 the small joined collection every five seconds. Replacing snapshots removes stale
 entries after leaving or finishing an event. The client clears its snapshot on
-disconnect. Match links open Match Details and tournament links open the existing
-tournament page. League and queue titles open their MTGO window until Tracker has
-dedicated run pages. The existing `showUpcomingEvents` preference controls the
-Registered section for compatibility with saved settings.
+disconnect. Standalone match links open Match Details. Active tournament cards
+and league titles open their run summaries; registered tournaments open tournament
+details. A league's current-match action opens Match Details, and queue cards open
+MTGO. The existing `showUpcomingEvents` preference controls the Registered section
+for compatibility with saved settings.
+
+### 4.4 Event and league summaries
+
+History groups and joined-event cards open a summary for the selected tournament
+or league course. Tournament IDs and league course IDs scope the existing
+`GET /api/events/getplayermatches/{id}` endpoint; a league's season ID does
+not identify an individual run.
+
+The endpoint combines MTGO standings or league game history with recorded matches.
+MTGO-only results are visible while the client holds that event; they do not imply
+that Tracker captured a replay. Only the selected local recording is loaded through
+`GET /api/games/match/{id}`. Editing opponent classifications requires a local
+match belonging to the signed-in player.
+
+Scheduled match totals and match/game positions are captured from MTGO and retained
+with recordings. Older missing metadata stays unknown. The existing history stream carries
+new games, committed recordings, results, and tournament round/state changes;
+clock animation advances locally between those notifications.
 
 ## 5. Data Collection Details
 
@@ -545,7 +564,10 @@ remain readable without a live MTGO connection.
 
 The client-state provider owns the session cache; replacing it invalidates both
 cached snapshots and in-flight query results. Dashboard requests use the shared
-query hook and revalidate cached data on navigation. Event streams batch into one
+query hook and revalidate cached data on navigation. The dashboard owns one history
+subscription; match updates and stream reconnects refresh its KPIs, trend, deck
+chart, matchup table, and recent matches through the same refresh key.
+Event streams batch into one
 immutable React snapshot, from which the calendar's status lists are derived.
 
 Public deck previews share successful card-metadata reads. A failed metadata read

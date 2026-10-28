@@ -11,18 +11,15 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 
 using MTGOSDK.API.Play.Games;
+using MTGOSDK.API.Play.Tournaments;
 
 using MTGOTracker.Controllers.Base;
 using MTGOTracker.Database;
 using MTGOTracker.Controllers.Models.Games;
 using MTGOTracker.Services.MTGO;
-using MTGOTracker.Services.MTGO.Collection;
 using MTGOTracker.Services.MTGO.Events;
-
-using static MTGOTracker.Services.MTGO.Events.MatchHistorySerialization;
 
 
 namespace MTGOTracker.Controllers;
@@ -31,9 +28,9 @@ namespace MTGOTracker.Controllers;
 public sealed class GameStreamsController(
   EventContext context,
   ClientStateMonitor clientMonitor,
-  IClientAPIProvider clientProvider,
-  CollectionDeckService deckService) : APIController
-{  [HttpGet("/api/games/match/{matchId}/watch")]
+  IClientAPIProvider clientProvider) : APIController
+{
+  [HttpGet("/api/games/match/{matchId}/watch")]
   [ProducesResponseType(typeof(IEnumerable<GameLogDTO>), StatusCodes.Status200OK)]
   [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
   [Produces("application/json", "application/x-ndjson")]
@@ -78,129 +75,64 @@ public sealed class GameStreamsController(
       clientMonitor.Token);
   }
 
+  /// <summary>
+  /// The IDs of events whose match history has changed for the signed-in player.
+  /// </summary>
   [HttpGet("/api/games/history/watch")]
-  [ProducesResponseType(typeof(IEnumerable<MatchHistoryDTO>), StatusCodes.Status200OK)]
+  [ProducesResponseType(typeof(IEnumerable<int>), StatusCodes.Status200OK)]
   [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
-  [Produces("application/json", "application/x-ndjson")]
+  [Produces("application/x-ndjson")]
   public async Task<IActionResult> WatchMatchHistory()
   {
     if (!clientMonitor.IsClientReady)
-    {
       return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = "MTGO client is not ready" });
-    }
+    if (!clientProvider.TryGetCurrentUsername(out var username)) return BadRequest("Client not ready or user not logged in.");
 
-    if (!clientProvider.TryGetCurrentUsername(out var currentUser))
+    async Task historyCallback(object? sender, (int Id, bool IsMatch) update)
     {
-      return BadRequest("Client not ready or user not logged in.");
-    }
-
-    async Task historyCallback(object? sender, int id)
-    {
-      // Use a fresh DbContext scope to ensure we see the latest committed data
-      using var scope = HttpContext.RequestServices.CreateScope();
-      var freshContext = scope.ServiceProvider.GetRequiredService<EventContext>();
-
-      // Try as match first (covers MatchCreated + MatchResultUpdated)
-      var match = await freshContext.Matches
-        .Include(m => m.Event)
-        .Include(m => m.Games)
-          .ThenInclude(g => g.Players)
-        .AsNoTracking()
-        .FirstOrDefaultAsync(m => m.Id == id);
-
-      if (match != null)
-      {
-        DeckRevisionView? deck =
-          match.Event.DeckRevisionId is long revisionId
-            ? await deckService.GetRevisionAsync(revisionId)
-            : null;
-        bool isActive = GameAPIService.ActiveMatchIds.Contains(id);
-
-        var recordedDurations = await ReadGameDurationsAsync(
-          freshContext, match.Games.Select(game => game.Id));
-        TimeSpan matchDuration = TimeSpan.Zero;
-        int wins = 0, losses = 0;
-        foreach (var game in match.Games)
-        {
-          var gameResult = game.GamePlayerResults.FirstOrDefault(p => p.Player == currentUser);
-          matchDuration += GetGameDuration(game, gameResult, recordedDurations);
-          if (gameResult != null)
-          {
-            if (gameResult.Result == GameResult.Win) wins++;
-            else if (gameResult.Result == GameResult.Loss) losses++;
-          }
-        }
-
-        var dto = new MatchHistoryDTO
-        {
-          Id = match.Id,
-          EventId = match.EventId,
-          EventName = match.Event?.Description ?? "",
-          Format = match.Event?.Format ?? "",
-          StartTime = match.Event?.StartTime ?? DateTime.MinValue,
-          Result = GetMatchResult(match, currentUser, isActive),
-          Record = $"{wins}-{losses}",
-          Duration = FormatDuration(matchDuration),
-          DeckRevisionId = match.Event?.DeckRevisionId,
-          DeckName = deck?.Name,
-          DeckArchetype = deck?.Archetype,
-          DeckColors = deck?.Colors,
-          OpponentName = GetOpponentName(match, currentUser),
-          IsActive = isActive
-        };
-
-        await StreamResponse(new[] { dto });
+      // Standings and round hooks also receive public tournaments the player never joined.
+      if (sender is Tournament tournament && !tournament.HasJoined && !tournament.IsParticipant &&
+          !await context.MatchesForPlayer(username).AnyAsync(match => match.EventId == update.Id, HttpContext.RequestAborted))
         return;
-      }
 
-      // Fall back to event lookup (tournament just joined, no matches yet)
-      var evt = await freshContext.Events
-        .AsNoTracking()
-        .FirstOrDefaultAsync(e => e.Id == id);
-
-      if (evt != null)
-      {
-        DeckRevisionView? deck = evt.DeckRevisionId is long revisionId
-          ? await deckService.GetRevisionAsync(revisionId)
-          : null;
-        var dto = new MatchHistoryDTO
-        {
-          Id = 0,
-          EventId = evt.Id,
-          EventName = evt.Description,
-          Format = evt.Format,
-          StartTime = evt.StartTime,
-          Result = "In Progress",
-          Record = "",
-          Duration = "",
-          DeckRevisionId = evt.DeckRevisionId,
-          DeckName = deck?.Name,
-          DeckArchetype = deck?.Archetype,
-          DeckColors = deck?.Colors,
-          IsActive = true,
-          IsEvent = true
-        };
-
-        await StreamResponse(new[] { dto });
-      }
+      int eventId = update.IsMatch
+        ? await context.Matches.Where(match => match.Id == update.Id)
+          .Select(match => match.EventId).SingleOrDefaultAsync(HttpContext.RequestAborted)
+        : update.Id;
+      if (eventId > 0) await StreamResponse(new[] { eventId });
     }
 
-    return await StreamNdjsonEventHandler<int>(
+    EventHandler<int>? eventUpdate = null, matchUpdate = null;
+    EventHandler<(Tournament Tournament, IList<StandingRecord> Standings)>? standingsUpdate = null;
+    EventHandler<(Tournament Tournament, TournamentRound Round)>? roundUpdate = null;
+    EventHandler<(Tournament Tournament, TournamentState State)>? stateUpdate = null;
+    return await StreamNdjsonEventHandler<(int Id, bool IsMatch)>(
       e =>
       {
-        GameAPIService.EventCreated += e;
-        GameAPIService.MatchCreated += e;
-        GameAPIService.MatchResultUpdated += e;
+        eventUpdate = (sender, id) => e(sender, (id, false));
+        matchUpdate = (sender, id) => e(sender, (id, true));
+        standingsUpdate = (_, update) => e(update.Tournament, (update.Tournament.Id, false));
+        roundUpdate = (_, update) => e(update.Tournament, (update.Tournament.Id, false));
+        stateUpdate = (_, update) => e(update.Tournament, (update.Tournament.Id, false));
+        GameAPIService.EventCreated += eventUpdate;
+        GameAPIService.LeagueHistoryUpdated += eventUpdate;
+        GameAPIService.MatchCreated += matchUpdate;
+        GameAPIService.MatchUpdated += matchUpdate;
+        GameAPIService.StandingsUpdated += standingsUpdate;
+        GameAPIService.RoundUpdated += roundUpdate;
+        GameAPIService.StateUpdated += stateUpdate;
       },
       e =>
       {
-        GameAPIService.EventCreated -= e;
-        GameAPIService.MatchCreated -= e;
-        GameAPIService.MatchResultUpdated -= e;
+        GameAPIService.EventCreated -= eventUpdate;
+        GameAPIService.LeagueHistoryUpdated -= eventUpdate;
+        GameAPIService.MatchCreated -= matchUpdate;
+        GameAPIService.MatchUpdated -= matchUpdate;
+        GameAPIService.StandingsUpdated -= standingsUpdate;
+        GameAPIService.RoundUpdated -= roundUpdate;
+        GameAPIService.StateUpdated -= stateUpdate;
       },
       historyCallback,
       clientMonitor.Token);
   }
-
-
 }

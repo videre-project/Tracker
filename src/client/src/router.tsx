@@ -23,6 +23,7 @@ import { settingsPages } from "@/lib/settings-pages";
 
 const Events = React.lazy(() => import('@/pages/events'))
 const EventDetails = React.lazy(() => import('@/pages/event-details'))
+const EventSummary = React.lazy(() => import('@/pages/event-summary'))
 const Home = React.lazy(() => import('@/pages/home'))
 const Metagame = React.lazy(() => import('@/pages/metagame-decks'))
 const SettingsPage = React.lazy(() => import('@/pages/settings'))
@@ -120,6 +121,12 @@ export const routes: RouteEntry[] = [
         icon: HistoryIcon,
         type: NavType.Primary,
         element: <History />
+      },
+      {
+        path: "/history/events/:eventId",
+        name: "Event summary",
+        type: NavType.Secondary,
+        element: <EventSummary />,
       },
       {
         path: "/history/:matchId",

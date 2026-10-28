@@ -10,11 +10,11 @@
   </PropertyGroup>
 
   <PropertyGroup Label="SDKVersions">
-    <MTGOSDKVersion>1.8.0.20261018</MTGOSDKVersion>
+    <MTGOSDKVersion>1.8.1.20261028</MTGOSDKVersion>
   </PropertyGroup>
 
   <PropertyGroup Label="PluginVersions">
-    <TrackerPluginsVersion>0.1.0-preview.1</TrackerPluginsVersion>
+    <TrackerPluginsVersion>0.1.0-preview.2</TrackerPluginsVersion>
   </PropertyGroup>
 
   <ItemGroup Label="PackageVersions">

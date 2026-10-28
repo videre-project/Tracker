@@ -106,6 +106,9 @@ public static class DatabaseService
           if (typeof(T).Name == "EventContext")
           {
             await EnsureColumnExistsAsync(context, "Events", "FormatType", "INTEGER", cancellationToken);
+            await EnsureColumnExistsAsync(context, "Events", "TotalMatches", "INTEGER", cancellationToken);
+            await EnsureColumnExistsAsync(context, "Matches", "MatchNumber", "INTEGER", cancellationToken);
+            await EnsureColumnExistsAsync(context, "Games", "GameNumber", "INTEGER", cancellationToken);
             await EnsureColumnExistsAsync(context, "Games", "StartTime", "TEXT", cancellationToken);
             await EnsureColumnExistsAsync(context, "GameStates", "ServerNonce", "INTEGER", cancellationToken);
             await EnsureColumnExistsAsync(context, "GameStates", "Interaction", "TEXT", cancellationToken);

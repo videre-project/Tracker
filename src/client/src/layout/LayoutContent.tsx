@@ -225,12 +225,20 @@ export default function Layout() {
     return acc;
   }, [] as RouteFragment[]);
   const isMatchDetailsPage = Boolean(matchPath("/history/:matchId", location.pathname));
-  const displayBreadcrumbs = breadcrumbs.map(item =>
+  const isReplayPage = Boolean(matchPath("/history/:matchId/game/:gameId/replay", location.pathname));
+  const eventSummaryId = location.pathname.match(/^\/history\/events\/(\d+)$/)?.[1]
+    ?? new URLSearchParams(location.search).get("eventSummary");
+  const summaryBreadcrumbs: RouteFragment[] = eventSummaryId && /^\d+$/.test(eventSummaryId)
+    ? [{ title: "History", url: "/history" }, { title: `Event #${eventSummaryId}`, url: `/history/events/${eventSummaryId}` },
+      ...(isMatchDetailsPage || isReplayPage ? breadcrumbs.slice(-1) : [])]
+    : breadcrumbs;
+  const displayBreadcrumbs = summaryBreadcrumbs.map(item =>
     item.url === "/decks" && item.kind === "collection"
       ? { ...item, title: "Decks" }
       : item
   );
   const isTournamentPage = Boolean(matchPath("/events/:eventId", location.pathname));
+  const isEventSummaryPage = Boolean(matchPath("/history/events/:eventId", location.pathname));
   const isApiDocsPage = location.pathname === "/settings/api-docs";
   const currentBreadcrumbHref = isApiDocsPage ? getApiUrl("/docs") : undefined;
 
@@ -266,7 +274,7 @@ export default function Layout() {
               className="pointer-events-auto absolute right-4 top-0 hidden h-full items-center md:flex"
             />
             </header>
-            <div className={cn("flex-1 min-h-0 overflow-y-auto", (isTournamentPage || isMatchDetailsPage || location.pathname === "/collection" || location.pathname === "/history") && "flex flex-col overflow-hidden")}>
+            <div className={cn("flex-1 min-h-0 overflow-y-auto", (isTournamentPage || isEventSummaryPage || isMatchDetailsPage || location.pathname === "/collection" || location.pathname === "/history") && "flex flex-col overflow-hidden")}>
               <div className="h-14 shrink-0" />
               <Suspense fallback={<div role="status" aria-label="Loading page"
                 className="flex min-h-0 flex-1 flex-col gap-4 px-4 pb-4 pt-1">

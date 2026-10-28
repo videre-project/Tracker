@@ -21,6 +21,11 @@ public class GameModel
 
   public DateTime? StartTime { get; set; }
 
+  /// <summary>
+  /// MTGO's position within the match, independent of how many games Tracker captured.
+  /// </summary>
+  public int? GameNumber { get; set; }
+
   public List<GamePlayerResult> GamePlayerResults { get; set; } = new();
 
   // Structured game state tables

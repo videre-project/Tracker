@@ -519,6 +519,8 @@ public abstract class APIController : ControllerBase
 
     try
     {
+      // A reconnect must become visible to the client even while the stream is idle.
+      await Response.Body.FlushAsync(streamToken);
       await foreach (var evt in channel.Reader.ReadAllAsync(streamToken))
       {
         await onEvent(evt.Sender, evt.Args);

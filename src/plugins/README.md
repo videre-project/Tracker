@@ -11,10 +11,10 @@ The package, public namespace, and assembly are named `MTGOTracker.Plugins`.
 | --- | --- |
 | Tracker application | 0.3.0 |
 | .NET SDK / target | .NET 10 / `net10.0-windows7.0` |
-| MTGOTracker.Plugins package | `0.1.0-preview.1` |
+| MTGOTracker.Plugins package | `0.1.0-preview.2` |
 | Manifest `apiVersion` | `1` |
 | API assembly version | `1.0.0.0` |
-| MTGOSDK package | `1.8.0.20261018` |
+| MTGOSDK package | `1.8.1.20261028` |
 | Runtime | Windows x64; the installed Tracker host supplies the runtime |
 
 Local plugins built against the earlier, unpublished `Tracker.Plugins` assembly

@@ -37,6 +37,7 @@ public class GameTracker : IDisposable
 {
   private readonly Game _game;
   private readonly int _gameId;
+  private readonly int _matchId;
   private readonly BlockingCollection<GameLogEntry> _eventLog;
   private readonly EventDatabaseWriter _dbWriter;
   private readonly MTGOContext _context;
@@ -119,6 +120,7 @@ public class GameTracker : IDisposable
   {
     _game = game;
     _gameId = game.Id;
+    _matchId = game.Match.Id;
     _eventLog = eventLog;
     _dbWriter = dbWriter;
     _context = context;
@@ -311,6 +313,7 @@ public class GameTracker : IDisposable
           interaction: interaction,
           capturedAt: batch.CapturedAt) < 0) continue;
         int nonce = update?.Nonce ?? state.Snapshot.Nonce;
+        bool firstSnapshot = _lastRecordedSnapshot == null;
         _lastRecordedSnapshot = state.Snapshot;
         _lastRecordedPromptOptions = promptOptions;
         _lastRecordedInteraction = interaction;
@@ -347,6 +350,8 @@ public class GameTracker : IDisposable
           _eventLog.Add(new GameLogEntry(_gameId, batch.CapturedAt,
             GameLogType.Interaction, interactionJson!, update.Nonce));
 
+        // Summary readers can load the recording once its first state is committed.
+        if (firstSnapshot) GameAPIService.MatchUpdated?.Invoke(this, _matchId);
       }
       catch (Exception ex)
       {

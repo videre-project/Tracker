@@ -99,23 +99,27 @@ public partial class GamesController
     DeckReferenceData deck, string opponent, IEnumerable<MatchModel> source, string username)
   {
     var matches = source.ToList();
-    var results = matches.Select(match => match.PlayerResults.First(result => string.Equals(result.Player, username, StringComparison.OrdinalIgnoreCase)).Result).ToList();
-    var games = matches.SelectMany(match => match.Games.OrderBy(game => game.Id)
-      .Select((game, index) => (Game: game, Number: index + 1, PlayDraw: ResolvePlayDraw(game, username)))).ToList();
-    return new(deck, opponent,
-      new(results.Count(result => result == MatchResult.Win),
-        results.Count(result => result == MatchResult.Loss),
-        results.Count(result => result == MatchResult.Draw)),
-      GameRecord(games.Select(item => item.Game), username),
-      GameRecord(games.Where(item => item.Number == 1).Select(item => item.Game), username),
-      GameRecord(games.Where(item => item.Number > 1).Select(item => item.Game), username),
-      GameRecord(games.Where(item => item.PlayDraw == "Play").Select(item => item.Game), username),
-      GameRecord(games.Where(item => item.PlayDraw == "Draw").Select(item => item.Game), username),
-      GameRecord(games.Where(item => item.Number == 1 && item.PlayDraw == "Play").Select(item => item.Game), username),
-      GameRecord(games.Where(item => item.Number == 1 && item.PlayDraw == "Draw").Select(item => item.Game), username),
-      GameRecord(games.Where(item => item.Number > 1 && item.PlayDraw == "Play").Select(item => item.Game), username),
-      GameRecord(games.Where(item => item.Number > 1 && item.PlayDraw == "Draw").Select(item => item.Game), username),
-      matches.OrderByDescending(match => match.Event.StartTime)
+    var results = matches.Select(match => match.PlayerResults.First(result =>
+      string.Equals(result.Player, username, StringComparison.OrdinalIgnoreCase)).Result).ToList();
+    var games = matches.SelectMany(match => match.Games)
+      .Select(game => (Game: game, Number: game.GameNumber, PlayDraw: ResolvePlayDraw(game, username))).ToList();
+    return new(
+      Deck: deck,
+      OpponentArchetype: opponent,
+      Matches: new(
+        Wins: results.Count(result => result == MatchResult.Win),
+        Losses: results.Count(result => result == MatchResult.Loss),
+        Draws: results.Count(result => result == MatchResult.Draw)),
+      Games: GameRecord(games.Select(item => item.Game), username),
+      GameOne: GameRecord(games.Where(item => item.Number == 1).Select(item => item.Game), username),
+      Postboard: GameRecord(games.Where(item => item.Number > 1).Select(item => item.Game), username),
+      OnPlay: GameRecord(games.Where(item => item.PlayDraw == "Play").Select(item => item.Game), username),
+      OnDraw: GameRecord(games.Where(item => item.PlayDraw == "Draw").Select(item => item.Game), username),
+      GameOneOnPlay: GameRecord(games.Where(item => item.Number == 1 && item.PlayDraw == "Play").Select(item => item.Game), username),
+      GameOneOnDraw: GameRecord(games.Where(item => item.Number == 1 && item.PlayDraw == "Draw").Select(item => item.Game), username),
+      PostboardOnPlay: GameRecord(games.Where(item => item.Number > 1 && item.PlayDraw == "Play").Select(item => item.Game), username),
+      PostboardOnDraw: GameRecord(games.Where(item => item.Number > 1 && item.PlayDraw == "Draw").Select(item => item.Game), username),
+      OpponentColors: matches.OrderByDescending(match => match.Event.StartTime)
         .Select(match => match.OpponentDeckColors).FirstOrDefault(colors => colors != null));
   }
 

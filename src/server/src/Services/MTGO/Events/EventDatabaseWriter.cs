@@ -42,6 +42,19 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
   private static readonly ConcurrentDictionary<int, int> s_matchIdMap = new();
   private static readonly ConcurrentDictionary<int, int> s_gameIdMap = new();
 
+  private static int? GetMatchNumber(Match match, int eventId)
+  {
+    // Native course positions remain stable across stages and result corrections.
+    int? number = GameAPIService.GetActiveEvent(eventId) switch
+    {
+      League course when course.ActiveMatch?.Id == match.Id =>
+        course.MatchNumber,
+      Tournament tournament => tournament.RoundNumber,
+      _ => null,
+    };
+    return number > 0 ? number : null;
+  }
+
   public bool TryAddEvent(Event eventObj, out EventModel? eventModel)
   {
     DateTime startTime = DateTime.Now;
@@ -83,10 +96,22 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
           type = EventType.Match;
         }
 
+        int? totalMatches = eventObj switch
+        {
+          League course => course.TotalMatches,
+          Tournament tournament => tournament.TotalRounds + (tournament.InPlayoffs ? 3 : 0),
+          _ => null,
+        };
+
         // Check if event already exists
         var existingEvent = context.Events.FirstOrDefault(e => e.Id == eventId);
         if (existingEvent != null)
         {
+          if (totalMatches > 0 && existingEvent.TotalMatches != totalMatches)
+          {
+            existingEvent.TotalMatches = totalMatches;
+            context.SaveChanges();
+          }
           eventModel = existingEvent;
           transaction.Commit();
           return false;
@@ -111,10 +136,11 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
           FormatType = formatType,
           Description = description,
           Type = type,
+          TotalMatches = totalMatches,
           LeagueEventId = leagueEventId,
           StartTime = eventObj is Tournament t ? t.StartTime : startTime
         };
-        if (eventObj.RegisteredDeck is Deck deck)
+        if ((eventObj is League league ? league.ActiveDeck : eventObj.RegisteredDeck) is Deck deck)
         {
           var deckService =
             scope.ServiceProvider.GetRequiredService<CollectionDeckService>();
@@ -241,13 +267,19 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
         var existingMatch = context.Matches.FirstOrDefault(m => m.Id == match.Id);
         if (existingMatch != null)
         {
+          existingMatch.MatchNumber ??= GetMatchNumber(match, eventId);
+          context.SaveChanges();
           matchModel = existingMatch;
           transaction.Commit();
           return false;
         }
 
         // Create new match
-        matchModel = new MatchModel { Id = match.Id };
+        matchModel = new MatchModel
+        {
+          Id = match.Id,
+          MatchNumber = GetMatchNumber(match, eventId),
+        };
 
         // First add the match to the context
         context.Matches.Add(matchModel);
@@ -259,6 +291,8 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
 
         if (eventModel != null)
         {
+          if (GameAPIService.GetActiveEvent(eventId) is Tournament { InPlayoffs: true } tournament)
+            eventModel.TotalMatches = tournament.TotalRounds + 3;
           eventModel.Matches ??= new List<MatchModel>();
           eventModel.Matches.Add(matchModel);
         }
@@ -308,10 +342,13 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
         }
 
         // Check if game already exists
+        int position = game.Match.Games.ToList().FindIndex(item => item.Id == game.Id);
+        int? gameNumber = position >= 0 ? position + 1 : null;
         var existingGame = context.Games.FirstOrDefault(g => g.Id == game.Id);
         if (existingGame != null)
         {
           existingGame.StartTime = game.StartTime.ToUniversalTime();
+          existingGame.GameNumber ??= gameNumber;
           context.SaveChanges();
           gameModel = existingGame;
           transaction.Commit();
@@ -322,6 +359,7 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
         gameModel = new GameModel
         {
           Id = game.Id,
+          GameNumber = gameNumber,
           StartTime = game.StartTime.ToUniversalTime()
         };
 
@@ -337,6 +375,8 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
           transaction.Rollback();
           return false;
         }
+
+        matchModel.MatchNumber ??= GetMatchNumber(game.Match, matchModel.EventId);
 
         // Add game to context and relate to match
         context.Games.Add(gameModel);
@@ -873,19 +913,8 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
           return false;
         }
 
-        var recorded = context.GameStates
-          .Where(state => state.GameId == gameId)
-          .GroupBy(state => state.GameId)
-          .Select(group => new
-          {
-            Start = group.Min(state => state.ClientTimestamp),
-            End = group.Max(state => state.ClientTimestamp)
-          }).FirstOrDefault();
-        TimeSpan? recordedDuration = recorded != null && recorded.End > recorded.Start
-          ? recorded.End - recorded.Start : null;
-
-        // Match-server rankings can arrive after game-server results. Preserve
-        // play/draw from the richer message rather than replacing it with Unknown.
+        // Match-server rankings can arrive after game-server results. Retain known
+        // play/draw and duration when a later message omits them.
         existingGame.GamePlayerResults = results.Select(result =>
         {
           var previous = existingGame.GamePlayerResults
@@ -893,7 +922,7 @@ public class EventDatabaseWriter(IServiceProvider serviceProvider) : DLRWrapper
           var playDraw = result.PlayDraw == PlayDrawResult.Unknown && previous != null
             ? previous.PlayDraw : result.PlayDraw;
           return new GamePlayerResult(result.Player, playDraw, result.Result,
-            recordedDuration ?? result.Clock);
+            result.Clock > TimeSpan.Zero ? result.Clock : previous?.Clock ?? TimeSpan.Zero);
         }).ToList();
 
         context.Entry(existingGame).State = EntityState.Modified;

@@ -15,6 +15,10 @@ public class MatchHistoryDTO
   public int Id { get; set; }
   public int EventId { get; set; }
   public required string EventName { get; set; }
+  /// <summary>
+  /// The one-based match position in the event or league course, when known.
+  /// </summary>
+  public int? MatchNumber { get; set; }
   public required string Format { get; set; }
   public DateTime StartTime { get; set; }
   public required string Result { get; set; }

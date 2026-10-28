@@ -25,8 +25,8 @@ import {
 import type { DateRange } from "react-day-picker"
 
 function getHistoryRowHref(match: MatchHistoryItem): string | null {
-  if (match.isEvent) return `/events/${match.eventId}`
-  return `/history/${match.id}`
+  if (match.isEvent) return `/history/events/${match.eventId}`
+  return `/history/${match.id}${match.eventId !== match.id ? `?eventSummary=${match.eventId}` : ""}`
 }
 
 export default function History() {
@@ -70,12 +70,10 @@ export default function History() {
   const { data, loading, error, refresh } = useGamesHistory(page, pageSize, effectiveRange, selectedFormat, undefined, scope)
   const { isReady: clientReady } = useClientState()
 
-  // Subscribe to event/match creation/completion SSE stream
-  const onSSEMessage = useCallback(() => refresh(), [refresh])
-
-  useNDJSONStream<MatchHistoryItem>({
+  useNDJSONStream<number>({
     url: getApiUrl("/api/games/history/watch"),
-    onMessage: onSSEMessage,
+    onMessage: refresh,
+    onOpen: refresh,
     enabled: clientReady,
     autoReconnect: true,
     reconnectDelay: 2000,

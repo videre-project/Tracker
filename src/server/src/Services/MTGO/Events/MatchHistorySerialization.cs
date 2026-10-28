@@ -117,14 +117,15 @@ internal static class MatchHistorySerialization
   }
 
   internal static MatchHistoryDTO ToMatchHistory(MatchModel match, string username, DeckRevisionView? deck,
-    bool isActive, IReadOnlyDictionary<int, TimeSpan> durations)
+    bool isActive, IReadOnlyDictionary<int, TimeSpan> stateSpans)
   {
     var record = GameRecord(match.Games, username);
     var duration = match.Games.Aggregate(TimeSpan.Zero, (total, game) => total + GetGameDuration(game,
-      game.GamePlayerResults.FirstOrDefault(result => string.Equals(result.Player, username, StringComparison.OrdinalIgnoreCase)), durations));
+      game.GamePlayerResults.FirstOrDefault(result => string.Equals(result.Player, username, StringComparison.OrdinalIgnoreCase)), stateSpans));
     return new()
     {
       Id = match.Id, EventId = match.EventId, EventName = match.Event.Description, Format = match.Event.Format,
+      MatchNumber = match.MatchNumber,
       StartTime = match.Event.StartTime, Result = GetMatchResult(match, username, isActive),
       Record = $"{record.Wins}-{record.Losses}", Duration = FormatDuration(duration),
       DeckRevisionId = match.Event.DeckRevisionId, DeckName = deck?.Name, DeckArchetype = deck?.Archetype,
@@ -134,7 +135,36 @@ internal static class MatchHistorySerialization
     };
   }
 
-  internal static async Task<Dictionary<int, TimeSpan>> ReadGameDurationsAsync(
+  /// <summary>
+  /// Shares game results between event rows and match details. Replay logs are
+  /// loaded only for the selected recording, not for every match in an event.
+  /// </summary>
+  internal static GameDetailsDTO ToGameDetails(GameModel game, MatchModel match,
+    string username, int gameNumber, bool includeLogs = false,
+    IReadOnlyDictionary<int, TimeSpan>? stateSpans = null)
+  {
+    var result = game.GamePlayerResults.FirstOrDefault(item =>
+      string.Equals(item.Player, username, StringComparison.OrdinalIgnoreCase));
+    return new()
+    {
+      Id = game.Id, GameNumber = game.GameNumber ?? gameNumber,
+      Result = result?.Result is GameResult.Win or GameResult.Loss ? result.Result.ToString() : "Unknown",
+      Duration = FormatDuration(GetGameDuration(game, result, stateSpans)),
+      PlayDraw = ResolvePlayDraw(game, username, result?.PlayDraw),
+      SideboardChanges = match.SideboardChanges.GetValueOrDefault(game.Id, [])
+        .Select(change => new SideboardChangeDTO
+        {
+          CatalogId = change.catalogId, Name = change.name, Quantity = change.quantity
+        }).ToList(),
+      Logs = includeLogs ? BuildGameLogs(game) : [],
+    };
+  }
+
+  /// <summary>
+  /// Reads the interval between each game's first and last state updates.
+  /// The interval can cover only part of a game.
+  /// </summary>
+  internal static async Task<Dictionary<int, TimeSpan>> ReadGameStateSpansAsync(
     EventContext context, IEnumerable<int> gameIds)
   {
     int[] ids = gameIds.Distinct().ToArray();
@@ -154,17 +184,19 @@ internal static class MatchHistorySerialization
 
   internal static TimeSpan GetGameDuration(
     GameModel game, GamePlayerResult? result,
-    IReadOnlyDictionary<int, TimeSpan>? recordedDurations = null)
+    IReadOnlyDictionary<int, TimeSpan>? stateSpans = null)
   {
-    TimeSpan recorded = TimeSpan.Zero;
-    if (recordedDurations != null)
-      recordedDurations.TryGetValue(game.Id, out recorded);
+    // Prefer MTGO's completed duration; a recording may begin partway through a game.
+    if (result?.Clock > TimeSpan.Zero) return result.Clock;
+
+    TimeSpan stateSpan = TimeSpan.Zero;
+    if (stateSpans != null)
+      stateSpans.TryGetValue(game.Id, out stateSpan);
     else if (game.States.Count >= 2)
-      recorded = game.States.Max(state => state.ClientTimestamp)
+      stateSpan = game.States.Max(state => state.ClientTimestamp)
         - game.States.Min(state => state.ClientTimestamp);
 
-    if (recorded > TimeSpan.Zero) return recorded;
-    return result?.Clock > TimeSpan.Zero ? result.Clock : TimeSpan.Zero;
+    return stateSpan > TimeSpan.Zero ? stateSpan : TimeSpan.Zero;
   }
 
   internal static string GetMatchResult(MatchModel match, string currentUser, bool isActive)

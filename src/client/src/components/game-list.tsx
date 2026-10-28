@@ -110,7 +110,8 @@ function ActivityFooter({ item, href, opening, onOpen }: {
   const action = href
     ? <Link to={href} aria-label={actionLabel} className={viewActionClassName}>{viewAction}</Link>
     : <button type="button" onClick={onOpen} disabled={opening} aria-label={`View ${item.name} in MTGO`} className={viewActionClassName}>{viewAction}</button>
-  if (match) return <Link to={`/history/${match.id}`} aria-label={`Open match against ${match.opponent ?? "unknown opponent"}, ${matchActionLabel}`}
+  const summaryId = item.courseId ?? (item.kind === "tournament" ? item.eventId : null)
+  if (match) return <Link to={`/history/${match.id}${summaryId ? `?eventSummary=${summaryId}` : ""}`} aria-label={`Open match against ${match.opponent ?? "unknown opponent"}, ${matchActionLabel}`}
     className="group/match-action flex min-w-0 items-center justify-between gap-3 rounded text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring">
     <span className="truncate text-sidebar-foreground/70 group-hover/match-action:text-sidebar-accent-foreground">
       {match.opponent ? `vs ${match.opponent}` : "Current match"}
@@ -139,7 +140,7 @@ function RegularEventCard({ item, opening, error, onOpen }: {
   onOpen: () => void
 }) {
   const href = item.kind === "tournament"
-    ? `/events/${item.eventId}`
+    ? item.status === "active" ? `/history/events/${item.eventId}` : `/events/${item.eventId}`
     : null
   const Icon = item.isDraft ? Calendar : Trophy
   const progress = item.status === "active" && item.roundNumber
@@ -174,6 +175,7 @@ function ActivityCard({ item }: { item: PersonalActivityDTO }) {
   const Icon = item.kind === "match" ? Swords : item.kind === "league" ? Target : item.kind === "tournament" ? Trophy : Calendar
   const regularEvent = item.kind === "tournament" || item.kind === "queue"
   const href = item.kind === "tournament" ? `/events/${item.eventId}`
+    : item.kind === "league" && item.courseId ? `/history/events/${item.courseId}`
     : item.kind === "match" && item.match ? `/history/${item.match.id}` : null
   const viewHref = item.match ? `/history/${item.match.id}` : href
   async function openInMTGO() {

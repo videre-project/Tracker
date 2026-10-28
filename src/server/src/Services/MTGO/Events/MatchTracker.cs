@@ -158,7 +158,7 @@ public class MatchTracker: IDisposable
     // Native result captures are delivered by the service independently of this
     // match's UI lifecycle, including results received after the window closes.
     GameAPIService.RemoveActiveMatch(m_match.Id);
-    GameAPIService.MatchResultUpdated?.Invoke(this, m_match.Id);
+    GameAPIService.MatchUpdated?.Invoke(this, m_match.Id);
     Dispose();
   }
 }

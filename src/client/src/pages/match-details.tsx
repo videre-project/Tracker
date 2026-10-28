@@ -10,7 +10,6 @@ import {
   type MatchDetailsData,
   type MatchDetailsGame,
   type ReplayData,
-  GAME_LOG_TYPE_ORDER as TYPE_ORDER,
 } from "@videreproject/ui"
 import { ArrowLeft } from "lucide-react"
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom"
@@ -22,10 +21,8 @@ import { useClientState } from "@/hooks/use-client-state"
 import { useDeckDetail, type DeckDetail } from "@/hooks/use-decks"
 import { useMatchDetails, loadOpponentArchetypeContext, updateOpponentArchetypes } from "@/hooks/use-match-details"
 import { OpponentClassificationNotice } from "@/components/opponent-classification-notice"
-import { useNDJSONStream } from "@/hooks/use-ndjson-stream"
 import type {
   GameDetailsDTO,
-  GameLogDTO,
   MatchDetailsDTO,
   OpponentArchetypeUpdate,
 } from "@/types/api"
@@ -158,17 +155,17 @@ function toSharedMatchDetails({
 export default function MatchDetails() {
   const location = useLocation()
   const [searchParams] = useSearchParams()
+  const routeMatchNumber = (location.state as { matchNumber?: number } | null)?.matchNumber
+  const eventSummaryId = searchParams.get("eventSummary")
   const { matchId } = useParams<{ matchId: string }>()
   const navigate = useNavigate()
   const parsedMatchId = matchId ? parseInt(matchId, 10) : null
-  const { data: fetchedData, loading, error } = useMatchDetails(
-    parsedMatchId, (location.state as { match?: MatchDetailsDTO } | null)?.match,
+  const { data, refresh, error, liveUpdateCount } = useMatchDetails(
+    parsedMatchId,
   )
   const { isReady: clientReady } = useClientState()
   const { getArtUrl, prefetchCards, isReady: cardArtReady } = useCardArtContext()
 
-  const [data, setData] = useState<MatchDetailsDTO | null>(fetchedData)
-  const [liveLogCount, setLiveLogCount] = useState(0)
   const [selectedGameKey, setSelectedGameKey] = useState<number | null>(() => {
     const gameId = Number(searchParams.get("gameId"))
     return Number.isSafeInteger(gameId) && gameId > 0 ? gameId : null
@@ -184,12 +181,6 @@ export default function MatchDetails() {
   }, [parsedMatchId])
   const loadOpponentContext = useCallback((signal: AbortSignal) =>
     loadOpponentArchetypeContext(parsedMatchId == null ? [] : [parsedMatchId], data?.format ? [data.format] : [], signal), [parsedMatchId, data?.format])
-
-  useEffect(() => {
-    if (!fetchedData) return
-    setData(fetchedData)
-    setLiveLogCount(0)
-  }, [fetchedData])
 
   useEffect(() => {
     if (!data) return
@@ -227,66 +218,6 @@ export default function MatchDetails() {
     return () => controller.abort()
   }, [clientReady, parsedMatchId, selectedGameKey])
 
-  const [refetchTrigger, setRefetchTrigger] = useState(0)
-  const unknownGameIdRef = useRef(new Set<number>())
-
-  useEffect(() => {
-    if (refetchTrigger === 0 || !parsedMatchId || !clientReady) return
-    fetch(getApiUrl(`/api/games/match/${parsedMatchId}`))
-      .then(response => response.json())
-      .then(json => {
-        setData(json)
-        unknownGameIdRef.current.clear()
-      })
-      .catch(console.error)
-  }, [refetchTrigger, parsedMatchId, clientReady])
-
-  const onSSEMessage = useCallback((dto: GameLogDTO) => {
-    setData(previous => {
-      if (!previous?.games) return previous
-      const gameIndex = previous.games.findIndex(game => game.id === (dto.gameId ?? 0))
-      if (gameIndex === -1) {
-        if (dto.gameId && !unknownGameIdRef.current.has(dto.gameId)) {
-          unknownGameIdRef.current.add(dto.gameId)
-          setTimeout(() => setRefetchTrigger(value => value + 1), 0)
-        }
-        return previous
-      }
-
-      return {
-        ...previous,
-        games: previous.games.map((game, index) => {
-          if (index !== gameIndex) return game
-          const logs = [...(game.logs ?? []), dto]
-          logs.sort((a, b) => {
-            const nonceA = a.nonce ?? 0
-            const nonceB = b.nonce ?? 0
-            if (nonceA !== 0 && nonceB !== 0 && nonceA === nonceB) {
-              const typeA = TYPE_ORDER[a.gameLogType] ?? 6
-              const typeB = TYPE_ORDER[b.gameLogType] ?? 6
-              if (typeA !== typeB) return typeA - typeB
-            }
-            const timestampA = a.timestamp ? new Date(a.timestamp).getTime() : 0
-            const timestampB = b.timestamp ? new Date(b.timestamp).getTime() : 0
-            return timestampA - timestampB
-          })
-          return { ...game, logs }
-        }),
-      }
-    })
-    setLiveLogCount(count => count + 1)
-  }, [])
-
-  useNDJSONStream<GameLogDTO>({
-    url: parsedMatchId ? getApiUrl(`/api/games/match/${parsedMatchId}/watch`) : "",
-    onMessage: onSSEMessage,
-    enabled: clientReady && parsedMatchId != null && data != null,
-    autoReconnect: true,
-    reconnectDelay: 2000,
-    maxReconnectAttempts: 0,
-    useConstantRetry: true,
-  })
-
   const { detail: deckDetail } = useDeckDetail(data?.deckRevisionId?.toString() ?? null)
   const previewCards = useMemo(() => getDeckPreviewCards(deckDetail), [deckDetail])
   const backgroundCard = previewCards[Math.floor(previewCards.length / 2)]
@@ -298,12 +229,12 @@ export default function MatchDetails() {
   }, [backgroundCard?.name, cardArtReady, deckBackgroundArtUrl, prefetchCards])
 
   const sharedMatch = useMemo(() => data ? toSharedMatchDetails({
-    match: data,
+    match: { ...data, matchNumber: data.matchNumber ?? routeMatchNumber },
     deckDetail,
     selectedGameKey,
     selectedGameReplay,
     deckBackgroundArtUrl,
-  }) : null, [data, deckBackgroundArtUrl, deckDetail, selectedGameKey, selectedGameReplay])
+  }) : null, [data, deckBackgroundArtUrl, deckDetail, selectedGameKey, selectedGameReplay, routeMatchNumber])
 
   if (error) {
     return (
@@ -313,13 +244,13 @@ export default function MatchDetails() {
           Back
         </Button>
         <div className="rounded-md bg-destructive/15 px-4 py-3 text-sm font-medium text-destructive">
-          Error loading match details: {error.message || String(error)}
+          Error loading match details: {error}
         </div>
       </div>
     )
   }
 
-  if (loading || !data || !sharedMatch) {
+  if (!data || !sharedMatch) {
     return (
       <div className="w-full space-y-4 px-4 pb-4 pt-1">
         <div className="flex items-start justify-between gap-3">
@@ -382,8 +313,9 @@ export default function MatchDetails() {
         className="flex-1"
         match={sharedMatch}
         initialGameId={selectedGameKey == null ? undefined : String(selectedGameKey)}
-        liveUpdateCount={liveLogCount}
-        onBack={() => navigate("/history")}
+        liveUpdateCount={liveUpdateCount}
+        onBack={() => navigate(eventSummaryId && /^\d+$/.test(eventSummaryId)
+          ? `/history/events/${eventSummaryId}?matchId=${parsedMatchId}&gameId=${selectedGameKey ?? ""}` : "/history")}
         onWatchLive={() => {
           if (parsedMatchId == null || latestGameKey == null) return
           navigate(`/history/${parsedMatchId}/game/${latestGameKey}/replay`, {
@@ -415,11 +347,7 @@ export default function MatchDetails() {
             const previous = await updateOpponentArchetypes([{ matchId: parsedMatchId, archetype, colors: nextColors }])
             if (archetypeMatchId.current !== parsedMatchId) return
             setArchetypeUndo(previous)
-            setData(previous => previous ? {
-              ...previous,
-              opponentDeckArchetype: archetype || null,
-              opponentDeckColors: nextColors,
-            } : previous)
+            refresh()
           } catch (requestError) {
             if (archetypeMatchId.current === parsedMatchId) setArchetypeError(requestError instanceof Error ? requestError.message : String(requestError))
             throw requestError
@@ -433,8 +361,7 @@ export default function MatchDetails() {
           setArchetypePending(true); setArchetypeError(null)
           void updateOpponentArchetypes(archetypeUndo).then(() => {
             if (archetypeMatchId.current !== parsedMatchId) return
-            const previous = archetypeUndo[0]
-            setData(data => data ? { ...data, opponentDeckArchetype: previous.archetype, opponentDeckColors: previous.colors } : data)
+            refresh()
             setArchetypeUndo(null)
           }).catch(error => { if (archetypeMatchId.current === parsedMatchId) setArchetypeError(error instanceof Error ? error.message : "Could not undo classification.") })
             .finally(() => { if (archetypeMatchId.current === parsedMatchId) setArchetypePending(false) })

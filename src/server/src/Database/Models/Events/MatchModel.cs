@@ -20,6 +20,11 @@ public class MatchModel
   public int EventId { get; set; }
   public EventModel Event { get; set; }
 
+  /// <summary>
+  /// The tournament round or overall league-course match number captured from MTGO.
+  /// </summary>
+  public int? MatchNumber { get; set; }
+
   public List<PlayerResult> PlayerResults { get; set; } = new();
   public Dictionary<int, List<CardEntry>> SideboardChanges { get; set; } = new();
 

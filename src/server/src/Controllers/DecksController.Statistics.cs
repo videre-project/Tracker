@@ -50,13 +50,13 @@ public partial class DecksController
 
     var matches = await query.Include(match => match.Games).ThenInclude(game => game.Players)
       .AsSplitQuery().ToListAsync(cancellationToken);
-    var games = matches.SelectMany(match => match.Games.OrderBy(game => game.Id)
-        .Where((_, index) => gameScope switch
+    var games = matches.SelectMany(match => match.Games)
+        .Where(game => gameScope switch
         {
-          "one" => index == 0,
-          "postboard" => index > 0,
+          "one" => game.GameNumber == 1,
+          "postboard" => game.GameNumber > 1,
           _ => true,
-        }))
+        })
       .Where(game => game.GamePlayerResults.Any(result =>
         string.Equals(result.Player, account.Username, StringComparison.OrdinalIgnoreCase) &&
         result.Result is GameResult.Win or GameResult.Loss))
@@ -106,16 +106,15 @@ public partial class DecksController
     foreach (var match in matches)
     {
       if (match.Event.DeckRevisionId is not long id || !revisions.TryGetValue(id, out var revision)) continue;
-      var ordered = match.Games.OrderBy(game => game.Id).ToList();
-      foreach (var game in ordered.Where(game => gameIds.Contains(game.Id)))
+      foreach (var game in match.Games.Where(game => gameIds.Contains(game.Id)))
       {
         // Each game's sideboard changes are relative to the registered list.
         // Missing changes mean the starting list is unknown; an empty list
         // means the registered mainboard was kept.
-        if (game != ordered[0] && !match.SideboardChanges.ContainsKey(game.Id)) continue;
+        if (game.GameNumber != 1 && !match.SideboardChanges.ContainsKey(game.Id)) continue;
         var quantities = revision.Mainboard.GroupBy(card => card.name.Trim(), StringComparer.OrdinalIgnoreCase)
           .ToDictionary(group => group.Key, group => group.Sum(card => card.quantity), StringComparer.OrdinalIgnoreCase);
-        if (game != ordered[0])
+        if (game.GameNumber != 1)
         {
           foreach (var change in match.SideboardChanges[game.Id])
             quantities[change.name.Trim()] = quantities.GetValueOrDefault(change.name.Trim()) + change.quantity;

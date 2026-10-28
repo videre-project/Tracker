@@ -37,6 +37,11 @@ public class EventModel
   public DateTime? EndTime { get; set; }
 
   /// <summary>
+  /// Scheduled matches for this run, including known playoffs. Absent in older recordings.
+  /// </summary>
+  public int? TotalMatches { get; set; }
+
+  /// <summary>
   /// Reference to Collection.db/CardGroupingRevisions.Id.
   /// </summary>
   /// <remarks>

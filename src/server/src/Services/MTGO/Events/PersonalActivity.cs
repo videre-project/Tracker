@@ -17,13 +17,12 @@ namespace MTGOTracker.Services.MTGO.Events;
 
 internal static class PersonalActivity
 {
-  // JoinedEvents is personal participation; the public tournament catalog and
-  // spectated matches must never populate this list.
+  // Only joined events belong in the sidebar; exclude public listings and spectated matches.
   internal static PersonalActivityDTO[] Read(string username)
   {
     var activities = new Dictionary<string, PersonalActivityDTO>();
-    var standalone = new List<Match>();
-    var nestedMatches = new HashSet<int>();
+    var standaloneMatches = new List<Match>();
+    var eventMatchIds = new HashSet<int>();
     var events = EventManager.JoinedEvents.Cast<Event>()
       .Concat(LeagueManager.OpenLeagues.Cast<Event>()).ToArray();
     foreach (var playerEvent in events)
@@ -34,7 +33,7 @@ internal static class PersonalActivity
             playerEvent.IsRemoved || playerEvent.IsEliminated) continue;
         if (playerEvent is Match match)
         {
-          standalone.Add(match);
+          standaloneMatches.Add(match);
           continue;
         }
         PersonalActivityDTO? activity = playerEvent switch
@@ -51,7 +50,7 @@ internal static class PersonalActivity
         };
         if (activity == null) continue;
         activities[activity.Id] = activity;
-        if (activity.Match != null) nestedMatches.Add(activity.Match.Id);
+        if (activity.Match != null) eventMatchIds.Add(activity.Match.Id);
       }
       catch (Exception exception)
       {
@@ -59,11 +58,11 @@ internal static class PersonalActivity
         Log.Debug(exception, "Could not read a joined event for the activity sidebar");
       }
     }
-    foreach (var match in standalone)
+    foreach (var match in standaloneMatches)
     {
       try
       {
-        if (nestedMatches.Contains(match.Id)) continue;
+        if (eventMatchIds.Contains(match.Id)) continue;
         var currentMatch = ReadMatch(match, username);
         if (currentMatch == null) continue;
         string id = $"match-{match.Id}";
@@ -81,11 +80,16 @@ internal static class PersonalActivity
       .ThenBy(activity => activity.StartTime).ThenBy(activity => activity.Id).ToArray();
   }
 
-  private static PersonalActivityDTO? ReadTournament(Tournament tournament, string username)
+  internal static PersonalActivityDTO? ReadTournament(Tournament tournament, string username,
+    bool includeCompleted = false)
   {
     var state = tournament.State;
-    if (state == TournamentState.Finished || tournament.IsCompleted) return null;
+    bool completed = state == TournamentState.Finished || tournament.IsCompleted;
+    if (completed && !includeCompleted) return null;
     bool registered = state is TournamentState.WaitingToStart or TournamentState.NotSet;
+    string status = "active";
+    if (completed) status = "completed";
+    else if (registered) status = "registered";
     string label = state switch
     {
       TournamentState.Drafting => "Drafting",
@@ -94,10 +98,18 @@ internal static class PersonalActivity
       TournamentState.WaitingForFirstRoundToStart => "Waiting for round 1",
       TournamentState.RoundInProgress => tournament.HasBye ? "Bye this round" : "Round in progress",
       TournamentState.BetweenRounds => "Between rounds",
-      _ => registered ? "Registered" : "Starting",
+      _ when completed => "Finished",
+      _ when registered => "Registered",
+      _ => "Starting",
+    };
+    int completedRounds = state switch
+    {
+      TournamentState.BetweenRounds => tournament.RoundNumber,
+      TournamentState.RoundInProgress => Math.Max(0, tournament.RoundNumber - 1),
+      _ => 0,
     };
     return new($"tournament-{tournament.Id}", tournament.Id, "tournament",
-      tournament.Description, tournament.Format.ToString(), registered ? "registered" : "active",
+      tournament.Description, tournament.Format.ToString(), status,
       label, tournament.StartTime,
       registered ? null : ReadOptional(() => (DateTime?)tournament.RoundEndTime),
       tournament.RoundNumber, tournament.TotalRounds,
@@ -108,20 +120,24 @@ internal static class PersonalActivity
       IsDraft: ReadOptional(() => tournament.EventStructure.IsDraft),
       HasPlayoffs: ReadOptional(() => tournament.HasPlayoffs),
       InPlayoffs: ReadOptional(() => tournament.InPlayoffs),
-      CompletedRounds: state == TournamentState.BetweenRounds ? tournament.RoundNumber
-        : state == TournamentState.RoundInProgress ? Math.Max(0, tournament.RoundNumber - 1) : 0,
+      CompletedRounds: completedRounds,
       RoundInProgress: state == TournamentState.RoundInProgress,
       RoundClock: state == TournamentState.RoundInProgress ? ReadOptional(() => ReadRoundClock(tournament)) : null);
   }
 
-  private static PersonalActivityDTO? ReadLeague(League league, string username)
+  internal static PersonalActivityDTO? ReadLeague(League league, string username,
+    bool includeCompleted = false)
   {
-    if (league.CourseId <= 0 || league.IsCompleted) return null;
+    if (league.CourseId <= 0 || league.IsCompleted && !includeCompleted) return null;
     var match = ReadMatch(league.ActiveMatch, username);
-    if (league.MatchesRemaining <= 0 && match == null) return null;
+    bool completed = league.MatchesRemaining <= 0 && match == null;
+    if (completed && !includeCompleted) return null;
+    string label = "Ready for next match";
+    if (completed) label = "Finished";
+    else if (league.IsWaitingInMatchQueue) label = "Finding a match";
+    else if (league.IsPaused) label = "Paused";
     return new($"league-{league.Id}-{league.CourseId}", league.Id, "league", league.Name,
-      league.Format.ToString(), "active", league.IsWaitingInMatchQueue ? "Finding a match"
-        : league.IsPaused ? "Paused" : "Ready for next match",
+      league.Format.ToString(), completed ? "completed" : "active", label,
       TotalRounds: league.TotalMatches, Wins: league.Wins, Losses: league.Losses,
       DeckName: ReadOptional(() => league.ActiveDeck?.Name),
       Match: match, NetDeckId: ReadOptional(() => league.ActiveDeck?.NetDeckId), CourseId: league.CourseId);
@@ -136,11 +152,12 @@ internal static class PersonalActivity
       return null;
     string? opponent = match.Players.Select(player => player.Name)
       .FirstOrDefault(name => !string.Equals(name, username, StringComparison.OrdinalIgnoreCase));
+    string status = "Waiting for game";
+    if (state.HasFlag(MatchState.Sideboarding)) status = "Sideboarding";
+    else if (state.HasFlag(MatchState.GameStarted) && !state.HasFlag(MatchState.GameCompleted))
+      status = "Game in progress";
     int games = match.Games.Count;
-    return new(match.Id, opponent, games > 0 ? games : null,
-      state.HasFlag(MatchState.Sideboarding) ? "Sideboarding"
-        : state.HasFlag(MatchState.GameStarted) && !state.HasFlag(MatchState.GameCompleted)
-          ? "Game in progress" : "Waiting for game",
+    return new(match.Id, opponent, games > 0 ? games : null, status,
       ReadOptional(() => ReadMatchClock(match, state)));
   }
 

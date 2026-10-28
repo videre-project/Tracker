@@ -176,11 +176,11 @@ public partial class GamesController : APIController
     var deckRevisions = new Dictionary<long, DeckRevisionView>();
     await LoadDeckRevisionsAsync(matches.Select(match => match.Event));
 
-    var recordedDurations = await ReadGameDurationsAsync(
+    var stateSpans = await ReadGameStateSpansAsync(
       context, matches.SelectMany(match => match.Games).Select(game => game.Id));
 
     var matchDTOs = matches.Select(match => ToMatchHistory(match, currentUser, GetDeck(match.Event),
-      GameAPIService.ActiveMatchIds.Contains(match.Id), recordedDurations)).ToList();
+      GameAPIService.ActiveMatchIds.Contains(match.Id), stateSpans)).ToList();
     if (includeOpponentCards)
     {
       var cards = await ReadOpponentCardsAsync(matches.Select(match => match.Id), currentUser, cancellationToken);
@@ -209,14 +209,14 @@ public partial class GamesController : APIController
         await LoadDeckRevisionsAsync(
           activeMatches.Select(match => match.Event));
 
-        var activeDurations = await ReadGameDurationsAsync(
+        var activeStateSpans = await ReadGameStateSpansAsync(
           context, activeMatches.SelectMany(match => match.Games).Select(game => game.Id));
-        foreach (var (id, duration) in activeDurations) recordedDurations[id] = duration;
+        foreach (var (id, span) in activeStateSpans) stateSpans[id] = span;
         matches.AddRange(activeMatches);
 
         foreach (var match in activeMatches)
         {
-          matchDTOs.Add(ToMatchHistory(match, currentUser, GetDeck(match.Event), true, activeDurations));
+          matchDTOs.Add(ToMatchHistory(match, currentUser, GetDeck(match.Event), true, activeStateSpans));
           existingEventIds.Add(match.EventId);
         }
       }
@@ -291,7 +291,7 @@ public partial class GamesController : APIController
         var totalDuration = matches.Where(match => match.EventId == group.Key)
           .SelectMany(match => match.Games)
           .Aggregate(TimeSpan.Zero, (total, game) => total + GetGameDuration(game,
-            game.GamePlayerResults.FirstOrDefault(result => string.Equals(result.Player, currentUser, StringComparison.OrdinalIgnoreCase)), recordedDurations));
+            game.GamePlayerResults.FirstOrDefault(result => string.Equals(result.Player, currentUser, StringComparison.OrdinalIgnoreCase)), stateSpans));
 
         parentRow = new MatchHistoryDTO
         {
@@ -444,25 +444,8 @@ public partial class GamesController : APIController
       }
       matchDuration += dur;
 
-      var gameDTO = new GameDetailsDTO
-      {
-        Id = game.Id,
-        GameNumber = match.Games.IndexOf(game) + 1,
-        Result = gameResult?.Result.ToString() ?? "Unknown",
-        Duration = FormatDuration(dur),
-        PlayDraw = ResolvePlayDraw(game, currentUser, gameResult?.PlayDraw),
-        SideboardChanges = match.SideboardChanges
-          .GetValueOrDefault(game.Id, [])
-          .Select(change => new SideboardChangeDTO
-          {
-            CatalogId = change.catalogId,
-            Name = change.name,
-            Quantity = change.quantity
-          })
-          .ToList(),
-        Logs = BuildGameLogs(game)
-      };
-      gameDetails.Add(gameDTO);
+      gameDetails.Add(ToGameDetails(game, match, currentUser,
+        match.Games.IndexOf(game) + 1, includeLogs: true));
     }
 
     if (string.IsNullOrEmpty(match.OpponentDeckArchetype))
@@ -474,6 +457,7 @@ public partial class GamesController : APIController
     {
       Id = match.Id,
       EventId = match.EventId,
+      MatchNumber = match.MatchNumber,
       EventName = match.Event.Description,
       Format = match.Event.Format,
       StartTime = match.Event.StartTime,
@@ -794,9 +778,9 @@ public partial class GamesController : APIController
       formatType: formatType, legacyFormats: legacyFormats)
       .Include(match => match.Games).ThenInclude(game => game.Players)
       .AsSplitQuery().ToListAsync();
-    await ReadPlayDrawAsync(context, matches.Select(match => match.Games.MinBy(game => game.Id))
-      .OfType<GameModel>(), currentUser);
-    var recordedDurations = await ReadGameDurationsAsync(context, matches.SelectMany(match => match.Games).Select(game => game.Id));
+    await ReadPlayDrawAsync(context, matches.SelectMany(match => match.Games)
+      .Where(game => game.GameNumber == 1), currentUser);
+    var stateSpans = await ReadGameStateSpansAsync(context, matches.SelectMany(match => match.Games).Select(game => game.Id));
 
     // Calculate stats in memory
     int totalMatches = matches.Count;
@@ -834,8 +818,8 @@ public partial class GamesController : APIController
         ties++;
       }
 
-      // Play/Draw (Check first game)
-      var firstGame = match.Games.OrderBy(g => g.Id).FirstOrDefault();
+      // Match play/draw comes from Game 1, which may be absent from a partial recording.
+      var firstGame = match.Games.FirstOrDefault(game => game.GameNumber == 1);
       if (firstGame != null)
       {
         var gameResult = firstGame.GamePlayerResults.FirstOrDefault(p => string.Equals(p.Player, currentUser, StringComparison.OrdinalIgnoreCase));
@@ -865,7 +849,7 @@ public partial class GamesController : APIController
         var gameResult = game.GamePlayerResults.FirstOrDefault(p => string.Equals(p.Player, currentUser, StringComparison.OrdinalIgnoreCase));
         if (gameResult != null)
         {
-          matchDuration += GetGameDuration(game, gameResult, recordedDurations);
+          matchDuration += GetGameDuration(game, gameResult, stateSpans);
         }
       }
 

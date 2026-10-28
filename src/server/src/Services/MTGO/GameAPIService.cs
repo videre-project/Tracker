@@ -82,16 +82,21 @@ public static class GameAPIService
   public static EventHandler<int>? EventCreated;
 
   /// <summary>
+  /// Native league history changed; the event argument is the course ID.
+  /// </summary>
+  public static EventHandler<int>? LeagueHistoryUpdated;
+
+  /// <summary>
   /// An event that is raised when a match is first tracked.
   /// The event argument is the match ID.
   /// </summary>
   public static EventHandler<int>? MatchCreated;
 
   /// <summary>
-  /// An event that is raised when game or match results are persisted to the database.
+  /// An event that is raised after a tracked match gains a game or its saved results change.
   /// The event argument is the match ID.
   /// </summary>
-  public static EventHandler<int>? MatchResultUpdated;
+  public static EventHandler<int>? MatchUpdated;
 
   private static volatile GameService? s_currentInstance;
 
@@ -111,6 +116,9 @@ public static class GameAPIService
 
   internal static void RemoveActiveEvent(int eventId) =>
     s_currentInstance?._activeEvents.TryRemove(eventId, out _);
+
+  internal static Event? GetActiveEvent(int eventId) =>
+    s_currentInstance?._activeEvents.GetValueOrDefault(eventId);
 
   internal static void RemoveActiveMatch(int matchId) =>
     s_currentInstance?._activeMatches.TryRemove(matchId, out _);
@@ -149,6 +157,7 @@ public static class GameAPIService
 
   private static Action<Tournament, TournamentRound>? s_roundChangedHandler;
   private static Action<Tournament, TournamentState>? s_stateChangedHandler;
+  private static Action<League>? s_leagueHistoryChangedHandler;
 
   private static bool CacheDiscoveredTournament(Tournament tournament)
   {
@@ -456,6 +465,7 @@ public static class GameAPIService
         recordReplay: serviceProvider.GetRequiredService<SettingsService>().Startup.RecordReplays);
       _gameTrackers.TryAdd(game.Id, tracker);
       _context.AddGame(game);
+      MatchUpdated?.Invoke(this, matchId.Value);
       if (game.Status == GameStatus.Finished)
       {
         SaveGameResults(game.Id, game.Results);
@@ -539,7 +549,7 @@ public static class GameAPIService
     {
       if (results.Count == 0) return;
       if (!_dbWriter.TryUpdateGameResults(gameId, results, out int matchId)) return;
-      MatchResultUpdated?.Invoke(this, matchId);
+      MatchUpdated?.Invoke(this, matchId);
       Log.Debug("Updated game results for {Id}: {Results}", gameId,
         System.Text.Json.JsonSerializer.Serialize(results));
     }
@@ -562,7 +572,7 @@ public static class GameAPIService
       if (!_matchTrackers.ContainsKey(matchId) || results.Count == 0) return;
       if (!_dbWriter.TryUpdateMatchResults(matchId, results)) return;
       RemoveActiveMatch(matchId);
-      MatchResultUpdated?.Invoke(this, matchId);
+      MatchUpdated?.Invoke(this, matchId);
       Log.Debug("Updated match results for {Id}: {Results}", matchId,
         System.Text.Json.JsonSerializer.Serialize(results));
     }
@@ -574,7 +584,7 @@ public static class GameAPIService
         _activeMatches.TryRemove(match.Id, out _);
         if (_matchTrackers.TryGetValue(match.Id, out var matchTracker))
           matchTracker.OnRemoved();
-        MatchResultUpdated?.Invoke(this, match.Id);
+        MatchUpdated?.Invoke(this, match.Id);
       }
 
       int eventId = e.GetDatabaseId();
@@ -647,6 +657,8 @@ public static class GameAPIService
             }
           }
         };
+        s_leagueHistoryChangedHandler = league => LeagueHistoryUpdated?.Invoke(null, league.CourseId);
+        League.GameHistoryChanged += s_leagueHistoryChangedHandler;
         Tournament.StandingsChanged += s_standingsChangedHandler;
         Tournament.RoundChanged += s_roundChangedHandler;
         Tournament.StateChanged += s_stateChangedHandler;
@@ -746,6 +758,7 @@ public static class GameAPIService
       Tournament.StandingsChanged.EnsureInitialize();
       Tournament.RoundChanged.EnsureInitialize();
       Tournament.StateChanged.EnsureInitialize();
+      League.GameHistoryChanged.EnsureInitialize();
     }
 
     private void ResetService()
@@ -790,6 +803,12 @@ public static class GameAPIService
       {
         Try(() => Tournament.StateChanged -= s_stateChangedHandler);
         s_stateChangedHandler = null;
+      }
+
+      if (s_leagueHistoryChangedHandler != null)
+      {
+        Try(() => League.GameHistoryChanged -= s_leagueHistoryChangedHandler);
+        s_leagueHistoryChangedHandler = null;
       }
 
       // Clear discovery subscriptions
@@ -872,7 +891,7 @@ public static class GameAPIService
     private Task ProcessLogsAsync(CancellationToken stoppingToken)
     {
       // GameTracker writes structured data to the DB directly.
-      // This loop processes the notification stream for SSE clients.
+      // Forward log notifications to subscribers.
       foreach (GameLogEntry entry in _eventLog.GetConsumingEnumerable(stoppingToken))
       {
         try

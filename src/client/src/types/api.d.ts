@@ -2502,8 +2502,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Combines recorded results with live tournament pairings when available. With no player specified, selects the signed-in
-         *     participant or the first player in the standings.
+         * Combines MTGO tournament or league-course results with local recordings.
+         *     With no player specified, reads the signed-in participant's history.
          */
         get: {
             parameters: {
@@ -2513,7 +2513,7 @@ export interface paths {
                 };
                 header?: never;
                 path: {
-                    /** @description Tournament ID. */
+                    /** @description Tournament ID or league course ID. */
                     id: number;
                 };
                 cookie?: never;
@@ -2526,9 +2526,9 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "text/plain": TournamentPlayerHistoryDTO;
-                        "application/json": TournamentPlayerHistoryDTO;
-                        "text/json": TournamentPlayerHistoryDTO;
+                        "text/plain": EventPlayerHistoryDTO;
+                        "application/json": EventPlayerHistoryDTO;
+                        "text/json": EventPlayerHistoryDTO;
                     };
                 };
                 /** @description Not Found */
@@ -3274,6 +3274,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** The IDs of events whose match history has changed for the signed-in player. */
         get: {
             parameters: {
                 query?: never;
@@ -3289,8 +3290,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": MatchHistoryDTO[];
-                        "application/x-ndjson": MatchHistoryDTO[];
+                        "application/x-ndjson": number[];
                     };
                 };
                 /** @description Service Unavailable */
@@ -4997,6 +4997,43 @@ export interface components {
             remainingSeconds?: number;
             running?: boolean;
         };
+        /**
+         * @description A pairing viewed from the selected player's perspective. Record is absent
+         *     until game results are available; round is absent in older recordings; byes do not imply a played game score.
+         */
+        "MTGOTracker.Controllers.Models.Events.EventMatchDTO": {
+            /** Format: int32 */
+            id?: number | null;
+            /** Format: int32 */
+            round?: number | null;
+            opponent?: string | null;
+            record?: string | null;
+            result?: EventMatchResult;
+            isRecorded?: boolean;
+            games?: GameDetailsDTO[] | null;
+            opponentDeckArchetype?: string | null;
+            opponentDeckColors?: string[] | null;
+            canEditOpponent?: boolean;
+        };
+        /**
+         * @description The selected player's result, including pairings awaiting a final result.
+         * @enum {string}
+         */
+        "MTGOTracker.Controllers.Models.Events.EventMatchResult": "win" | "loss" | "draw" | "bye" | "in-progress" | "pending" | "nullified";
+        /** @description An event participant's results from MTGO and Tracker recordings. */
+        "MTGOTracker.Controllers.Models.Events.EventPlayerHistoryDTO": {
+            player?: string;
+            matches?: EventMatchDTO[];
+            eventName?: string | null;
+            format?: string | null;
+            /** Format: date-time */
+            startTime?: string | null;
+            /** Format: date-time */
+            endTime?: string | null;
+            activity?: PersonalActivityDTO;
+            /** Format: int32 */
+            totalMatches?: number | null;
+        };
         "MTGOTracker.Controllers.Models.Events.IEventStructure": {
             readonly name?: string;
             readonly isConstructed?: boolean;
@@ -5113,36 +5150,6 @@ export interface components {
             status?: string;
             clock?: ActivityClockDTO;
         };
-        /**
-         * @description A pairing viewed from the selected player's perspective. Record is absent
-         *     until game results are available; round is absent in older recordings; byes do not imply a played game score.
-         */
-        "MTGOTracker.Controllers.Models.Events.TournamentMatchDTO": {
-            /** Format: int32 */
-            id?: number | null;
-            /** Format: int32 */
-            round?: number | null;
-            opponent?: string | null;
-            record?: string | null;
-            result?: TournamentMatchResult;
-            isRecorded?: boolean;
-        };
-        /**
-         * @description The selected player's result, including pairings awaiting a final result.
-         * @enum {string}
-         */
-        "MTGOTracker.Controllers.Models.Events.TournamentMatchResult": "win" | "loss" | "draw" | "bye" | "in-progress" | "pending";
-        /** @description A selected tournament participant and the match results available from recordings and MTGO. */
-        "MTGOTracker.Controllers.Models.Events.TournamentPlayerHistoryDTO": {
-            player?: string;
-            matches?: TournamentMatchDTO[];
-            eventName?: string | null;
-            format?: string | null;
-            /** Format: date-time */
-            startTime?: string | null;
-            /** Format: date-time */
-            endTime?: string | null;
-        };
         "MTGOTracker.Controllers.Models.Games.DashboardStatsDTO": {
             /** Format: double */
             overallWinrate?: number;
@@ -5247,6 +5254,11 @@ export interface components {
             /** Format: int32 */
             eventId?: number;
             eventName: string;
+            /**
+             * Format: int32
+             * @description The one-based match position in the event or league course, when known.
+             */
+            matchNumber?: number | null;
             format: string;
             /** Format: date-time */
             startTime?: string;
@@ -5847,6 +5859,9 @@ export type MtgoTrackerControllersModelsDecksImportDeckResponse = ImportDeckResp
 export type MtgoTrackerControllersModelsDecksSideboardGuideData = SideboardGuideData;
 export type MtgoTrackerControllersModelsDecksSortableCardEntry = SortableCardEntry;
 export type MtgoTrackerControllersModelsEventsActivityClockDto = ActivityClockDTO;
+export type MtgoTrackerControllersModelsEventsEventMatchDto = EventMatchDTO;
+export type MtgoTrackerControllersModelsEventsEventMatchResult = EventMatchResult;
+export type MtgoTrackerControllersModelsEventsEventPlayerHistoryDto = EventPlayerHistoryDTO;
 export type MtgoTrackerControllersModelsEventsIEventStructure = IEventStructure;
 export type MtgoTrackerControllersModelsEventsIStandingResult = IStandingResult;
 export type MtgoTrackerControllersModelsEventsITournament = ITournament;
@@ -5854,9 +5869,6 @@ export type MtgoTrackerControllersModelsEventsITournamentPlayerUpdate = ITournam
 export type MtgoTrackerControllersModelsEventsITournamentStateUpdate = ITournamentStateUpdate;
 export type MtgoTrackerControllersModelsEventsPersonalActivityDto = PersonalActivityDTO;
 export type MtgoTrackerControllersModelsEventsPersonalMatchDto = PersonalMatchDTO;
-export type MtgoTrackerControllersModelsEventsTournamentMatchDto = TournamentMatchDTO;
-export type MtgoTrackerControllersModelsEventsTournamentMatchResult = TournamentMatchResult;
-export type MtgoTrackerControllersModelsEventsTournamentPlayerHistoryDto = TournamentPlayerHistoryDTO;
 export type MtgoTrackerControllersModelsGamesDashboardStatsDto = DashboardStatsDTO;
 export type MtgoTrackerControllersModelsGamesDeckCardStatisticsData = DeckCardStatisticsData;
 export type MtgoTrackerControllersModelsGamesDeckStatisticsData = DeckStatisticsData;
@@ -5984,6 +5996,9 @@ export type ImportDeckResponse = components['schemas']['MTGOTracker.Controllers.
 export type SideboardGuideData = components['schemas']['MTGOTracker.Controllers.Models.Decks.SideboardGuideData'];
 export type SortableCardEntry = components['schemas']['MTGOTracker.Controllers.Models.Decks.SortableCardEntry'];
 export type ActivityClockDTO = components['schemas']['MTGOTracker.Controllers.Models.Events.ActivityClockDTO'];
+export type EventMatchDTO = components['schemas']['MTGOTracker.Controllers.Models.Events.EventMatchDTO'];
+export type EventMatchResult = components['schemas']['MTGOTracker.Controllers.Models.Events.EventMatchResult'];
+export type EventPlayerHistoryDTO = components['schemas']['MTGOTracker.Controllers.Models.Events.EventPlayerHistoryDTO'];
 export type IEventStructure = components['schemas']['MTGOTracker.Controllers.Models.Events.IEventStructure'];
 export type IStandingResult = components['schemas']['MTGOTracker.Controllers.Models.Events.IStandingResult'];
 export type ITournament = components['schemas']['MTGOTracker.Controllers.Models.Events.ITournament'];
@@ -5991,9 +6006,6 @@ export type ITournamentPlayerUpdate = components['schemas']['MTGOTracker.Control
 export type ITournamentStateUpdate = components['schemas']['MTGOTracker.Controllers.Models.Events.ITournamentStateUpdate'];
 export type PersonalActivityDTO = components['schemas']['MTGOTracker.Controllers.Models.Events.PersonalActivityDTO'];
 export type PersonalMatchDTO = components['schemas']['MTGOTracker.Controllers.Models.Events.PersonalMatchDTO'];
-export type TournamentMatchDTO = components['schemas']['MTGOTracker.Controllers.Models.Events.TournamentMatchDTO'];
-export type TournamentMatchResult = components['schemas']['MTGOTracker.Controllers.Models.Events.TournamentMatchResult'];
-export type TournamentPlayerHistoryDTO = components['schemas']['MTGOTracker.Controllers.Models.Events.TournamentPlayerHistoryDTO'];
 export type DashboardStatsDTO = components['schemas']['MTGOTracker.Controllers.Models.Games.DashboardStatsDTO'];
 export type DeckCardStatisticsData = components['schemas']['MTGOTracker.Controllers.Models.Games.DeckCardStatisticsData'];
 export type DeckStatisticsData = components['schemas']['MTGOTracker.Controllers.Models.Games.DeckStatisticsData'];

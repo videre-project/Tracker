@@ -6,7 +6,7 @@
 import { useApplicationSettings } from "@/hooks/use-application-settings"
 import { useState, useEffect, useCallback, useRef } from "react"
 import { createPortal } from "react-dom"
-import { useParams, useNavigate, useLocation } from "react-router-dom"
+import { useParams, useNavigate, useLocation, useSearchParams } from "react-router-dom"
 import { getApiUrl } from "@/utils/api-config"
 import { readReplayData } from "@/utils/replay-data"
 import { useClientState } from "@/hooks/use-client-state"
@@ -37,11 +37,16 @@ export default function GameReplay() {
   }>()
   const navigate = useNavigate()
   const location = useLocation()
+  const [searchParams] = useSearchParams()
   const { isReady: clientReady } = useClientState()
 
   const parsedMatchId = matchId ? parseInt(matchId, 10) : null
   const gameId = gameIdParam ? parseInt(gameIdParam, 10) : null
-  const parentPath = `/history/${matchId}${gameId != null ? `?gameId=${gameId}` : ""}`
+  const eventSummaryId = searchParams.get("eventSummary")
+  const fromSummary = Boolean(eventSummaryId && /^\d+$/.test(eventSummaryId))
+  const parentPath = fromSummary
+    ? `/history/events/${eventSummaryId}?matchId=${matchId}&gameId=${gameId ?? ""}`
+    : `/history/${matchId}${gameId != null ? `?gameId=${gameId}` : ""}`
   const routeState = location.state as ReplayRouteState | null
   const initialEventId = typeof routeState?.eventId === "number" ? routeState.eventId : null
   const initialGameNumber = typeof routeState?.gameNumber === "number" ? routeState.gameNumber : null
@@ -224,7 +229,7 @@ export default function GameReplay() {
         size="icon"
         className="h-8 w-8 shrink-0 -translate-y-[0.5px]"
         onClick={navigateToParent}
-        aria-label="Back to match"
+        aria-label={fromSummary ? "Back to run summary" : "Back to match"}
       >
         <ArrowLeft className="h-5 w-5" />
       </Button>
@@ -263,7 +268,7 @@ export default function GameReplay() {
               Failed to load replay: {error}
             </span>
             <Button variant="ghost" size="sm" onClick={navigateToParent}>
-              <ArrowLeft className="mr-2 h-4 w-4" /> Back to match
+              <ArrowLeft className="mr-2 h-4 w-4" /> {fromSummary ? "Back to run summary" : "Back to match"}
             </Button>
           </div>
           <div className="shrink-0 h-[68px] border-t border-sidebar-border/60 bg-card/50" />

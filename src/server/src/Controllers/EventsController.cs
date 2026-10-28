@@ -18,15 +18,20 @@ using Microsoft.EntityFrameworkCore;
 using MTGOSDK.API.Play;
 using MTGOSDK.API.Play.Tournaments;
 using MTGOSDK.API.Play.Games;
+using MTGOSDK.API.Play.Leagues;
+using GameResult = MTGOSDK.API.Play.Games.GameResult;
 using MTGOSDK.Core.Logging;
 using static MTGOSDK.Core.Reflection.DLRWrapper;
 
 using MTGOTracker.Controllers.Base;
 using MTGOTracker.Controllers.Models.Events;
+using MTGOTracker.Controllers.Models.Decks;
 using MTGOTracker.Database;
 using static MTGOTracker.Services.MTGO.Events.MatchHistorySerialization;
 using MTGOTracker.Services.MTGO;
 using MTGOTracker.Services.MTGO.Events;
+using MTGOTracker.Services.MTGO.Collection;
+using MTGOTracker.Database.Models.Events;
 
 
 using static MTGOTracker.Services.MTGO.Events.TournamentSerialization;
@@ -41,6 +46,7 @@ public class EventsController(
   ClientStateMonitor clientMonitor,
   IClientCommandGateway commandGateway,
   IClientAPIProvider clientProvider,
+  CollectionDeckService decks,
   EventContext context) : APIController
 {
   /// <summary>
@@ -420,45 +426,62 @@ public class EventsController(
   }
 
   /// <summary>
-  /// Combines recorded results with live tournament pairings when available. With no player specified, selects the signed-in
-  /// participant or the first player in the standings.
+  /// Combines MTGO tournament or league-course results with local recordings.
+  /// With no player specified, reads the signed-in participant's history.
   /// </summary>
-  /// <param name="id">Tournament ID.</param>
+  /// <param name="id">Tournament ID or league course ID.</param>
   /// <param name="player">Exact player name, or null for the default selection.</param>
-  /// <returns>The selected player and their available tournament match history.</returns>
+  /// <returns>The participant's results, recording availability, and their own event metadata.</returns>
   [HttpGet("{id}")]
-  [ProducesResponseType(typeof(TournamentPlayerHistoryDTO), StatusCodes.Status200OK)]
+  [ProducesResponseType(typeof(EventPlayerHistoryDTO), StatusCodes.Status200OK)]
   [ProducesResponseType(StatusCodes.Status404NotFound)]
   public async Task<IActionResult> GetPlayerMatches(int id, [FromQuery] string? player = null)
   {
+    var token = HttpContext.RequestAborted;
+    var user = clientProvider.CurrentUser;
+    player ??= user?.Username;
     var recordedEvent = await context.Events.AsNoTracking()
-      .FirstOrDefaultAsync(item => item.Id == id, HttpContext.RequestAborted);
+      .FirstOrDefaultAsync(item => item.Id == id, token);
     var recorded = await context.Matches.AsNoTracking().Where(match => match.EventId == id)
       .Include(match => match.Games).ThenInclude(game => game.Players)
       .Select(match => new { Match = match, IsRecorded = match.Games.Any(game => game.States.Any()) })
-      .AsSplitQuery().ToListAsync(HttpContext.RequestAborted);
+      .AsSplitQuery().ToListAsync(token);
 
-    Tournament? tournament = null;
+    Event? liveEvent = null;
     if (clientMonitor.IsClientReady)
     {
-      try { tournament = EventManager.GetEvent(id) as Tournament; }
-      catch (KeyNotFoundException) { }
-      tournament ??= GameAPIService.DiscoveredTournaments.GetValueOrDefault(id);
+      liveEvent = GameAPIService.GetActiveEvent(id);
+      if (liveEvent == null && recordedEvent?.Type != EventType.League)
+      {
+        liveEvent = GameAPIService.DiscoveredTournaments.GetValueOrDefault(id);
+        if (liveEvent == null)
+        {
+          try { liveEvent = EventManager.GetEvent(id) as Event; }
+          catch (KeyNotFoundException) { }
+        }
+      }
+      // League IDs identify a season; course IDs identify the particular run.
+      liveEvent ??= LeagueManager.OpenLeagues.FirstOrDefault(league => league.CourseId == id);
     }
-    var standings = tournament == null ? null
-      : player == null ? tournament.ComputeStandings() : tournament.Standings;
-    var selected = player != null ? standings?.FirstOrDefault(entry => entry.Player.Name == player)
-      : standings?.FirstOrDefault(entry => entry.Player.Name == clientProvider.CurrentUser?.Username)
-        ?? standings?.FirstOrDefault();
+    var tournament = liveEvent as Tournament;
+    var standings = tournament?.Standings;
+    if (tournament != null && standings?.Count == 0) standings = tournament.ComputeStandings();
+    var selected = standings?.FirstOrDefault(entry =>
+      string.Equals(entry.Player.Name, player, StringComparison.OrdinalIgnoreCase));
     var players = recorded.SelectMany(item => item.Match.PlayerResults.Select(result => result.Player)
       .Concat(item.Match.Games.SelectMany(game => game.Players.Select(participant => participant.Name))));
-    player ??= selected?.Player.Name
-      ?? players.FirstOrDefault(name => string.Equals(name, clientProvider.CurrentUser?.Username, StringComparison.OrdinalIgnoreCase))
-      ?? players.FirstOrDefault();
+    player ??= selected?.Player.Name ?? players.FirstOrDefault();
     if (player == null) return NotFound();
 
+    bool own = string.Equals(player, user?.Username, StringComparison.OrdinalIgnoreCase);
     var matches = tournament != null && selected != null
-      ? TournamentPlayerHistory.Read(tournament, selected).ToList() : new List<TournamentMatchDTO>();
+      ? EventPlayerHistory.Read(tournament, selected).ToList()
+      : own && liveEvent is League league
+        ? EventPlayerHistory.Read(league, player).ToList() : new List<EventMatchDTO>();
+    var liveMatch = liveEvent switch { League course => course.ActiveMatch, Tournament current => current.ActiveMatch, _ => null };
+    int? activeGameId = liveMatch?.CurrentGame is { Status: GameStatus.Started } currentGame ? currentGame.Id : null;
+    var stateSpans = await ReadGameStateSpansAsync(context,
+      recorded.SelectMany(item => item.Match.Games).Select(game => game.Id));
     foreach (var item in recorded)
     {
       var match = item.Match;
@@ -467,38 +490,102 @@ public class EventsController(
       if (result == null && !match.Games.Any(game => game.Players.Any(participant =>
           string.Equals(participant.Name, player, StringComparison.OrdinalIgnoreCase)))) continue;
       int index = matches.FindIndex(row => row.Id == match.Id);
+      var games = match.Games.OrderBy(game => game.StartTime).ThenBy(game => game.Id)
+        .Select((game, gameIndex) => ToGameDetails(game, match, player, gameIndex + 1, stateSpans: stateSpans)).ToArray();
+      foreach (var game in games)
+        if (game.Id == activeGameId) game.Result = "In Progress";
       if (index >= 0)
       {
-        matches[index] = matches[index] with { IsRecorded = item.IsRecorded };
+        // MTGO may know games played before Tracker attached. Enrich its rows;
+        // never discard those results when only part of the match was recorded.
+        var row = matches[index];
+        foreach (var game in games)
+        {
+          if (row.Games?.FirstOrDefault(item => item.Id == game.Id) is { } nativeGame)
+          {
+            game.GameNumber = nativeGame.GameNumber;
+            if (nativeGame.Result is "Win" or "Loss" or "Draw") game.Result = nativeGame.Result;
+            if (game.Duration.Length == 0) game.Duration = nativeGame.Duration;
+          }
+        }
+        var combined = (row.Games ?? []).Where(game => !games.Any(recordedGame => recordedGame.Id == game.Id))
+          .Concat(games).OrderBy(game => game.GameNumber).ToArray();
+        matches[index] = row with
+        {
+          IsRecorded = item.IsRecorded, Games = combined,
+          OpponentDeckArchetype = match.OpponentDeckArchetype,
+          OpponentDeckColors = match.OpponentDeckColors,
+          CanEditOpponent = own,
+        };
         continue;
       }
       int wins = result?.Wins ?? 0, losses = result?.Losses ?? 0, draws = result?.Draws ?? 0;
       if (wins + losses + draws == 0)
       {
-        var games = match.Games.SelectMany(game => game.GamePlayerResults)
+        var results = match.Games.SelectMany(game => game.GamePlayerResults)
           .Where(result => string.Equals(result.Player, player, StringComparison.OrdinalIgnoreCase)).ToList();
-        wins = games.Count(game => game.Result == GameResult.Win);
-        losses = games.Count(game => game.Result == GameResult.Loss);
+        wins = results.Count(game => game.Result == GameResult.Win);
+        losses = results.Count(game => game.Result == GameResult.Loss);
       }
-      // Older recordings have no round number; preserve that absence rather than numbering a partial history.
-      matches.Add(new TournamentMatchDTO(match.Id, null, GetOpponentName(match, player),
-        wins + losses + draws > 0 ? $"{wins}-{losses}" + (draws > 0 ? $"-{draws}" : "") : null,
-        result?.Result switch
+      var outcome = GameAPIService.ActiveMatchIds.Contains(match.Id) ? EventMatchResult.InProgress
+        : result?.Result switch
         {
-          MatchResult.Win => TournamentMatchResult.Win,
-          MatchResult.Loss => TournamentMatchResult.Loss,
-          MatchResult.Draw => TournamentMatchResult.Draw,
-          _ => TournamentMatchResult.Pending
-        }, item.IsRecorded));
+          MatchResult.Win => EventMatchResult.Win,
+          MatchResult.Loss => EventMatchResult.Loss,
+          MatchResult.Draw => EventMatchResult.Draw,
+          _ => EventMatchResult.Pending
+        };
+      matches.Add(new EventMatchDTO(match.Id, match.MatchNumber, GetOpponentName(match, player),
+        wins + losses + draws > 0 ? $"{wins}-{losses}" + (draws > 0 ? $"-{draws}" : "") : null,
+        outcome, item.IsRecorded, games, match.OpponentDeckArchetype, match.OpponentDeckColors, own));
     }
-    if (selected == null && matches.Count == 0) return NotFound();
-    return Ok(new TournamentPlayerHistoryDTO(player,
+
+    PersonalActivityDTO? activity = own ? liveEvent switch
+    {
+      Tournament current when selected != null || current.IsParticipant || current.HasJoined =>
+        PersonalActivity.ReadTournament(current, player, includeCompleted: true),
+      League current when current.CourseId == id =>
+        PersonalActivity.ReadLeague(current, player, includeCompleted: true),
+      _ => null,
+    } : null;
+    if (own && activity == null && recordedEvent != null && recordedEvent.Type != EventType.Match && matches.Count > 0)
+    {
+      bool active = GameAPIService.ActiveEventIds.Contains(id) || matches.Any(match => match.Result == EventMatchResult.InProgress);
+      bool leagueCourse = recordedEvent.Type == EventType.League;
+      activity = new PersonalActivityDTO($"{(leagueCourse ? "league" : "tournament")}-{id}",
+        recordedEvent.LeagueEventId ?? id, leagueCourse ? "league" : "tournament",
+        recordedEvent.Description, recordedEvent.Format,
+        active ? "active" : recordedEvent.EndTime.HasValue ? "completed" : "recorded",
+        active ? "In progress" : recordedEvent.EndTime.HasValue ? "Finished" : "Recorded",
+        recordedEvent.StartTime,
+        CourseId: leagueCourse ? id : null, EndTime: recordedEvent.EndTime);
+    }
+    if (activity != null)
+    {
+      activity = activity with
+      {
+        Wins = activity.Wins ?? matches.Count(match => match.Result is EventMatchResult.Win or EventMatchResult.Bye),
+        Losses = activity.Losses ?? matches.Count(match => match.Result == EventMatchResult.Loss),
+      };
+      if (recordedEvent?.DeckRevisionId is long revisionId)
+      {
+        var deck = await decks.GetRevisionAsync(revisionId, token);
+        if (deck != null && deck.AccountId == user?.Id)
+          activity = activity with { Deck = new DeckReferenceData(deck.CardGroupingId, deck.RevisionId,
+            deck.Name, deck.Format, deck.Archetype, deck.Timestamp, deck.Colors, deck.FeaturedCards) };
+      }
+    }
+    if (selected == null && matches.Count == 0 && activity == null) return NotFound();
+    int? totalMatches = activity?.TotalRounds is int rounds
+      ? rounds + (activity.InPlayoffs ? 3 : 0) : recordedEvent?.TotalMatches;
+    return Ok(new EventPlayerHistoryDTO(player,
       matches.OrderBy(match => match.Round ?? int.MaxValue).ThenBy(match => match.Id).ToArray(),
-      recordedEvent?.Description ?? tournament?.Description,
-      recordedEvent?.Format ?? tournament?.Format.ToString(),
+      recordedEvent?.Description ?? activity?.Name ?? tournament?.Description,
+      recordedEvent?.Format ?? liveEvent?.Format.ToString(),
       recordedEvent?.StartTime ?? tournament?.StartTime,
-      recordedEvent?.EndTime));
+      recordedEvent?.EndTime, activity, totalMatches));
   }
+
 
   //
   // Event Streaming Endpoints
