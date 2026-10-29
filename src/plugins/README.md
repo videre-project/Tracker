@@ -9,7 +9,7 @@ The package, public namespace, and assembly are named `MTGOTracker.Plugins`.
 
 | Component | Supported version |
 | --- | --- |
-| Tracker application | 0.3.0 |
+| Tracker application | 0.4.0 |
 | .NET SDK / target | .NET 10 / `net10.0-windows7.0` |
 | MTGOTracker.Plugins package | `0.1.0-preview.2` |
 | Manifest `apiVersion` | `1` |
